@@ -2187,6 +2187,7 @@ export default {
         apiKeys: 'API 密钥数',
         accounts: '账号数',
         capacity: '容量',
+        codexQuota: 'Codex 额度',
         usage: '用量',
         status: '状态',
         actions: '操作',

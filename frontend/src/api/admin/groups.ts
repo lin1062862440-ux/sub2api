@@ -329,6 +329,32 @@ export async function getCapacitySummary(): Promise<
   return data
 }
 
+export interface GroupCodexQuotaWindow {
+  used_percent: number
+  remaining_percent: number
+  sampled_accounts: number
+  missing_accounts: number
+  expired_accounts: number
+  next_reset_at?: string | null
+}
+
+export interface GroupCodexQuotaSummary {
+  group_id: number
+  account_count: number
+  five_hour: GroupCodexQuotaWindow
+  seven_day: GroupCodexQuotaWindow
+}
+
+/**
+ * Get equal-weight Codex 5h/7d quota summary for all active groups.
+ */
+export async function getCodexQuotaSummary(): Promise<GroupCodexQuotaSummary[]> {
+  const { data } = await apiClient.get<GroupCodexQuotaSummary[]>(
+    '/admin/groups/codex-quota-summary'
+  )
+  return data
+}
+
 export const groupsAPI = {
   list,
   getAll,
@@ -350,7 +376,8 @@ export const groupsAPI = {
   batchSetGroupRPMOverrides,
   updateSortOrder,
   getUsageSummary,
-  getCapacitySummary
+  getCapacitySummary,
+  getCodexQuotaSummary
 }
 
 export default groupsAPI

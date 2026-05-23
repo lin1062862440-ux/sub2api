@@ -2134,6 +2134,7 @@ export default {
         type: 'Type',
         accounts: 'Accounts',
         capacity: 'Capacity',
+        codexQuota: 'Codex Quota',
         usage: 'Usage',
         status: 'Status',
         actions: 'Actions',
