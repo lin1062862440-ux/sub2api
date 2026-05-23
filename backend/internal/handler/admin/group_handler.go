@@ -405,6 +405,17 @@ func (h *GroupHandler) GetCapacitySummary(c *gin.Context) {
 	response.Success(c, results)
 }
 
+// GetCodexQuotaSummary returns equal-weight Codex 5h/7d quota usage for all active groups.
+// GET /api/v1/admin/groups/codex-quota-summary
+func (h *GroupHandler) GetCodexQuotaSummary(c *gin.Context) {
+	results, err := h.groupCapacityService.GetAllGroupCodexQuota(c.Request.Context())
+	if err != nil {
+		response.Error(c, 500, "Failed to get group Codex quota summary")
+		return
+	}
+	response.Success(c, results)
+}
+
 // GetGroupAPIKeys handles getting API keys in a group
 // GET /api/v1/admin/groups/:id/api-keys
 func (h *GroupHandler) GetGroupAPIKeys(c *gin.Context) {

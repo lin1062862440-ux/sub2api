@@ -250,6 +250,16 @@
             <span v-else class="text-xs text-gray-400">—</span>
           </template>
 
+          <template #cell-codex_quota="{ row }">
+            <GroupCodexQuotaBadge
+              v-if="codexQuotaMap.get(row.id)"
+              :account-count="codexQuotaMap.get(row.id)!.account_count"
+              :five-hour="codexQuotaMap.get(row.id)!.five_hour"
+              :seven-day="codexQuotaMap.get(row.id)!.seven_day"
+            />
+            <span v-else class="text-xs text-gray-400">—</span>
+          </template>
+
           <template #cell-usage="{ row }">
             <div v-if="usageLoading" class="text-xs text-gray-400">—</div>
             <div v-else class="space-y-0.5 text-xs">
@@ -2837,6 +2847,7 @@ import { useAppStore } from "@/stores/app";
 import { useOnboardingStore } from "@/stores/onboarding";
 import { adminAPI } from "@/api/admin";
 import type { AdminGroup, GroupPlatform, SubscriptionType } from "@/types";
+import type { GroupCodexQuotaSummary } from "@/api/admin/groups";
 import type { Column } from "@/components/common/types";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import TablePageLayout from "@/components/layout/TablePageLayout.vue";
@@ -2851,6 +2862,7 @@ import Icon from "@/components/icons/Icon.vue";
 import GroupRateMultipliersModal from "@/components/admin/group/GroupRateMultipliersModal.vue";
 import GroupRPMOverridesModal from "@/components/admin/group/GroupRPMOverridesModal.vue";
 import GroupCapacityBadge from "@/components/common/GroupCapacityBadge.vue";
+import GroupCodexQuotaBadge from "@/components/common/GroupCodexQuotaBadge.vue";
 import { VueDraggable } from "vue-draggable-plus";
 import { createStableObjectKeyResolver } from "@/utils/stableObjectKey";
 import { useKeyedDebouncedSearch } from "@/composables/useKeyedDebouncedSearch";
@@ -2898,6 +2910,11 @@ const columns = computed<Column[]>(() => [
   {
     key: "capacity",
     label: t("admin.groups.columns.capacity"),
+    sortable: false,
+  },
+  {
+    key: "codex_quota",
+    label: t("admin.groups.columns.codexQuota"),
     sortable: false,
   },
   { key: "usage", label: t("admin.groups.columns.usage"), sortable: false },
@@ -3062,6 +3079,7 @@ const capacityMap = ref<
     }
   >
 >(new Map());
+const codexQuotaMap = ref<Map<number, GroupCodexQuotaSummary>>(new Map());
 const searchQuery = ref("");
 const filters = reactive({
   platform: "",
@@ -3524,6 +3542,7 @@ const loadGroups = async () => {
     pagination.pages = response.pages;
     loadUsageSummary();
     loadCapacitySummary();
+    loadCodexQuotaSummary();
   } catch (error: any) {
     if (
       signal.aborted ||
@@ -3594,6 +3613,19 @@ const loadCapacitySummary = async () => {
     capacityMap.value = map;
   } catch (error) {
     console.error("Error loading group capacity summary:", error);
+  }
+};
+
+const loadCodexQuotaSummary = async () => {
+  try {
+    const data = await adminAPI.groups.getCodexQuotaSummary();
+    const map = new Map<number, GroupCodexQuotaSummary>();
+    for (const item of data) {
+      map.set(item.group_id, item);
+    }
+    codexQuotaMap.value = map;
+  } catch (error) {
+    console.error("Error loading group Codex quota summary:", error);
   }
 };
 
