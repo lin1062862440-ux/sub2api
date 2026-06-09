@@ -1,20 +1,101 @@
 <template>
-  <AuthLayout>
-    <div class="space-y-6">
-      <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-          {{ t('auth.createAccount') }}
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-          {{ t('auth.signUpToStart', { siteName }) }}
-        </p>
-      </div>
+  <div class="min-h-screen bg-[#f5f5f7] text-gray-950 dark:bg-dark-950 dark:text-white">
+    <header
+      class="border-b border-gray-950/5 bg-[#f5f5f7]/90 backdrop-blur-xl dark:border-white/10 dark:bg-dark-950/85"
+    >
+      <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <router-link
+          to="/"
+          class="flex min-w-0 items-center gap-3 text-gray-950 transition-colors hover:text-gray-700 dark:text-white dark:hover:text-dark-200"
+        >
+          <span
+            class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white dark:bg-dark-900"
+          >
+            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+          </span>
+          <span class="truncate text-sm font-semibold sm:text-base">{{ siteName }}</span>
+        </router-link>
+
+        <router-link
+          to="/"
+          class="hidden text-sm font-medium text-gray-600 transition-colors hover:text-gray-950 dark:text-dark-300 dark:hover:text-white sm:inline-flex"
+        >
+          返回首页
+        </router-link>
+      </nav>
+    </header>
+
+    <main class="px-4 py-10 sm:px-6 lg:px-8">
+      <div class="mx-auto grid min-h-[calc(100vh-9rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1fr_28rem]">
+        <section class="hidden lg:block">
+          <div class="max-w-xl">
+            <div
+              class="mb-7 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white dark:bg-dark-900"
+            >
+              <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+            </div>
+            <h1 class="auth-display-title text-5xl font-semibold leading-[1.04] tracking-[-0.03em] text-gray-950 dark:text-white">
+              {{ siteName }}
+            </h1>
+            <p class="mt-5 max-w-lg text-lg leading-8 text-gray-700 dark:text-dark-200">
+              {{ siteSubtitle }}
+            </p>
+          </div>
+
+          <div class="mt-12 max-w-xl overflow-hidden rounded-2xl bg-gray-950 p-7 text-white dark:bg-dark-900">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium text-white/60">创建账户</p>
+                <p class="mt-2 text-2xl font-semibold tracking-[-0.02em]">
+                  统一管理 API Key、模型与用量
+                </p>
+              </div>
+              <Icon name="userPlus" size="lg" class="text-white/70" />
+            </div>
+
+            <div class="mt-8 space-y-3 text-sm leading-6 text-white/70">
+              <div class="flex items-center gap-3">
+                <Icon name="key" size="sm" class="text-white/70" />
+                <span>生成和分发访问密钥</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <Icon name="chart" size="sm" class="text-white/70" />
+                <span>查看消耗、余额和计费状态</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <Icon name="shield" size="sm" class="text-white/70" />
+                <span>按平台策略完成验证与准入</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="mx-auto w-full max-w-[28rem]">
+          <div class="mb-8 text-center lg:hidden">
+            <div
+              class="mx-auto mb-5 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white dark:bg-dark-900"
+            >
+              <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+            </div>
+            <h1 class="text-3xl font-semibold tracking-[-0.02em] text-gray-950 dark:text-white">
+              {{ siteName }}
+            </h1>
+          </div>
+
+          <div class="rounded-2xl bg-white p-6 dark:bg-dark-900 sm:p-8">
+            <div>
+              <h2 class="text-2xl font-semibold tracking-[-0.02em] text-gray-950 dark:text-white">
+                {{ t('auth.createAccount') }}
+              </h2>
+              <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-dark-300">
+                {{ t('auth.signUpToStart', { siteName }) }}
+              </p>
+            </div>
 
       <!-- Registration Disabled Message -->
       <div
         v-if="!registrationEnabled && settingsLoaded"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
+        class="mt-7 rounded-2xl bg-amber-50 p-4 dark:bg-amber-900/20"
       >
         <div class="flex items-start gap-3">
           <div class="flex-shrink-0">
@@ -27,10 +108,10 @@
       </div>
 
       <!-- Registration Form -->
-      <form v-else @submit.prevent="handleRegister" class="space-y-5">
+      <form v-else @submit.prevent="handleRegister" class="mt-7 space-y-5">
         <!-- Email Input -->
         <div>
-          <label for="email" class="input-label">
+          <label for="email" class="auth-label">
             {{ t('auth.emailLabel') }}
           </label>
           <div class="relative">
@@ -45,8 +126,8 @@
               autofocus
               autocomplete="email"
               :disabled="registrationActionDisabled"
-              class="input pl-11"
-              :class="{ 'input-error': errors.email }"
+              class="auth-input pl-11"
+              :class="{ 'auth-input-error': errors.email }"
               :placeholder="t('auth.emailPlaceholder')"
             />
           </div>
@@ -54,7 +135,7 @@
 
         <!-- Password Input -->
         <div>
-          <label for="password" class="input-label">
+          <label for="password" class="auth-label">
             {{ t('auth.passwordLabel') }}
           </label>
           <div class="relative">
@@ -68,28 +149,28 @@
               required
               autocomplete="new-password"
               :disabled="registrationActionDisabled"
-              class="input pl-11 pr-11"
-              :class="{ 'input-error': errors.password }"
+              class="auth-input pl-11 pr-11"
+              :class="{ 'auth-input-error': errors.password }"
               :placeholder="t('auth.createPasswordPlaceholder')"
             />
             <button
               type="button"
               :disabled="registrationActionDisabled"
               @click="showPassword = !showPassword"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:text-dark-200"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
             </button>
           </div>
-          <p class="input-hint">
+          <p class="auth-hint">
             {{ t('auth.passwordHint') }}
           </p>
         </div>
 
         <!-- Invitation Code Input (Required when enabled) -->
         <div v-if="invitationCodeEnabled">
-          <label for="invitation_code" class="input-label">
+          <label for="invitation_code" class="auth-label">
             {{ t('auth.invitationCodeLabel') }}
           </label>
           <div class="relative">
@@ -101,7 +182,7 @@
               v-model="formData.invitation_code"
               type="text"
               :disabled="registrationActionDisabled"
-              class="input pl-11 pr-10"
+              class="auth-input pl-11 pr-10"
               :class="{
                 'border-green-500 focus:border-green-500 focus:ring-green-500': invitationValidation.valid,
                 'border-red-500 focus:border-red-500 focus:ring-red-500': invitationValidation.invalid || errors.invitation_code
@@ -136,7 +217,7 @@
 
         <!-- Promo Code Input (Optional) -->
         <div v-if="promoCodeEnabled">
-          <label for="promo_code" class="input-label">
+          <label for="promo_code" class="auth-label">
             {{ t('auth.promoCodeLabel') }}
             <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">({{ t('common.optional') }})</span>
           </label>
@@ -149,7 +230,7 @@
               v-model="formData.promo_code"
               type="text"
               :disabled="registrationActionDisabled"
-              class="input pl-11 pr-10"
+              class="auth-input pl-11 pr-10"
               :class="{
                 'border-green-500 focus:border-green-500 focus:ring-green-500': promoValidation.valid,
                 'border-red-500 focus:border-red-500 focus:ring-red-500': promoValidation.invalid
@@ -209,11 +290,11 @@
         <button
           type="submit"
           :disabled="registrationActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-dark-100"
         >
           <svg
             v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
+            class="h-4 w-4 animate-spin"
             fill="none"
             viewBox="0 0 24 24"
           >
@@ -231,7 +312,7 @@
               d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
             ></path>
           </svg>
-          <Icon v-else name="userPlus" size="md" class="mr-2" />
+          <Icon v-else name="userPlus" size="sm" />
           {{
             isLoading
               ? t('auth.processing')
@@ -280,28 +361,31 @@
           :show-divider="false"
         />
       </div>
-    </div>
+          </div>
 
-    <!-- Footer -->
-    <template #footer>
-      <p class="text-gray-500 dark:text-dark-400">
-        {{ t('auth.alreadyHaveAccount') }}
-        <router-link
-          to="/login"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-        >
-          {{ t('auth.signIn') }}
-        </router-link>
-      </p>
-    </template>
-  </AuthLayout>
+          <div class="mt-6 text-center text-sm text-gray-600 dark:text-dark-300">
+            {{ t('auth.alreadyHaveAccount') }}
+            <router-link
+              to="/login"
+              class="font-medium text-gray-950 transition-colors hover:text-gray-700 dark:text-white dark:hover:text-dark-200"
+            >
+              {{ t('auth.signIn') }}
+            </router-link>
+          </div>
+
+          <p class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
+            &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
+          </p>
+        </section>
+      </div>
+    </main>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, reactive, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { AuthLayout } from '@/components/layout'
 import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
 import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
 import WechatOAuthSection from '@/components/auth/WechatOAuthSection.vue'
@@ -353,7 +437,9 @@ const promoCodeEnabled = ref<boolean>(true)
 const invitationCodeEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
-const siteName = ref<string>('Sub2API')
+const fetchedSiteName = ref<string>('')
+const fetchedSiteLogo = ref<string>('')
+const fetchedSiteSubtitle = ref<string>('')
 const linuxdoOAuthEnabled = ref<boolean>(false)
 const wechatOAuthEnabled = ref<boolean>(false)
 const oidcOAuthEnabled = ref<boolean>(false)
@@ -426,6 +512,17 @@ const showOAuthLogin = computed(
     googleOAuthEnabled.value
 )
 
+const siteName = computed(
+  () => fetchedSiteName.value || appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Sub2API'
+)
+const siteLogo = computed(
+  () => fetchedSiteLogo.value || appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || ''
+)
+const siteSubtitle = computed(
+  () => fetchedSiteSubtitle.value || appStore.cachedPublicSettings?.site_subtitle || 'AI API Gateway Platform'
+)
+const currentYear = computed(() => new Date().getFullYear())
+
 const agreementGateActive = computed(
   () => loginAgreementEnabled.value && !agreementAccepted.value
 )
@@ -461,7 +558,9 @@ onMounted(async () => {
     invitationCodeEnabled.value = settings.invitation_code_enabled
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
-    siteName.value = settings.site_name || 'Sub2API'
+    fetchedSiteName.value = settings.site_name || ''
+    fetchedSiteLogo.value = settings.site_logo || ''
+    fetchedSiteSubtitle.value = settings.site_subtitle || ''
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     wechatOAuthEnabled.value = isWeChatWebOAuthEnabled(settings)
     oidcOAuthEnabled.value = settings.oidc_oauth_enabled
@@ -927,5 +1026,78 @@ async function handleRegister(): Promise<void> {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+.auth-display-title {
+  text-wrap: balance;
+}
+
+.auth-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.dark .auth-label {
+  color: #cbd5e1;
+}
+
+.auth-input {
+  min-height: 3rem;
+  width: 100%;
+  border-radius: 0.875rem;
+  border: 1px solid transparent;
+  background: #f5f5f7;
+  color: #111827;
+  font-size: 0.875rem;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.auth-input::placeholder {
+  color: #6b7280;
+}
+
+.auth-input:focus {
+  border-color: #111827;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.12);
+  outline: none;
+}
+
+.auth-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.auth-input-error {
+  border-color: #ef4444;
+}
+
+.auth-hint {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.dark .auth-input {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.dark .auth-input::placeholder {
+  color: #94a3b8;
+}
+
+.dark .auth-input:focus {
+  background: #0f172a;
+}
+
+.dark .auth-hint {
+  color: #94a3b8;
 }
 </style>
