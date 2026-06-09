@@ -1,51 +1,86 @@
 <template>
   <AppLayout>
     <TablePageLayout>
+      <template #actions>
+        <div class="keys-page-head">
+          <div class="keys-head-copy">
+            <ProductIcon name="key" tone="blue" size="lg" />
+            <div class="min-w-0">
+              <p class="keys-kicker">{{ t('keys.apiKey') }}</p>
+              <h1>{{ t('keys.title') }}</h1>
+            </div>
+          </div>
+
+          <div class="keys-stat-grid">
+            <div class="keys-stat-card">
+              <ProductIcon name="database" tone="slate" size="xs" bare />
+              <span>{{ t('keys.title') }}</span>
+              <strong>{{ pagination.total.toLocaleString() }}</strong>
+            </div>
+            <div class="keys-stat-card">
+              <ProductIcon name="bolt" tone="blue" size="xs" bare />
+              <span>{{ t('common.active') }}</span>
+              <strong>{{ visibleActiveKeys }}</strong>
+            </div>
+            <div class="keys-stat-card">
+              <ProductIcon name="wallet" tone="emerald" size="xs" bare />
+              <span>{{ t('keys.today') }}</span>
+              <strong>${{ visibleTodayCost.toFixed(4) }}</strong>
+            </div>
+            <div class="keys-stat-card">
+              <ProductIcon name="clock" tone="amber" size="xs" bare />
+              <span>{{ t('keys.rateLimitColumn') }}</span>
+              <strong>{{ visibleLimitedKeys }}</strong>
+            </div>
+          </div>
+
+          <div class="keys-action-bar">
+            <button
+              @click="loadApiKeys"
+              :disabled="loading"
+              class="btn btn-secondary keys-icon-button"
+              :title="t('common.refresh')"
+            >
+              <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
+            </button>
+            <button @click="showCreateModal = true" class="btn btn-primary keys-primary-button" data-tour="keys-create-btn">
+              <Icon name="plus" size="md" />
+              {{ t('keys.createKey') }}
+            </button>
+          </div>
+        </div>
+      </template>
+
       <template #filters>
-        <div class="flex flex-col gap-3">
-          <div class="flex flex-wrap items-center gap-3">
+        <div class="keys-filter-card">
+          <div class="keys-filter-toolbar">
             <SearchInput
               v-model="filterSearch"
               :placeholder="t('keys.searchPlaceholder')"
-              class="w-full sm:w-64"
+              class="keys-search-input"
               @search="onFilterChange"
             />
             <Select
               :model-value="filterGroupId"
-              class="w-40"
+              class="keys-filter-select"
               :options="groupFilterOptions"
               @update:model-value="onGroupFilterChange"
             />
             <Select
               :model-value="filterStatus"
-              class="w-40"
+              class="keys-filter-select"
               :options="statusFilterOptions"
               @update:model-value="onStatusFilterChange"
             />
+            <div class="keys-endpoint-popover">
+              <EndpointPopover
+                v-if="publicSettings?.api_base_url || (publicSettings?.custom_endpoints?.length ?? 0) > 0"
+                :api-base-url="publicSettings?.api_base_url || ''"
+                :custom-endpoints="publicSettings?.custom_endpoints || []"
+              />
+            </div>
           </div>
-          <EndpointPopover
-            v-if="publicSettings?.api_base_url || (publicSettings?.custom_endpoints?.length ?? 0) > 0"
-            :api-base-url="publicSettings?.api_base_url || ''"
-            :custom-endpoints="publicSettings?.custom_endpoints || []"
-          />
         </div>
-      </template>
-
-      <template #actions>
-        <div class="flex justify-end gap-3">
-        <button
-          @click="loadApiKeys"
-          :disabled="loading"
-          class="btn btn-secondary"
-          :title="t('common.refresh')"
-        >
-          <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
-        </button>
-        <button @click="showCreateModal = true" class="btn btn-primary" data-tour="keys-create-btn">
-          <Icon name="plus" size="md" class="mr-2" />
-          {{ t('keys.createKey') }}
-        </button>
-      </div>
       </template>
 
       <template #table>
@@ -65,10 +100,10 @@
               </code>
               <button
                 @click="copyToClipboard(value, row.id)"
-                class="rounded-lg p-1 transition-colors hover:bg-gray-100 dark:hover:bg-dark-700"
+                class="keys-copy-button"
                 :class="
                   copiedKeyId === row.id
-                    ? 'text-green-500'
+                    ? 'text-blue-600 dark:text-blue-400'
                     : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
                 "
                 :title="copiedKeyId === row.id ? t('keys.copied') : t('keys.copyToClipboard')"
@@ -314,7 +349,7 @@
               <!-- Use Key Button -->
               <button
                 @click="openUseKeyModal(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
+                class="keys-row-action hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10 dark:hover:text-blue-300"
               >
                 <Icon name="terminal" size="sm" />
                 <span class="text-xs">{{ t('keys.useKey') }}</span>
@@ -323,7 +358,7 @@
               <button
                 v-if="!publicSettings?.hide_ccs_import_button"
                 @click="importToCcswitch(row)"
-                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
+                class="keys-row-action hover:bg-sky-50 hover:text-sky-600 dark:hover:bg-sky-500/10 dark:hover:text-sky-300"
               >
                 <Icon name="upload" size="sm" />
                 <span class="text-xs">{{ t('keys.importToCcSwitch') }}</span>
@@ -335,7 +370,7 @@
                   'flex flex-col items-center gap-0.5 rounded-lg p-1.5 transition-colors',
                   row.status === 'active'
                     ? 'text-gray-500 hover:bg-yellow-50 hover:text-yellow-600 dark:hover:bg-yellow-900/20 dark:hover:text-yellow-400'
-                    : 'text-gray-500 hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400'
+                    : 'text-gray-500 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-500/10 dark:hover:text-blue-300'
                 ]"
               >
                 <Icon v-if="row.status === 'active'" name="ban" size="sm" />
@@ -1064,6 +1099,7 @@ import TablePageLayout from '@/components/layout/TablePageLayout.vue'
 	import Select from '@/components/common/Select.vue'
 	import SearchInput from '@/components/common/SearchInput.vue'
 	import Icon from '@/components/icons/Icon.vue'
+	import ProductIcon from '@/components/common/ProductIcon.vue'
 	import UseKeyModal from '@/components/keys/UseKeyModal.vue'
 	import EndpointPopover from '@/components/keys/EndpointPopover.vue'
 	import GroupBadge from '@/components/common/GroupBadge.vue'
@@ -1136,6 +1172,16 @@ const sortState = ref({
 const filterSearch = ref('')
 const filterStatus = ref('')
 const filterGroupId = ref<string | number>('')
+
+const visibleActiveKeys = computed(() => apiKeys.value.filter((key) => key.status === 'active').length)
+const visibleLimitedKeys = computed(() =>
+  apiKeys.value.filter((key) =>
+    key.quota > 0 || key.rate_limit_5h > 0 || key.rate_limit_1d > 0 || key.rate_limit_7d > 0
+  ).length
+)
+const visibleTodayCost = computed(() =>
+  apiKeys.value.reduce((total, key) => total + (usageStats.value[key.id]?.today_actual_cost ?? 0), 0)
+)
 
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
@@ -1788,3 +1834,195 @@ onUnmounted(() => {
   if (resetTimer) clearInterval(resetTimer)
 })
 </script>
+
+<style scoped>
+.keys-page-head {
+  display: grid;
+  grid-template-columns: minmax(18rem, 1fr) minmax(28rem, 1.3fr) auto;
+  align-items: stretch;
+  gap: 1rem;
+}
+
+.keys-head-copy,
+.keys-filter-card,
+.keys-stat-card {
+  border: 1px solid rgb(17 24 39 / 0.06);
+  border-radius: 1rem;
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.keys-head-copy {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.keys-kicker {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+  color: rgb(100 116 139);
+}
+
+.keys-head-copy h1 {
+  margin-top: 0.125rem;
+  font-size: 1.25rem;
+  font-weight: 750;
+  line-height: 1.75rem;
+  color: rgb(15 23 42);
+}
+
+.keys-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.keys-stat-card {
+  display: grid;
+  align-content: center;
+  gap: 0.25rem;
+  min-height: 5rem;
+  padding: 0.875rem;
+}
+
+.keys-stat-card span {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+  color: rgb(100 116 139);
+}
+
+.keys-stat-card strong {
+  overflow: hidden;
+  color: rgb(15 23 42);
+  font-variant-numeric: tabular-nums;
+  font-size: 1.125rem;
+  font-weight: 750;
+  line-height: 1.5rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keys-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.keys-icon-button {
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.keys-primary-button {
+  min-height: 2.75rem;
+  white-space: nowrap;
+}
+
+.keys-filter-card {
+  padding: 1rem;
+}
+
+.keys-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.keys-search-input {
+  width: min(100%, 20rem);
+}
+
+.keys-filter-select {
+  width: 11rem;
+}
+
+.keys-endpoint-popover {
+  margin-left: auto;
+}
+
+.keys-copy-button {
+  border-radius: 0.5rem;
+  padding: 0.25rem;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.keys-copy-button:hover {
+  background: rgb(241 245 249);
+}
+
+.keys-row-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.125rem;
+  border-radius: 0.625rem;
+  padding: 0.375rem;
+  color: rgb(100 116 139);
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+:global(.dark) .keys-head-copy,
+:global(.dark) .keys-filter-card,
+:global(.dark) .keys-stat-card {
+  border-color: rgb(255 255 255 / 0.1);
+  background: rgb(15 23 42 / 0.52);
+  box-shadow: none;
+}
+
+:global(.dark) .keys-kicker,
+:global(.dark) .keys-stat-card span {
+  color: rgb(148 163 184);
+}
+
+:global(.dark) .keys-head-copy h1,
+:global(.dark) .keys-stat-card strong {
+  color: rgb(255 255 255);
+}
+
+:global(.dark) .keys-copy-button:hover {
+  background: rgb(30 41 59);
+}
+
+@media (max-width: 1180px) {
+  .keys-page-head {
+    grid-template-columns: 1fr;
+  }
+
+  .keys-action-bar {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .keys-stat-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .keys-filter-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .keys-search-input,
+  .keys-filter-select,
+  .keys-endpoint-popover {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .keys-action-bar {
+    flex-wrap: wrap;
+  }
+}
+</style>

@@ -1,10 +1,10 @@
 <template>
-  <div :class="props.embedded ? 'space-y-4' : 'card'">
+  <div :class="props.embedded ? 'space-y-4' : 'profile-form-card'">
     <div
       v-if="!props.embedded"
-      class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
+      class="profile-form-card-header"
     >
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+      <h2>
         {{ t('profile.changePassword') }}
       </h2>
     </div>
@@ -114,3 +114,38 @@ const handleChangePassword = async () => {
   }
 }
 </script>
+
+<style scoped>
+.profile-form-card {
+  border: 1px solid rgb(17 24 39 / 0.06);
+  border-radius: 1rem;
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.profile-form-card-header {
+  border-bottom: 1px solid rgb(226 232 240);
+  padding: 1rem 1.25rem;
+}
+
+.profile-form-card-header h2 {
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.5rem;
+}
+
+:global(.dark) .profile-form-card {
+  border-color: rgb(255 255 255 / 0.1);
+  background: rgb(15 23 42 / 0.52);
+  box-shadow: none;
+}
+
+:global(.dark) .profile-form-card-header {
+  border-color: rgb(51 65 85);
+}
+
+:global(.dark) .profile-form-card-header h2 {
+  color: rgb(255 255 255);
+}
+</style>

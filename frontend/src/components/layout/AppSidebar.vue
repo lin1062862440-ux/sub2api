@@ -3,17 +3,17 @@
     class="sidebar"
     :class="[
       sidebarCollapsed ? 'w-[72px]' : 'w-64',
-      { '-translate-x-full lg:translate-x-0': !mobileOpen }
+      { '-translate-x-[calc(100%+1rem)] lg:translate-x-0': !mobileOpen }
     ]"
   >
     <!-- Logo/Brand -->
     <div class="sidebar-header" :class="{ 'sidebar-header-collapsed': sidebarCollapsed }">
       <!-- Custom Logo or Default Logo -->
-      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl shadow-glow">
+      <div class="sidebar-logo flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-gray-950/5 dark:bg-dark-900 dark:ring-white/10">
         <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
       </div>
       <div class="sidebar-brand" :class="{ 'sidebar-brand-collapsed': sidebarCollapsed }" :aria-hidden="sidebarCollapsed ? 'true' : 'false'">
-        <span class="sidebar-brand-title text-lg font-bold text-gray-900 dark:text-white">
+        <span class="sidebar-brand-title text-base font-semibold tracking-[-0.01em] text-gray-950 dark:text-white">
           {{ siteName }}
         </span>
         <!-- Version Badge -->
@@ -140,7 +140,7 @@
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-gray-100 p-3 dark:border-dark-800">
+    <div class="mt-auto border-t border-gray-100/80 p-3 dark:border-white/10">
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"

@@ -1,22 +1,22 @@
 <template>
   <button
     type="button"
-    class="group text-left p-5 rounded-2xl min-h-[280px] w-full bg-white/70 backdrop-blur-xl border border-gray-200/80 shadow-card dark:bg-dark-800/60 dark:border-dark-700/70 hover:-translate-y-1 hover:shadow-card-hover dark:hover:border-primary-500/30 hover:border-gray-300 transition-all duration-300 ease-out flex flex-col"
+    class="monitor-card group"
     @click="emit('click')"
   >
     <!-- Header: icon + name/model + status chip -->
     <div class="flex items-start gap-3">
       <span
-        class="w-9 h-9 rounded-xl ring-1 ring-black/5 dark:ring-white/10 grid place-items-center flex-shrink-0"
+        class="grid h-9 w-9 flex-shrink-0 place-items-center rounded-xl ring-1 ring-black/5 dark:ring-white/10"
         :class="[providerGradient(item.provider), providerTintClass]"
       >
         <ProviderIcon :provider="item.provider" :size="20" />
       </span>
       <div class="flex-1 min-w-0">
-        <div class="text-base font-semibold truncate text-gray-900 dark:text-gray-100">
+        <div class="truncate text-base font-semibold text-gray-900 dark:text-gray-100">
           {{ item.name }}
         </div>
-        <div class="mt-0.5 flex items-center gap-1.5 min-w-0">
+        <div class="mt-0.5 flex min-w-0 items-center gap-1.5">
           <span
             class="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium flex-shrink-0"
             :class="providerBadgeClass(item.provider)"
@@ -35,7 +35,7 @@
         </div>
       </div>
       <span
-        class="px-2.5 py-1 rounded-full text-xs font-semibold flex-shrink-0"
+        class="flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold"
         :class="statusBadgeClass(item.primary_status)"
       >
         {{ statusLabel(item.primary_status) }}
@@ -126,3 +126,46 @@ const extraModelsCountLabel = computed(() => {
   return t('monitorCommon.extraModelsCount', { n: count })
 })
 </script>
+
+<style scoped>
+.monitor-card {
+  display: flex;
+  min-height: 15rem;
+  width: 100%;
+  flex-direction: column;
+  border-radius: 1rem;
+  border: 1px solid rgb(17 24 39 / 0.06);
+  background: rgb(255 255 255);
+  padding: 1rem;
+  text-align: left;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.monitor-card:hover {
+  border-color: rgb(148 163 184 / 0.42);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 0.08);
+  transform: translateY(-2px);
+}
+
+:global(.dark) .monitor-card {
+  border-color: rgb(255 255 255 / 0.1);
+  background: rgb(15 23 42 / 0.52);
+  box-shadow: none;
+}
+
+:global(.dark) .monitor-card:hover {
+  border-color: rgb(96 165 250 / 0.28);
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .monitor-card {
+    transition: border-color 0.18s ease;
+  }
+
+  .monitor-card:hover {
+    transform: none;
+  }
+}
+</style>

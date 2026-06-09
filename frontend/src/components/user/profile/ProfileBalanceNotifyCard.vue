@@ -1,10 +1,10 @@
 <template>
-  <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+  <div class="profile-notify-card">
+    <div class="profile-notify-header">
+      <h2>
         {{ t('profile.balanceNotify.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p>
         {{ t('profile.balanceNotify.description') }}
       </p>
     </div>
@@ -372,3 +372,49 @@ async function verifySavedEmail(email: string) {
   }
 }
 </script>
+
+<style scoped>
+.profile-notify-card {
+  border: 1px solid rgb(17 24 39 / 0.06);
+  border-radius: 1rem;
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.profile-notify-header {
+  border-bottom: 1px solid rgb(226 232 240);
+  padding: 1rem 1.25rem;
+}
+
+.profile-notify-header h2 {
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.5rem;
+}
+
+.profile-notify-header p {
+  margin-top: 0.25rem;
+  color: rgb(100 116 139);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+:global(.dark) .profile-notify-card {
+  border-color: rgb(255 255 255 / 0.1);
+  background: rgb(15 23 42 / 0.52);
+  box-shadow: none;
+}
+
+:global(.dark) .profile-notify-header {
+  border-color: rgb(51 65 85);
+}
+
+:global(.dark) .profile-notify-header h2 {
+  color: rgb(255 255 255);
+}
+
+:global(.dark) .profile-notify-header p {
+  color: rgb(148 163 184);
+}
+</style>

@@ -2,8 +2,8 @@
   <BaseDialog :show="show" :title="t('admin.users.userApiKeys')" width="wide" @close="handleClose">
     <div v-if="user" class="space-y-4">
       <div class="flex items-center gap-3 rounded-xl bg-gray-50 p-4 dark:bg-dark-700">
-        <div class="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30">
-          <span class="text-lg font-medium text-primary-700 dark:text-primary-300">{{ user.email.charAt(0).toUpperCase() }}</span>
+        <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-gray-950/10 dark:bg-dark-900 dark:ring-white/10">
+          <img :src="resolveAvatarUrl(user.avatar_url)" :alt="user.email" class="h-full w-full object-cover">
         </div>
         <div><p class="font-medium text-gray-900 dark:text-white">{{ user.email }}</p><p class="text-sm text-gray-500 dark:text-dark-400">{{ user.username }}</p></div>
       </div>
@@ -107,6 +107,7 @@ import type { AdminUser, AdminGroup, ApiKey } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = defineProps<{ show: boolean; user: AdminUser | null }>()
 const emit = defineEmits(['close'])

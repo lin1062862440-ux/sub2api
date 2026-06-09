@@ -2,111 +2,95 @@
   <AppLayout>
     <TablePageLayout>
       <template #actions>
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div class="usage-summary-grid">
           <!-- Total Requests -->
-          <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
-              <Icon name="document" size="md" class="text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalRequests') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ usageStats?.total_requests?.toLocaleString() || '0' }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.inSelectedRange') }}
-              </p>
+          <div class="usage-metric-card">
+            <div class="flex items-center gap-3">
+              <ProductIcon name="document" tone="blue" size="sm" />
+              <div class="min-w-0">
+                <p class="usage-metric-label">
+                  {{ t('usage.totalRequests') }}
+                </p>
+                <p class="usage-metric-value">
+                  {{ usageStats?.total_requests?.toLocaleString() || '0' }}
+                </p>
+                <p class="usage-metric-hint">
+                  {{ t('usage.inSelectedRange') }}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Total Tokens -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
-              <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalTokens') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ formatTokens(usageStats?.total_tokens || 0) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                <span>{{ t('usage.in') }} {{ formatTokens(usageStats?.total_input_tokens || 0) }}</span>
-                <span> · </span>
-                <span>{{ t('usage.out') }} {{ formatTokens(usageStats?.total_output_tokens || 0) }}</span>
-                <span> · </span>
-                <span class="text-sky-600 dark:text-sky-400">{{ t('usage.cacheHit') }} {{ formatTokens(usageStats?.total_cache_read_tokens || 0) }}</span>
-                <span> · </span>
-                <span class="text-amber-600 dark:text-amber-400">{{ t('usage.cacheCreate') }} {{ formatTokens(usageStats?.total_cache_creation_tokens || 0) }}</span>
-              </p>
-              <p class="text-xs text-gray-400 dark:text-gray-500">
-                {{ t('usage.cacheHitRate') }}:
-                <template v-if="cacheStats.totalInput > 0">
-                  <span class="text-sky-600 dark:text-sky-400">{{ formatTokens(cacheStats.cacheRead) }}</span>
-                  <span class="text-gray-400">/</span>
-                  <span class="text-gray-600 dark:text-gray-300">{{ formatTokens(cacheStats.totalInput) }}</span>
-                  <span class="ml-1">{{ cacheStats.ratePercent }}</span>
-                </template>
-                <template v-else>-</template>
-              </p>
+          <!-- Total Tokens -->
+          <div class="usage-metric-card">
+            <div class="flex items-center gap-3">
+              <ProductIcon name="cube" tone="amber" size="sm" />
+              <div class="min-w-0 flex-1">
+                <p class="usage-metric-label">
+                  {{ t('usage.totalTokens') }}
+                </p>
+                <p class="usage-metric-value">
+                  {{ formatTokens(usageStats?.total_tokens || 0) }}
+                </p>
+                <div class="usage-token-meta">
+                  <span>{{ t('usage.in') }} {{ formatTokens(usageStats?.total_input_tokens || 0) }}</span>
+                  <span>{{ t('usage.out') }} {{ formatTokens(usageStats?.total_output_tokens || 0) }}</span>
+                  <span class="usage-token-meta-accent">{{ t('usage.cacheHit') }} {{ formatTokens(usageStats?.total_cache_read_tokens || 0) }}</span>
+                  <span class="usage-token-meta-warm">{{ t('usage.cacheCreate') }} {{ formatTokens(usageStats?.total_cache_creation_tokens || 0) }}</span>
+                </div>
+                <p class="usage-metric-hint">
+                  {{ t('usage.cacheHitRate') }}:
+                  <template v-if="cacheStats.totalInput > 0">
+                    <span class="text-sky-600 dark:text-sky-400">{{ formatTokens(cacheStats.cacheRead) }}</span>
+                    <span class="text-gray-400">/</span>
+                    <span class="text-gray-600 dark:text-gray-300">{{ formatTokens(cacheStats.totalInput) }}</span>
+                    <span class="ml-1">{{ cacheStats.ratePercent }}</span>
+                  </template>
+                  <template v-else>-</template>
+                </p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Total Cost -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-              <Icon name="dollar" size="md" class="text-green-600 dark:text-green-400" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalCost') }}
-              </p>
-              <p class="text-xl font-bold text-green-600 dark:text-green-400">
-                ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.actualCost') }} /
-                <span class="line-through">${{ (usageStats?.total_cost || 0).toFixed(4) }}</span>
-                {{ t('usage.standardCost') }}
-              </p>
+          <!-- Total Cost -->
+          <div class="usage-metric-card">
+            <div class="flex items-center gap-3">
+              <ProductIcon name="wallet" tone="emerald" size="sm" />
+              <div class="min-w-0 flex-1">
+                <p class="usage-metric-label">
+                  {{ t('usage.totalCost') }}
+                </p>
+                <p class="usage-metric-value text-emerald-600 dark:text-emerald-400">
+                  ${{ (usageStats?.total_cost || 0).toFixed(4) }}
+                </p>
+                <p class="usage-metric-hint">{{ t('usage.inSelectedRange') }}</p>
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- Average Duration -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
-              <Icon name="clock" size="md" class="text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.avgDuration') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ formatDuration(usageStats?.average_duration_ms || 0) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.perRequest') }}</p>
+          <!-- Average Duration -->
+          <div class="usage-metric-card">
+            <div class="flex items-center gap-3">
+              <ProductIcon name="clock" tone="violet" size="sm" />
+              <div class="min-w-0">
+                <p class="usage-metric-label">
+                  {{ t('usage.avgDuration') }}
+                </p>
+                <p class="usage-metric-value">
+                  {{ formatDuration(usageStats?.average_duration_ms || 0) }}
+                </p>
+                <p class="usage-metric-hint">{{ t('usage.perRequest') }}</p>
+              </div>
             </div>
           </div>
-        </div>
         </div>
       </template>
 
       <template #filters>
-        <div class="card">
-          <div class="px-6 py-4">
-          <div class="flex flex-wrap items-end gap-4">
+        <div class="usage-filter-card">
+          <div class="usage-filter-toolbar">
             <!-- API Key Filter -->
-            <div class="min-w-[180px]">
+            <div class="usage-filter-field min-w-[180px]">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select
                 v-model="filters.api_key_id"
@@ -117,7 +101,7 @@
             </div>
 
             <!-- Date Range Filter -->
-            <div>
+            <div class="usage-filter-field">
               <label class="input-label">{{ t('usage.timeRange') }}</label>
               <DateRangePicker
                 v-model:start-date="startDate"
@@ -127,11 +111,13 @@
             </div>
 
             <!-- Actions -->
-            <div class="ml-auto flex items-center gap-3">
+            <div class="usage-filter-actions">
               <button @click="applyFilters" :disabled="loading" class="btn btn-secondary">
+                <Icon name="refresh" size="sm" />
                 {{ t('common.refresh') }}
               </button>
               <button @click="resetFilters" class="btn btn-secondary">
+                <Icon name="x" size="sm" />
                 {{ t('common.reset') }}
               </button>
               <button @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
@@ -155,21 +141,21 @@
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   ></path>
                 </svg>
+                <Icon v-else name="download" size="sm" />
                 {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
               </button>
             </div>
           </div>
         </div>
-        </div>
       </template>
 
       <template #table>
         <!-- Tab 切换栏 -->
-        <div v-if="errorViewEnabled" class="mb-0 flex gap-2 border-b border-gray-200 px-4 pt-3 dark:border-dark-700">
-          <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
+        <div v-if="errorViewEnabled" class="usage-tabs-bar">
+          <button class="tab usage-tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
             {{ t('usage.tabs.usage') }}
           </button>
-          <button class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
+          <button class="tab usage-tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
             {{ t('usage.tabs.errors') }}
           </button>
         </div>
@@ -190,17 +176,17 @@
           @sort="handleSort"
         >
           <template #cell-api_key="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">{{
+            <span class="usage-primary-text">{{
               row.api_key?.name || '-'
             }}</span>
           </template>
 
           <template #cell-model="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+            <span class="usage-model-pill">{{ value }}</span>
           </template>
 
           <template #cell-reasoning_effort="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">
+            <span class="usage-secondary-text">
               {{ formatReasoningEffort(row.reasoning_effort) }}
             </span>
           </template>
@@ -213,7 +199,7 @@
 
           <template #cell-stream="{ row }">
             <span
-              class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
+              class="usage-status-pill"
               :class="getRequestTypeBadgeClass(row)"
             >
               {{ getRequestTypeLabel(row) }}
@@ -221,7 +207,7 @@
           </template>
 
           <template #cell-billing_mode="{ row }">
-            <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
+            <span class="usage-status-pill"
                   :class="getBillingModeBadgeClass(getDisplayBillingMode(row))">
               {{ getBillingModeLabel(getDisplayBillingMode(row), t) }}
             </span>
@@ -229,7 +215,7 @@
 
           <template #cell-tokens="{ row }">
             <!-- 图片生成请求 -->
-            <div v-if="isImageUsage(row)" class="flex items-center gap-1.5">
+            <div v-if="isImageUsage(row)" class="usage-token-stack">
               <svg
                 class="h-4 w-4 text-indigo-500"
                 fill="none"
@@ -243,23 +229,23 @@
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              <span class="font-medium text-gray-900 dark:text-white">{{ row.image_count }}{{ t('usage.imageUnit') }}</span>
-              <span class="text-gray-400">({{ formatImageBillingSize(row, t) }})</span>
+              <span class="usage-primary-text">{{ row.image_count }}{{ t('usage.imageUnit') }}</span>
+              <span class="usage-muted-text">({{ formatImageBillingSize(row, t) }})</span>
             </div>
             <!-- Token 请求 -->
-            <div v-else class="flex items-center gap-1.5">
-              <div class="space-y-1.5 text-sm">
+            <div v-else class="flex items-center gap-2">
+              <div class="usage-token-stack">
                 <!-- Input / Output Tokens -->
-                <div class="flex items-center gap-2">
+                <div class="usage-token-row">
                   <!-- Input -->
-                  <div class="inline-flex items-center gap-1">
+                  <div class="usage-token-pill">
                     <Icon name="arrowDown" size="sm" class="text-emerald-500" />
                     <span class="font-medium text-gray-900 dark:text-white">{{
                       (row.input_tokens ?? 0).toLocaleString()
                     }}</span>
                   </div>
                   <!-- Output -->
-                  <div class="inline-flex items-center gap-1">
+                  <div class="usage-token-pill">
                     <Icon name="arrowUp" size="sm" class="text-violet-500" />
                     <span class="font-medium text-gray-900 dark:text-white">{{
                       (row.output_tokens ?? 0).toLocaleString()
@@ -269,17 +255,17 @@
                 <!-- Cache Tokens (Read + Write) -->
                 <div
                   v-if="row.cache_read_tokens > 0 || row.cache_creation_tokens > 0"
-                  class="flex items-center gap-2"
+                  class="usage-token-row"
                 >
                   <!-- Cache Read -->
-                  <div v-if="row.cache_read_tokens > 0" class="inline-flex items-center gap-1">
+                  <div v-if="row.cache_read_tokens > 0" class="usage-token-pill usage-token-pill-cool">
                     <Icon name="inbox" size="sm" class="text-sky-500" />
                     <span class="font-medium text-sky-600 dark:text-sky-400">{{
                       formatCacheTokens(row.cache_read_tokens)
                     }}</span>
                   </div>
                   <!-- Cache Write -->
-                  <div v-if="row.cache_creation_tokens > 0" class="inline-flex items-center gap-1">
+                  <div v-if="row.cache_creation_tokens > 0" class="usage-token-pill usage-token-pill-warm">
                     <Icon name="edit" size="sm" class="text-amber-500" />
                     <span class="font-medium text-amber-600 dark:text-amber-400">{{
                       formatCacheTokens(row.cache_creation_tokens)
@@ -288,8 +274,8 @@
                     <span v-if="row.cache_ttl_overridden" :title="t('usage.cacheTtlOverriddenHint')" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:ring-rose-500/30 cursor-help">R</span>
                   </div>
                 </div>
-                <div v-if="hasImageOutputTokens(row)" class="flex items-center gap-2">
-                  <div class="inline-flex items-center gap-1">
+                <div v-if="hasImageOutputTokens(row)" class="usage-token-row">
+                  <div class="usage-token-pill usage-token-pill-pink">
                     <svg class="h-3.5 w-3.5 text-pink-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                     <span class="font-medium text-pink-600 dark:text-pink-400">{{ row.image_output_tokens.toLocaleString() }}</span>
                   </div>
@@ -302,12 +288,12 @@
                 @mouseleave="hideTokenTooltip"
               >
                 <div
-                  class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50"
+                  class="usage-info-button"
                 >
                   <Icon
                     name="infoCircle"
                     size="xs"
-                    class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400"
+                    class="text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300"
                   />
                 </div>
               </div>
@@ -315,9 +301,9 @@
           </template>
 
           <template #cell-cost="{ row }">
-            <div class="flex items-center gap-1.5 text-sm">
-              <span class="font-medium text-green-600 dark:text-green-400">
-                ${{ (row.actual_cost ?? 0).toFixed(6) }}
+            <div class="flex items-center gap-2 text-sm">
+              <span class="usage-cost-value">
+                ${{ (row.total_cost ?? 0).toFixed(6) }}
               </span>
               <!-- Cost Detail Tooltip -->
               <div
@@ -326,12 +312,12 @@
                 @mouseleave="hideTooltip"
               >
                 <div
-                  class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50"
+                  class="usage-info-button"
                 >
                   <Icon
                     name="infoCircle"
                     size="xs"
-                    class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400"
+                    class="text-gray-400 group-hover:text-gray-600 dark:text-gray-500 dark:group-hover:text-gray-300"
                   />
                 </div>
               </div>
@@ -513,7 +499,7 @@
               <span class="font-medium text-pink-300">${{ tooltipData.image_output_cost.toFixed(6) }}</span>
             </div>
             <!-- Token billing: show unit prices per 1M tokens -->
-            <template v-if="!tooltipData?.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN">
+            <template v-if="tooltipData && !isImageUsage(tooltipData) && (!tooltipData.billing_mode || tooltipData.billing_mode === BILLING_MODE_TOKEN)">
               <div v-if="tooltipData && tooltipData.input_tokens > 0" class="flex items-center justify-between gap-4">
                 <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
                 <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, tooltipData.input_tokens) }} {{ t('usage.perMillionTokens') }}</span>
@@ -580,20 +566,10 @@
             <span class="text-gray-400">{{ t('usage.serviceTier') }}</span>
             <span class="font-semibold text-cyan-300">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}</span>
           </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400"
-              >{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span
-            >
-          </div>
-          <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.original') }}</span>
-            <span class="font-medium text-white">${{ tooltipData?.total_cost.toFixed(6) }}</span>
-          </div>
           <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.billed') }}</span>
+            <span class="text-gray-400">{{ t('usage.totalCost') }}</span>
             <span class="font-semibold text-green-400"
-              >${{ tooltipData?.actual_cost.toFixed(6) }}</span
+              >${{ tooltipData?.total_cost.toFixed(6) }}</span
             >
           </div>
         </div>
@@ -618,13 +594,14 @@ import Pagination from '@/components/common/Pagination.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import Select from '@/components/common/Select.vue'
 import DateRangePicker from '@/components/common/DateRangePicker.vue'
+import ProductIcon from '@/components/common/ProductIcon.vue'
 import Icon from '@/components/icons/Icon.vue'
 import UserErrorRequestsTable from '@/components/user/UserErrorRequestsTable.vue'
 import type { UsageLog, ApiKey, UsageQueryParams, UsageStatsResponse, UserErrorRequest } from '@/types'
 import type { Column } from '@/components/common/types'
 import { formatDateTime, formatReasoningEffort } from '@/utils/format'
 import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
-import { formatCacheTokens, formatMultiplier } from '@/utils/formatters'
+import { formatCacheTokens } from '@/utils/formatters'
 import { formatTokenPricePerMillion } from '@/utils/usagePricing'
 import { getUsageServiceTierLabel } from '@/utils/usageServiceTier'
 import { resolveUsageRequestType } from '@/utils/usageRequestType'
@@ -1118,3 +1095,266 @@ onMounted(() => {
   loadUsageStats()
 })
 </script>
+
+<style scoped>
+.usage-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+}
+
+.usage-metric-card {
+  border: 1px solid rgb(17 24 39 / 0.06);
+  border-radius: 1rem;
+  background: rgb(255 255 255);
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.usage-metric-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+  color: rgb(100 116 139);
+}
+
+.usage-metric-value {
+  margin-top: 0.125rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.75rem;
+  color: rgb(17 24 39);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-metric-hint {
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: rgb(100 116 139);
+}
+
+.usage-token-meta {
+  margin-top: 0.125rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: rgb(100 116 139);
+}
+
+.usage-token-meta-accent {
+  color: rgb(2 132 199);
+}
+
+.usage-token-meta-warm {
+  color: rgb(217 119 6);
+}
+
+.usage-filter-card {
+  border: 1px solid rgb(17 24 39 / 0.06);
+  border-radius: 1rem;
+  background: rgb(255 255 255);
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.usage-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.usage-filter-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.usage-filter-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.usage-tabs-bar {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgb(226 232 240);
+  padding: 0.75rem 1rem 0;
+}
+
+.usage-tab {
+  border-radius: 999px 999px 0 0;
+}
+
+.usage-primary-text {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(17 24 39);
+}
+
+.usage-secondary-text,
+.usage-muted-text {
+  font-size: 0.875rem;
+  color: rgb(100 116 139);
+}
+
+.usage-model-pill,
+.usage-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1rem;
+}
+
+.usage-model-pill {
+  max-width: 18rem;
+  overflow: hidden;
+  border: 1px solid rgb(226 232 240);
+  background: rgb(248 250 252);
+  padding: 0.25rem 0.625rem;
+  color: rgb(30 41 59);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-status-pill {
+  padding: 0.25rem 0.625rem;
+}
+
+.usage-token-stack {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.usage-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.usage-token-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  background: rgb(248 250 252);
+  padding: 0.125rem 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.125rem;
+}
+
+.usage-token-pill-cool {
+  background: rgb(224 242 254 / 0.72);
+}
+
+.usage-token-pill-warm {
+  background: rgb(254 243 199 / 0.72);
+}
+
+.usage-token-pill-pink {
+  background: rgb(252 231 243 / 0.72);
+}
+
+.usage-cost-value {
+  border-radius: 999px;
+  background: rgb(236 253 245);
+  padding: 0.25rem 0.625rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: rgb(4 120 87);
+}
+
+.usage-info-button {
+  display: flex;
+  height: 1.25rem;
+  width: 1.25rem;
+  cursor: help;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgb(226 232 240);
+  background: rgb(255 255 255);
+  transition: border-color 0.18s ease, background-color 0.18s ease;
+}
+
+.usage-info-button:hover {
+  border-color: rgb(148 163 184);
+  background: rgb(248 250 252);
+}
+
+:global(.dark) .usage-metric-card,
+:global(.dark) .usage-filter-card {
+  border-color: rgb(255 255 255 / 0.1);
+  background: rgb(15 23 42 / 0.52);
+  box-shadow: none;
+}
+
+:global(.dark) .usage-metric-label,
+:global(.dark) .usage-metric-hint,
+:global(.dark) .usage-token-meta,
+:global(.dark) .usage-secondary-text,
+:global(.dark) .usage-muted-text {
+  color: rgb(148 163 184);
+}
+
+:global(.dark) .usage-metric-value,
+:global(.dark) .usage-primary-text {
+  color: rgb(255 255 255);
+}
+
+:global(.dark) .usage-tabs-bar {
+  border-color: rgb(51 65 85);
+}
+
+:global(.dark) .usage-model-pill {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42 / 0.72);
+  color: rgb(226 232 240);
+}
+
+:global(.dark) .usage-token-pill {
+  background: rgb(15 23 42 / 0.72);
+}
+
+:global(.dark) .usage-token-pill-cool {
+  background: rgb(14 165 233 / 0.14);
+}
+
+:global(.dark) .usage-token-pill-warm {
+  background: rgb(245 158 11 / 0.14);
+}
+
+:global(.dark) .usage-token-pill-pink {
+  background: rgb(236 72 153 / 0.14);
+}
+
+:global(.dark) .usage-cost-value {
+  background: rgb(16 185 129 / 0.14);
+  color: rgb(110 231 183);
+}
+
+:global(.dark) .usage-info-button {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42);
+}
+
+@media (max-width: 640px) {
+  .usage-filter-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .usage-filter-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+</style>
