@@ -1,6 +1,7 @@
-import { flushPromises, mount } from '@vue/test-utils'
+import { flushPromises, mount, RouterLinkStub } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import EmailVerifyView from '@/views/auth/EmailVerifyView.vue'
+import { storeAffiliateReferralCode } from '@/utils/oauthAffiliate'
 
 const {
   pushMock,
@@ -145,6 +146,7 @@ describe('EmailVerifyView', () => {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+          RouterLink: RouterLinkStub,
           Icon: true,
           TurnstileWidget: true,
           transition: false,
@@ -186,6 +188,7 @@ describe('EmailVerifyView', () => {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+          RouterLink: RouterLinkStub,
           Icon: true,
           TurnstileWidget: true,
           transition: false,
@@ -227,6 +230,7 @@ describe('EmailVerifyView', () => {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+          RouterLink: RouterLinkStub,
           Icon: true,
           TurnstileWidget: true,
           transition: false,
@@ -274,6 +278,7 @@ describe('EmailVerifyView', () => {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+          RouterLink: RouterLinkStub,
           Icon: true,
           TurnstileWidget: true,
           transition: false,
@@ -307,6 +312,7 @@ describe('EmailVerifyView', () => {
         password: 'secret-123',
       })
     )
+    storeAffiliateReferralCode('AFF123')
     apiClientPostMock.mockResolvedValue({
       data: {
         access_token: 'oauth-access-token',
@@ -320,6 +326,7 @@ describe('EmailVerifyView', () => {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+          RouterLink: RouterLinkStub,
           Icon: true,
           TurnstileWidget: true,
           transition: false,
@@ -384,6 +391,7 @@ describe('EmailVerifyView', () => {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+          RouterLink: RouterLinkStub,
           Icon: true,
           TurnstileWidget: true,
           transition: false,
@@ -430,6 +438,7 @@ describe('EmailVerifyView', () => {
       global: {
         stubs: {
           AuthLayout: { template: '<div><slot /><slot name="footer" /></div>' },
+          RouterLink: RouterLinkStub,
           Icon: true,
           TurnstileWidget: true,
           transition: false,

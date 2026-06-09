@@ -1,155 +1,234 @@
 <template>
-  <AuthLayout>
-    <div class="space-y-6">
-      <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
-          {{ t('auth.verifyYourEmail') }}
-        </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
-          {{ t('auth.sendCodeDesc') }}
-          <span class="font-medium text-gray-700 dark:text-gray-300">{{ email }}</span>
-        </p>
-      </div>
-
-      <!-- No Data Warning -->
-      <div
-        v-if="!hasRegisterData"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
-      >
-        <div class="flex items-start gap-3">
-          <div class="flex-shrink-0">
-            <Icon name="exclamationCircle" size="md" class="text-amber-500" />
-          </div>
-          <div class="text-sm text-amber-700 dark:text-amber-400">
-            <p class="font-medium">{{ t('auth.sessionExpired') }}</p>
-            <p class="mt-1">{{ t('auth.sessionExpiredDesc') }}</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Verification Form -->
-      <form v-else @submit.prevent="handleVerify" class="space-y-5">
-        <!-- Verification Code Input -->
-        <div>
-          <label for="code" class="input-label text-center">
-            {{ t('auth.verificationCode') }}
-          </label>
-          <input
-            id="code"
-            v-model="verifyCode"
-            type="text"
-            required
-            autocomplete="one-time-code"
-            inputmode="numeric"
-            maxlength="6"
-            :disabled="isLoading"
-            class="input py-3 text-center font-mono text-xl tracking-[0.5em]"
-            :class="{ 'input-error': errors.code }"
-            placeholder="000000"
-          />
-          <p class="input-hint text-center">{{ t('auth.verificationCodeHint') }}</p>
-        </div>
-
-        <!-- Code Status -->
-        <div
-          v-if="codeSent"
-          class="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20"
+  <div class="min-h-screen bg-[#f5f5f7] text-gray-950 dark:bg-dark-950 dark:text-white">
+    <header
+      class="border-b border-gray-950/5 bg-[#f5f5f7]/90 backdrop-blur-xl dark:border-white/10 dark:bg-dark-950/85"
+    >
+      <nav class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <router-link
+          to="/"
+          class="flex min-w-0 items-center gap-3 text-gray-950 transition-colors hover:text-gray-700 dark:text-white dark:hover:text-dark-200"
         >
-          <div class="flex items-start gap-3">
-            <div class="flex-shrink-0">
-              <Icon name="checkCircle" size="md" class="text-green-500" />
+          <span
+            class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white dark:bg-dark-900"
+          >
+            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+          </span>
+          <span class="truncate text-sm font-semibold sm:text-base">{{ siteName }}</span>
+        </router-link>
+
+        <router-link
+          to="/"
+          class="hidden text-sm font-medium text-gray-600 transition-colors hover:text-gray-950 dark:text-dark-300 dark:hover:text-white sm:inline-flex"
+        >
+          返回首页
+        </router-link>
+      </nav>
+    </header>
+
+    <main class="px-4 py-10 sm:px-6 lg:px-8">
+      <div class="mx-auto grid min-h-[calc(100vh-9rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1fr_26rem]">
+        <section class="hidden lg:block">
+          <div class="max-w-xl">
+            <div
+              class="mb-7 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white dark:bg-dark-900"
+            >
+              <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
             </div>
-            <p class="text-sm text-green-700 dark:text-green-400">
-              {{ t('auth.codeSentSuccess') }}
+            <h1 class="auth-display-title text-5xl font-semibold leading-[1.04] text-gray-950 dark:text-white">
+              {{ siteName }}
+            </h1>
+            <p class="mt-5 max-w-lg text-lg leading-8 text-gray-700 dark:text-dark-200">
+              {{ siteSubtitle }}
             </p>
           </div>
-        </div>
 
-        <!-- Turnstile Widget for Resend -->
-        <div v-if="turnstileEnabled && turnstileSiteKey && showResendTurnstile">
-          <TurnstileWidget
-            ref="turnstileRef"
-            :site-key="turnstileSiteKey"
-            @verify="onTurnstileVerify"
-            @expire="onTurnstileExpire"
-            @error="onTurnstileError"
-          />
-        </div>
+          <div class="mt-12 max-w-xl overflow-hidden rounded-2xl bg-gray-950 p-7 text-white dark:bg-dark-900">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium text-white/60">邮箱验证</p>
+                <p class="mt-2 text-2xl font-semibold">
+                  输入验证码后创建账户
+                </p>
+              </div>
+              <Icon name="mail" size="lg" class="text-white/70" />
+            </div>
 
-        <!-- Submit Button -->
-        <button type="submit" :disabled="isLoading || !verifyCode" class="btn btn-primary w-full">
-          <svg
-            v-if="isLoading"
-            class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
-            fill="none"
-            viewBox="0 0 24 24"
-          >
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            ></circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
-          <Icon v-else name="checkCircle" size="md" class="mr-2" />
-          {{ isLoading ? t('auth.verifying') : t('auth.verifyAndCreate') }}
-        </button>
+            <div class="mt-8 space-y-3 text-sm leading-6 text-white/70">
+              <div class="flex items-center gap-3">
+                <Icon name="checkCircle" size="sm" class="text-white/70" />
+                <span>验证码用于确认邮箱归属</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <Icon name="shield" size="sm" class="text-white/70" />
+                <span>注册数据只在当前验证流程中使用</span>
+              </div>
+              <div class="flex items-center gap-3">
+                <Icon name="arrowRight" size="sm" class="text-white/70" />
+                <span>验证完成后进入控制台</span>
+              </div>
+            </div>
+          </div>
+        </section>
 
-        <!-- Resend Code -->
-        <div class="text-center">
-          <button
-            v-if="countdown > 0"
-            type="button"
-            disabled
-            class="cursor-not-allowed text-sm text-gray-400 dark:text-dark-500"
-          >
-            {{ t('auth.resendCountdown', { countdown }) }}
-          </button>
-          <button
-            v-else
-            type="button"
-            @click="handleResendCode"
-            :disabled="
-              isSendingCode || (turnstileEnabled && showResendTurnstile && !resendTurnstileToken)
-            "
-            class="text-sm text-primary-600 transition-colors hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:text-primary-300"
-          >
-            <span v-if="isSendingCode">{{ t('auth.sendingCode') }}</span>
-            <span v-else-if="turnstileEnabled && !showResendTurnstile">
-              {{ t('auth.clickToResend') }}
-            </span>
-            <span v-else>{{ t('auth.resendCode') }}</span>
-          </button>
-        </div>
-      </form>
-    </div>
+        <section class="mx-auto w-full max-w-[26rem]">
+          <div class="mb-8 text-center lg:hidden">
+            <div
+              class="mx-auto mb-5 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white dark:bg-dark-900"
+            >
+              <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+            </div>
+            <h1 class="text-3xl font-semibold text-gray-950 dark:text-white">
+              {{ siteName }}
+            </h1>
+          </div>
 
-    <!-- Footer -->
-    <template #footer>
-      <button
-        @click="handleBack"
-        class="flex items-center gap-2 text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-gray-300"
-      >
-        <Icon name="arrowLeft" size="sm" />
-        {{ t('auth.backToRegistration') }}
-      </button>
-    </template>
-  </AuthLayout>
+          <div class="rounded-2xl bg-white p-6 dark:bg-dark-900 sm:p-8">
+            <div>
+              <h2 class="text-2xl font-semibold text-gray-950 dark:text-white">
+                {{ t('auth.verifyYourEmail') }}
+              </h2>
+              <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-dark-300">
+                {{ t('auth.sendCodeDesc') }}
+                <span class="font-medium text-gray-950 dark:text-white">{{ email }}</span>
+              </p>
+            </div>
+
+            <div
+              v-if="!hasRegisterData"
+              class="mt-7 rounded-2xl bg-amber-50 p-4 dark:bg-amber-900/20"
+            >
+              <div class="flex items-start gap-3">
+                <Icon name="exclamationCircle" size="md" class="shrink-0 text-amber-500" />
+                <div class="text-sm leading-6 text-amber-700 dark:text-amber-400">
+                  <p class="font-medium">{{ t('auth.sessionExpired') }}</p>
+                  <p class="mt-1">{{ t('auth.sessionExpiredDesc') }}</p>
+                </div>
+              </div>
+            </div>
+
+            <form v-else @submit.prevent="handleVerify" class="mt-7 space-y-5">
+              <div>
+                <label for="code" class="auth-label text-center">
+                  {{ t('auth.verificationCode') }}
+                </label>
+                <input
+                  id="code"
+                  v-model="verifyCode"
+                  type="text"
+                  required
+                  autocomplete="one-time-code"
+                  inputmode="numeric"
+                  maxlength="6"
+                  :disabled="isLoading"
+                  class="auth-input text-center font-mono text-xl"
+                  :class="{ 'auth-input-error': errors.code }"
+                  placeholder="000000"
+                />
+                <p class="auth-hint text-center">{{ t('auth.verificationCodeHint') }}</p>
+              </div>
+
+              <div
+                v-if="codeSent"
+                class="rounded-2xl bg-gray-100 p-4 dark:bg-dark-800"
+              >
+                <div class="flex items-start gap-3">
+                  <Icon name="checkCircle" size="md" class="shrink-0 text-gray-950 dark:text-white" />
+                  <p class="text-sm leading-6 text-gray-600 dark:text-dark-300">
+                    {{ t('auth.codeSentSuccess') }}
+                  </p>
+                </div>
+              </div>
+
+              <div v-if="turnstileEnabled && turnstileSiteKey && showResendTurnstile">
+                <TurnstileWidget
+                  ref="turnstileRef"
+                  :site-key="turnstileSiteKey"
+                  @verify="onTurnstileVerify"
+                  @expire="onTurnstileExpire"
+                  @error="onTurnstileError"
+                />
+              </div>
+
+              <button
+                type="submit"
+                :disabled="isLoading || !verifyCode"
+                class="inline-flex h-12 w-full items-center justify-center gap-2 rounded-full bg-gray-950 px-6 text-sm font-semibold text-white transition-colors hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-gray-950 dark:hover:bg-dark-100"
+              >
+                <svg
+                  v-if="isLoading"
+                  class="h-4 w-4 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+                <Icon v-else name="checkCircle" size="sm" />
+                {{ isLoading ? t('auth.verifying') : t('auth.verifyAndCreate') }}
+              </button>
+
+              <div class="text-center">
+                <button
+                  v-if="countdown > 0"
+                  type="button"
+                  disabled
+                  class="cursor-not-allowed text-sm text-gray-400 dark:text-dark-500"
+                >
+                  {{ t('auth.resendCountdown', { countdown }) }}
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  @click="handleResendCode"
+                  :disabled="
+                    isSendingCode || (turnstileEnabled && showResendTurnstile && !resendTurnstileToken)
+                  "
+                  class="text-sm font-medium text-gray-950 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:text-white dark:hover:text-dark-200"
+                >
+                  <span v-if="isSendingCode">{{ t('auth.sendingCode') }}</span>
+                  <span v-else-if="turnstileEnabled && !showResendTurnstile">
+                    {{ t('auth.clickToResend') }}
+                  </span>
+                  <span v-else>{{ t('auth.resendCode') }}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          <div class="mt-6 text-center">
+            <button
+              @click="handleBack"
+              class="inline-flex items-center gap-2 text-sm font-medium text-gray-600 transition-colors hover:text-gray-950 dark:text-dark-300 dark:hover:text-white"
+            >
+              <Icon name="arrowLeft" size="sm" />
+              {{ t('auth.backToRegistration') }}
+            </button>
+          </div>
+
+          <p class="mt-8 text-center text-xs text-gray-400 dark:text-dark-500">
+            &copy; {{ currentYear }} {{ siteName }}. All rights reserved.
+          </p>
+        </section>
+      </div>
+    </main>
+  </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
@@ -230,6 +309,8 @@ const hasRegisterData = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('Sub2API')
+const siteLogo = ref<string>('')
+const siteSubtitle = ref<string>('AI API Gateway Platform')
 const registrationEmailSuffixWhitelist = ref<string[]>([])
 
 // Turnstile for resend
@@ -245,6 +326,7 @@ const errors = ref({
 const validationToastMessage = computed(
   () => errors.value.code || errors.value.turnstile || ''
 )
+const currentYear = computed(() => new Date().getFullYear())
 
 watch(validationToastMessage, (value, previousValue) => {
   if (value && value !== previousValue) {
@@ -295,6 +377,8 @@ onMounted(async () => {
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     siteName.value = settings.site_name || 'Sub2API'
+    siteLogo.value = settings.site_logo || ''
+    siteSubtitle.value = settings.site_subtitle || 'AI API Gateway Platform'
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
     )
@@ -593,5 +677,78 @@ function buildEmailSuffixNotAllowedMessage(): string {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-8px);
+}
+
+.auth-display-title {
+  text-wrap: balance;
+}
+
+.auth-label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #374151;
+}
+
+.dark .auth-label {
+  color: #cbd5e1;
+}
+
+.auth-input {
+  min-height: 3rem;
+  width: 100%;
+  border-radius: 0.875rem;
+  border: 1px solid transparent;
+  background: #f5f5f7;
+  color: #111827;
+  font-size: 0.875rem;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.auth-input::placeholder {
+  color: #6b7280;
+}
+
+.auth-input:focus {
+  border-color: #111827;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(17, 24, 39, 0.12);
+  outline: none;
+}
+
+.auth-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.auth-input-error {
+  border-color: #ef4444;
+}
+
+.auth-hint {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.dark .auth-input {
+  background: #1e293b;
+  color: #f8fafc;
+}
+
+.dark .auth-input::placeholder {
+  color: #94a3b8;
+}
+
+.dark .auth-input:focus {
+  background: #0f172a;
+}
+
+.dark .auth-hint {
+  color: #94a3b8;
 }
 </style>

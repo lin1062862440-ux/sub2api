@@ -61,7 +61,7 @@
                   {{ t('usage.totalCost') }}
                 </p>
                 <p class="usage-metric-value text-emerald-600 dark:text-emerald-400">
-                  ${{ (usageStats?.total_cost || 0).toFixed(4) }}
+                  ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
                 </p>
                 <p class="usage-metric-hint">{{ t('usage.inSelectedRange') }}</p>
               </div>
@@ -303,7 +303,7 @@
           <template #cell-cost="{ row }">
             <div class="flex items-center gap-2 text-sm">
               <span class="usage-cost-value">
-                ${{ (row.total_cost ?? 0).toFixed(6) }}
+                ${{ (row.actual_cost ?? 0).toFixed(6) }}
               </span>
               <!-- Cost Detail Tooltip -->
               <div
@@ -567,10 +567,14 @@
             <span class="font-semibold text-cyan-300">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}</span>
           </div>
           <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.totalCost') }}</span>
+            <span class="text-gray-400">{{ t('usage.userBilled') }}</span>
             <span class="font-semibold text-green-400"
-              >${{ tooltipData?.total_cost.toFixed(6) }}</span
+              >${{ tooltipData?.actual_cost.toFixed(6) }}</span
             >
+          </div>
+          <div class="flex items-center justify-between gap-6">
+            <span class="text-gray-400">{{ t('usage.standardCost') }}</span>
+            <span class="font-medium text-gray-300">${{ tooltipData?.total_cost.toFixed(6) }}</span>
           </div>
         </div>
         <!-- Tooltip Arrow (left side) -->

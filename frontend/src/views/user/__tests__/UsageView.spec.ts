@@ -214,6 +214,70 @@ describe('user UsageView tooltip', () => {
     expect(text).toContain('$30.0000 / 1M tokens')
   })
 
+  it('shows billed cost after rate multiplier in summary and table cells', async () => {
+    query.mockResolvedValue({
+      items: [
+        {
+          request_id: 'req-user-rated-cost',
+          actual_cost: 2,
+          total_cost: 1,
+          rate_multiplier: 2,
+          service_tier: null,
+          input_cost: 1,
+          output_cost: 0,
+          cache_creation_cost: 0,
+          cache_read_cost: 0,
+          input_tokens: 1000,
+          output_tokens: 0,
+          cache_creation_tokens: 0,
+          cache_read_tokens: 0,
+          cache_creation_5m_tokens: 0,
+          cache_creation_1h_tokens: 0,
+          image_count: 0,
+          image_size: null,
+          first_token_ms: null,
+          duration_ms: 1,
+          created_at: '2026-03-08T00:00:00Z',
+        },
+      ],
+      total: 1,
+      pages: 1,
+    })
+    getStatsByDateRange.mockResolvedValue({
+      total_requests: 1,
+      total_tokens: 1000,
+      total_cost: 1,
+      total_actual_cost: 2,
+      avg_duration_ms: 1,
+    })
+    list.mockResolvedValue({ items: [] })
+
+    const wrapper = mount(UsageView, {
+      global: {
+        stubs: {
+          AppLayout: AppLayoutStub,
+          TablePageLayout: TablePageLayoutStub,
+          Pagination: true,
+          EmptyState: true,
+          Select: true,
+          DateRangePicker: true,
+          DataTable: DataTableStub,
+          Icon: true,
+          Teleport: true,
+        },
+      },
+    })
+
+    await flushPromises()
+    await nextTick()
+
+    const text = wrapper.text()
+    expect(text).toContain('$2.0000')
+    expect(text).toContain('$2.000000')
+    expect(text).not.toContain('$1.0000')
+    expect(text).not.toContain('$1.000000')
+  })
+
   it('exports csv with input and output unit price columns', async () => {
     const exportedLogs = [
       {
