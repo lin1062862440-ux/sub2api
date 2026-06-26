@@ -1,25 +1,28 @@
 <template>
-  <header class="sticky top-0 z-30 px-3 pt-3 md:px-5 lg:px-7">
-    <div class="flex h-14 items-center justify-between rounded-2xl border border-white/70 bg-white/82 px-3 shadow-[0_10px_30px_rgb(15_23_42/0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-dark-950/72 dark:shadow-none md:px-4">
+  <header class="glass sticky top-0 z-30 border-b border-gray-200/50 dark:border-dark-700/50">
+    <div class="flex h-16 items-center justify-between px-4 md:px-6">
       <!-- Left: Mobile Menu Toggle + Page Title -->
       <div class="flex items-center gap-4">
         <button
           @click="toggleMobileSidebar"
-          class="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-white hover:text-gray-950 focus:outline-none focus:ring-2 focus:ring-gray-950/15 dark:text-dark-300 dark:hover:bg-dark-900 dark:hover:text-white dark:focus:ring-white/20 lg:hidden"
+          class="btn-ghost btn-icon lg:hidden"
           aria-label="Toggle Menu"
         >
           <Icon name="menu" size="md" />
         </button>
 
         <div class="hidden lg:block">
-          <h1 class="text-base font-semibold tracking-[-0.01em] text-gray-950 dark:text-white">
+          <h1 class="text-lg font-semibold text-gray-900 dark:text-white">
             {{ pageTitle }}
           </h1>
+          <p v-if="pageDescription" class="text-xs text-gray-500 dark:text-dark-400">
+            {{ pageDescription }}
+          </p>
         </div>
       </div>
 
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
-      <div class="flex items-center gap-2 sm:gap-3">
+      <div class="flex items-center gap-3">
         <!-- Announcement Bell -->
         <AnnouncementBell v-if="user" />
 
@@ -29,7 +32,7 @@
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-gray-600 transition-colors hover:bg-white hover:text-gray-950 dark:text-dark-300 dark:hover:bg-dark-900 dark:hover:text-white"
+          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-dark-400 dark:hover:bg-dark-800 dark:hover:text-white"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -44,10 +47,22 @@
         <!-- Balance Display -->
         <div
           v-if="user"
-          class="hidden h-10 items-center gap-2 rounded-full bg-white px-3 text-gray-950 ring-1 ring-gray-950/5 dark:bg-dark-900 dark:text-white dark:ring-white/10 sm:flex"
+          class="hidden items-center gap-2 rounded-xl bg-primary-50 px-3 py-1.5 dark:bg-primary-900/20 sm:flex"
         >
-          <ProductIcon name="wallet" tone="slate" size="xs" bare />
-          <span class="text-sm font-semibold">
+          <svg
+            class="h-4 w-4 text-primary-600 dark:text-primary-400"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="1.5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z"
+            />
+          </svg>
+          <span class="text-sm font-semibold text-primary-700 dark:text-primary-300">
             ${{ user.balance?.toFixed(2) || '0.00' }}
           </span>
         </div>
@@ -56,18 +71,20 @@
         <div v-if="user" class="relative" ref="dropdownRef">
           <button
             @click="toggleDropdown"
-            class="flex h-11 items-center gap-2 rounded-full px-1.5 pr-2 transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-gray-950/15 dark:hover:bg-dark-900 dark:focus:ring-white/20"
+            class="flex items-center gap-2 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-dark-800"
             aria-label="User Menu"
           >
-            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gray-950 text-xs font-semibold text-white ring-1 ring-gray-950/10 dark:bg-white dark:text-gray-950 dark:ring-white/10">
+            <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br from-primary-500 to-primary-600 text-sm font-medium text-white shadow-sm">
               <img
+                v-if="avatarUrl"
                 :src="avatarUrl"
                 :alt="displayName"
                 class="h-full w-full object-cover"
               >
+              <span v-else>{{ userInitials }}</span>
             </div>
             <div class="hidden text-left md:block">
-              <div class="text-sm font-semibold text-gray-950 dark:text-white">
+              <div class="text-sm font-medium text-gray-900 dark:text-white">
                 {{ displayName }}
               </div>
               <div class="text-xs capitalize text-gray-500 dark:text-dark-400">
@@ -205,8 +222,6 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
-import ProductIcon from '@/components/common/ProductIcon.vue'
-import { resolveAvatarUrl } from '@/utils/avatar'
 
 const router = useRouter()
 const route = useRoute()
@@ -221,11 +236,25 @@ const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => appStore.docUrl)
-const avatarUrl = computed(() => resolveAvatarUrl(user.value?.avatar_url))
+const avatarUrl = computed(() => user.value?.avatar_url?.trim() || '')
 
 // 只在标准模式的管理员下显示新手引导按钮
 const showOnboardingButton = computed(() => {
   return !authStore.isSimpleMode && user.value?.role === 'admin'
+})
+
+const userInitials = computed(() => {
+  if (!user.value) return ''
+  // Prefer username, fallback to email
+  if (user.value.username) {
+    return user.value.username.substring(0, 2).toUpperCase()
+  }
+  if (user.value.email) {
+    // Get the part before @ and take first 2 chars
+    const localPart = user.value.email.split('@')[0]
+    return localPart.substring(0, 2).toUpperCase()
+  }
+  return ''
 })
 
 const displayName = computed(() => {
@@ -247,6 +276,14 @@ const pageTitle = computed(() => {
     return t(titleKey)
   }
   return (route.meta.title as string) || ''
+})
+
+const pageDescription = computed(() => {
+  const descKey = route.meta.descriptionKey as string
+  if (descKey) {
+    return t(descKey)
+  }
+  return (route.meta.description as string) || ''
 })
 
 function toggleMobileSidebar() {
@@ -295,9 +332,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .dropdown-enter-active,
 .dropdown-leave-active {
-  transition:
-    opacity 0.18s ease,
-    transform 0.18s ease;
+  transition: all 0.2s ease;
 }
 
 .dropdown-enter-from,

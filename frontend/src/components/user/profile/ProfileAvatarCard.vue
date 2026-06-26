@@ -19,11 +19,13 @@
           : 'flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br from-primary-500 to-primary-600 text-3xl font-bold text-white shadow-lg shadow-primary-500/20'"
       >
         <img
+          v-if="avatarPreviewUrl"
           data-testid="profile-avatar-preview"
           :src="avatarPreviewUrl"
           :alt="displayName"
           class="h-full w-full object-cover"
         >
+        <span v-else>{{ avatarInitial }}</span>
       </div>
 
       <div :class="props.embedded ? 'space-y-3' : 'min-w-0 flex-1 space-y-4'">
@@ -84,7 +86,6 @@ import { useAppStore } from '@/stores/app'
 import { useAuthStore } from '@/stores/auth'
 import type { User } from '@/types'
 import { extractApiErrorMessage } from '@/utils/apiError'
-import { resolveAvatarUrl } from '@/utils/avatar'
 
 const props = withDefaults(defineProps<{
   user: User | null
@@ -104,7 +105,8 @@ const avatarDraft = ref('')
 const avatarSaving = ref(false)
 
 const displayName = computed(() => props.user?.username?.trim() || props.user?.email?.trim() || t('profile.user'))
-const avatarPreviewUrl = computed(() => resolveAvatarUrl(avatarDraft.value || props.user?.avatar_url))
+const avatarInitial = computed(() => displayName.value.charAt(0).toUpperCase() || 'U')
+const avatarPreviewUrl = computed(() => avatarDraft.value.trim() || props.user?.avatar_url?.trim() || '')
 
 watch(
   () => props.user?.avatar_url,

@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"fmt"
-	"math"
 	"time"
 )
 
@@ -16,26 +14,6 @@ type GroupCapacitySummary struct {
 	SessionsMax     int   `json:"sessions_max"`
 	RPMUsed         int   `json:"rpm_used"`
 	RPMMax          int   `json:"rpm_max"`
-}
-
-// GroupCodexQuotaSummary holds equal-weight Codex quota usage for one group.
-// Each account contributes one capacity unit; accounts with missing or expired
-// snapshots are excluded from the average and reported separately.
-type GroupCodexQuotaSummary struct {
-	GroupID      int64                 `json:"group_id"`
-	AccountCount int                   `json:"account_count"`
-	FiveHour     GroupCodexQuotaWindow `json:"five_hour"`
-	SevenDay     GroupCodexQuotaWindow `json:"seven_day"`
-}
-
-// GroupCodexQuotaWindow describes one Codex quota window.
-type GroupCodexQuotaWindow struct {
-	UsedPercent      float64    `json:"used_percent"`
-	RemainingPercent float64    `json:"remaining_percent"`
-	SampledAccounts  int        `json:"sampled_accounts"`
-	MissingAccounts  int        `json:"missing_accounts"`
-	ExpiredAccounts  int        `json:"expired_accounts"`
-	NextResetAt      *time.Time `json:"next_reset_at,omitempty"`
 }
 
 // GroupCapacityService aggregates per-group capacity from runtime data.
@@ -62,123 +40,6 @@ func NewGroupCapacityService(
 		sessionLimitCache:  sessionLimitCache,
 		rpmCache:           rpmCache,
 	}
-}
-
-// GetAllGroupCodexQuota returns equal-weight Codex 5h/7d usage for all active groups.
-func (s *GroupCapacityService) GetAllGroupCodexQuota(ctx context.Context) ([]GroupCodexQuotaSummary, error) {
-	groups, err := s.groupRepo.ListActive(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make([]GroupCodexQuotaSummary, 0, len(groups))
-	for i := range groups {
-		summary, err := s.getGroupCodexQuota(ctx, groups[i].ID)
-		if err != nil {
-			continue
-		}
-		results = append(results, summary)
-	}
-	return results, nil
-}
-
-func (s *GroupCapacityService) getGroupCodexQuota(ctx context.Context, groupID int64) (GroupCodexQuotaSummary, error) {
-	accounts, err := s.accountRepo.ListByGroup(ctx, groupID)
-	if err != nil {
-		return GroupCodexQuotaSummary{}, err
-	}
-
-	now := time.Now()
-	summary := GroupCodexQuotaSummary{
-		GroupID:      groupID,
-		AccountCount: len(accounts),
-	}
-	summary.FiveHour = aggregateCodexQuotaWindow(accounts, "5h", now)
-	summary.SevenDay = aggregateCodexQuotaWindow(accounts, "7d", now)
-	return summary, nil
-}
-
-func aggregateCodexQuotaWindow(accounts []Account, window string, now time.Time) GroupCodexQuotaWindow {
-	var totalUsed float64
-	var sampled, missing, expired int
-	var nextReset *time.Time
-
-	for i := range accounts {
-		if codexQuotaSnapshotExpired(accounts[i].Extra, window, now) {
-			expired++
-			continue
-		}
-		progress := buildCodexUsageProgressFromExtra(accounts[i].Extra, window, now)
-		if progress == nil {
-			missing++
-			continue
-		}
-		if progress.ResetsAt != nil && !now.Before(*progress.ResetsAt) {
-			expired++
-			continue
-		}
-		sampled++
-		totalUsed += clampPercent(progress.Utilization)
-		if progress.ResetsAt != nil && (nextReset == nil || progress.ResetsAt.Before(*nextReset)) {
-			reset := progress.ResetsAt.UTC()
-			nextReset = &reset
-		}
-	}
-
-	if sampled == 0 {
-		return GroupCodexQuotaWindow{
-			MissingAccounts: missing,
-			ExpiredAccounts: expired,
-		}
-	}
-
-	used := roundPercent(totalUsed / float64(sampled))
-	return GroupCodexQuotaWindow{
-		UsedPercent:      used,
-		RemainingPercent: roundPercent(100 - used),
-		SampledAccounts:  sampled,
-		MissingAccounts:  missing,
-		ExpiredAccounts:  expired,
-		NextResetAt:      nextReset,
-	}
-}
-
-func codexQuotaSnapshotExpired(extra map[string]any, window string, now time.Time) bool {
-	if len(extra) == 0 {
-		return false
-	}
-	var resetAtKey string
-	switch window {
-	case "5h":
-		resetAtKey = "codex_5h_reset_at"
-	case "7d":
-		resetAtKey = "codex_7d_reset_at"
-	default:
-		return false
-	}
-	raw, ok := extra[resetAtKey]
-	if !ok {
-		return false
-	}
-	resetAt, err := parseTime(fmt.Sprint(raw))
-	if err != nil {
-		return false
-	}
-	return !now.Before(resetAt)
-}
-
-func clampPercent(v float64) float64 {
-	if v < 0 {
-		return 0
-	}
-	if v > 100 {
-		return 100
-	}
-	return v
-}
-
-func roundPercent(v float64) float64 {
-	return math.Round(v*10) / 10
 }
 
 // GetAllGroupCapacity returns capacity summary for all active groups.

@@ -84,7 +84,7 @@ func NewGroupHandler(adminService service.AdminService, dashboardService *servic
 type CreateGroupRequest struct {
 	Name             string             `json:"name" binding:"required"`
 	Description      string             `json:"description"`
-	Platform         string             `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity"`
+	Platform         string             `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok"`
 	RateMultiplier   float64            `json:"rate_multiplier"`
 	IsExclusive      bool               `json:"is_exclusive"`
 	SubscriptionType string             `json:"subscription_type" binding:"omitempty,oneof=standard subscription"`
@@ -124,7 +124,7 @@ type CreateGroupRequest struct {
 type UpdateGroupRequest struct {
 	Name             string             `json:"name"`
 	Description      *string            `json:"description"`
-	Platform         string             `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity"`
+	Platform         string             `json:"platform" binding:"omitempty,oneof=anthropic openai gemini antigravity grok"`
 	RateMultiplier   *float64           `json:"rate_multiplier"`
 	IsExclusive      *bool              `json:"is_exclusive"`
 	Status           string             `json:"status" binding:"omitempty,oneof=active inactive"`
@@ -432,17 +432,6 @@ func (h *GroupHandler) GetCapacitySummary(c *gin.Context) {
 	results, err := h.groupCapacityService.GetAllGroupCapacity(c.Request.Context())
 	if err != nil {
 		response.Error(c, 500, "Failed to get group capacity summary")
-		return
-	}
-	response.Success(c, results)
-}
-
-// GetCodexQuotaSummary returns equal-weight Codex 5h/7d quota usage for all active groups.
-// GET /api/v1/admin/groups/codex-quota-summary
-func (h *GroupHandler) GetCodexQuotaSummary(c *gin.Context) {
-	results, err := h.groupCapacityService.GetAllGroupCodexQuota(c.Request.Context())
-	if err != nil {
-		response.Error(c, 500, "Failed to get group Codex quota summary")
 		return
 	}
 	response.Success(c, results)

@@ -1,39 +1,20 @@
 <template>
   <AppLayout>
-    <div class="subscriptions-page">
-      <section class="subscriptions-head">
-        <div class="subscriptions-head-copy">
-          <ProductIcon name="subscription" tone="violet" size="sm" />
-          <div class="min-w-0">
-            <span>{{ t('userSubscriptions.description') }}</span>
-          </div>
-        </div>
-
-        <div class="subscriptions-stat-grid">
-          <div class="subscriptions-stat-card">
-            <ProductIcon name="database" tone="slate" size="xs" bare />
-            <span>{{ t('userSubscriptions.title') }}</span>
-            <strong>{{ subscriptions.length }}</strong>
-          </div>
-          <div class="subscriptions-stat-card">
-            <ProductIcon name="bolt" tone="emerald" size="xs" bare />
-            <span>{{ t('common.active') }}</span>
-            <strong>{{ activeSubscriptionCount }}</strong>
-          </div>
-          <div class="subscriptions-stat-card">
-            <ProductIcon name="clock" tone="amber" size="xs" bare />
-            <span>{{ t('userSubscriptions.expires') }}</span>
-            <strong>{{ expiringSoonCount }}</strong>
-          </div>
-        </div>
-      </section>
-
-      <div v-if="loading" class="subscriptions-loading">
-        <div v-for="index in 2" :key="index" class="subscriptions-skeleton-card" />
+    <div class="space-y-6">
+      <!-- Loading State -->
+      <div v-if="loading" class="flex justify-center py-12">
+        <div
+          class="h-8 w-8 animate-spin rounded-full border-2 border-primary-500 border-t-transparent"
+        ></div>
       </div>
 
-      <div v-else-if="subscriptions.length === 0" class="subscriptions-empty">
-        <ProductIcon name="document" tone="slate" size="lg" />
+      <!-- Empty State -->
+      <div v-else-if="subscriptions.length === 0" class="card p-12 text-center">
+        <div
+          class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gray-100 dark:bg-dark-700"
+        >
+          <Icon name="creditCard" size="xl" class="text-gray-400" />
+        </div>
         <h3 class="mb-2 text-lg font-semibold text-gray-900 dark:text-white">
           {{ t('userSubscriptions.noActiveSubscriptions') }}
         </h3>
@@ -42,33 +23,38 @@
         </p>
       </div>
 
-      <div v-else class="subscriptions-grid">
+      <!-- Subscriptions Grid -->
+      <div v-else class="grid gap-6 lg:grid-cols-2">
         <div
           v-for="subscription in subscriptions"
           :key="subscription.id"
-          class="subscription-card"
+          class="overflow-hidden rounded-2xl border bg-white dark:bg-dark-800"
+          :class="platformBorderClass(subscription.group?.platform || '')"
         >
-          <div class="subscription-card-header">
+          <!-- Header -->
+          <div
+            class="flex items-center justify-between border-b border-gray-100 p-4 dark:border-dark-700"
+          >
             <div class="flex items-center gap-3">
-              <div :class="['subscription-platform-dot', platformAccentDotClass(subscription.group?.platform || '')]" />
+              <div :class="['h-1.5 w-1.5 shrink-0 rounded-full', platformAccentDotClass(subscription.group?.platform || '')]" />
               <div>
                 <div class="flex items-center gap-2">
-                  <h3 class="subscription-title">
+                  <h3 class="font-semibold text-gray-900 dark:text-white">
                     {{ subscription.group?.name || `Group #${subscription.group_id}` }}
                   </h3>
-                  <span :class="['subscription-platform-badge', platformBadgeClass(subscription.group?.platform || '')]">
+                  <span :class="['rounded-md border px-2 py-0.5 text-[11px] font-medium', platformBadgeClass(subscription.group?.platform || '')]">
                     {{ platformLabel(subscription.group?.platform || '') }}
                   </span>
                 </div>
-                <p v-if="subscription.group?.description" class="subscription-description">
+                <p v-if="subscription.group?.description" class="mt-0.5 text-xs text-gray-500 dark:text-dark-400">
                   {{ subscription.group.description }}
                 </p>
               </div>
             </div>
-            <div class="subscription-actions">
+            <div class="flex items-center gap-2">
               <span
                 :class="[
-                  'subscription-status-pill',
+                  'rounded-full px-2 py-0.5 text-xs font-medium',
                   subscription.status === 'active'
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
                     : subscription.status === 'expired'
@@ -80,7 +66,7 @@
               </span>
               <button
                 v-if="subscription.status === 'active'"
-                class="subscription-renew-button"
+                :class="['rounded-lg px-3 py-1.5 text-xs font-semibold text-white transition-colors', platformButtonClass(subscription.group?.platform || '')]"
                 @click="router.push({ path: '/purchase', query: { tab: 'subscription', group: String(subscription.group_id) } })"
               >
                 {{ t('payment.renewNow') }}
@@ -88,34 +74,41 @@
             </div>
           </div>
 
-          <div class="subscription-card-body">
-            <div v-if="subscription.expires_at" class="subscription-meta-row">
-              <span>{{ t('userSubscriptions.expires') }}</span>
+          <!-- Usage Progress -->
+          <div class="space-y-4 p-4">
+            <!-- Expiration Info -->
+            <div v-if="subscription.expires_at" class="flex items-center justify-between text-sm">
+              <span class="text-gray-500 dark:text-dark-400">{{
+                t('userSubscriptions.expires')
+              }}</span>
               <span :class="getExpirationClass(subscription.expires_at)">
-                {{ formatCompactExpirationDate(subscription.expires_at) }}
+                {{ formatExpirationDate(subscription.expires_at) }}
               </span>
             </div>
-            <div v-else class="subscription-meta-row">
-              <span>{{ t('userSubscriptions.expires') }}</span>
-              <span class="text-gray-700 dark:text-gray-300">
-                {{ t('userSubscriptions.noExpiration') }}
-              </span>
+            <div v-else class="flex items-center justify-between text-sm">
+              <span class="text-gray-500 dark:text-dark-400">{{
+                t('userSubscriptions.expires')
+              }}</span>
+              <span class="text-gray-700 dark:text-gray-300">{{
+                t('userSubscriptions.noExpiration')
+              }}</span>
             </div>
 
-            <div v-if="subscription.group?.daily_limit_usd" class="subscription-quota-row">
+            <!-- Daily Usage -->
+            <div v-if="subscription.group?.daily_limit_usd" class="space-y-2">
               <div class="flex items-center justify-between">
-                <span>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.daily') }}
                 </span>
-                <strong>
+                <span class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.daily_usage_usd || 0).toFixed(2) }} / ${{
                     subscription.group.daily_limit_usd.toFixed(2)
                   }}
-                </strong>
+                </span>
               </div>
-              <div class="subscription-progress-track">
+              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
                 <div
-                  class="subscription-progress-bar"
+                  class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="
                     getProgressBarClass(
                       subscription.daily_usage_usd,
@@ -139,20 +132,20 @@
             </div>
 
             <!-- Weekly Usage -->
-            <div v-if="subscription.group?.weekly_limit_usd" class="subscription-quota-row">
+            <div v-if="subscription.group?.weekly_limit_usd" class="space-y-2">
               <div class="flex items-center justify-between">
-                <span>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.weekly') }}
                 </span>
-                <strong>
+                <span class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.weekly_usage_usd || 0).toFixed(2) }} / ${{
                     subscription.group.weekly_limit_usd.toFixed(2)
                   }}
-                </strong>
+                </span>
               </div>
-              <div class="subscription-progress-track">
+              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
                 <div
-                  class="subscription-progress-bar"
+                  class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="
                     getProgressBarClass(
                       subscription.weekly_usage_usd,
@@ -180,20 +173,20 @@
             </div>
 
             <!-- Monthly Usage -->
-            <div v-if="subscription.group?.monthly_limit_usd" class="subscription-quota-row">
+            <div v-if="subscription.group?.monthly_limit_usd" class="space-y-2">
               <div class="flex items-center justify-between">
-                <span>
+                <span class="text-sm font-medium text-gray-700 dark:text-gray-300">
                   {{ t('userSubscriptions.monthly') }}
                 </span>
-                <strong>
+                <span class="text-sm text-gray-500 dark:text-dark-400">
                   ${{ (subscription.monthly_usage_usd || 0).toFixed(2) }} / ${{
                     subscription.group.monthly_limit_usd.toFixed(2)
                   }}
-                </strong>
+                </span>
               </div>
-              <div class="subscription-progress-track">
+              <div class="relative h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-dark-600">
                 <div
-                  class="subscription-progress-bar"
+                  class="absolute inset-y-0 left-0 rounded-full transition-all duration-300"
                   :class="
                     getProgressBarClass(
                       subscription.monthly_usage_usd,
@@ -220,23 +213,24 @@
               </p>
             </div>
 
+            <!-- No limits configured - Unlimited badge -->
             <div
               v-if="
                 !subscription.group?.daily_limit_usd &&
                 !subscription.group?.weekly_limit_usd &&
                 !subscription.group?.monthly_limit_usd
               "
-              class="subscription-unlimited"
+              class="flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-50 to-teal-50 py-6 dark:from-emerald-900/20 dark:to-teal-900/20"
             >
               <div class="flex items-center gap-3">
-                <span>∞</span>
+                <span class="text-4xl text-emerald-600 dark:text-emerald-400">∞</span>
                 <div>
-                  <p>
+                  <p class="text-sm font-medium text-emerald-700 dark:text-emerald-300">
                     {{ t('userSubscriptions.unlimited') }}
                   </p>
-                  <small>
+                  <p class="text-xs text-emerald-600/70 dark:text-emerald-400/70">
                     {{ t('userSubscriptions.unlimitedDesc') }}
-                  </small>
+                  </p>
                 </div>
               </div>
             </div>
@@ -248,16 +242,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import { useAppStore } from '@/stores/app'
 import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
-import ProductIcon from '@/components/common/ProductIcon.vue'
+import Icon from '@/components/icons/Icon.vue'
 import { formatDateOnly } from '@/utils/format'
-import { platformBadgeClass, platformLabel } from '@/utils/platformColors'
+import { platformBorderClass, platformBadgeClass, platformButtonClass, platformLabel } from '@/utils/platformColors'
 import { getRemainingDurationParts, isOneTimeDailyQuota, type RemainingDurationParts } from '@/utils/subscriptionQuota'
 
 function platformAccentDotClass(p: string): string {
@@ -276,18 +270,6 @@ const appStore = useAppStore()
 
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
-
-const activeSubscriptionCount = computed(() =>
-  subscriptions.value.filter((subscription) => subscription.status === 'active').length
-)
-
-const expiringSoonCount = computed(() =>
-  subscriptions.value.filter((subscription) => {
-    if (!subscription.expires_at || subscription.status !== 'active') return false
-    const days = Math.ceil((new Date(subscription.expires_at).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    return days >= 0 && days <= 7
-  }).length
-)
 
 async function loadSubscriptions() {
   try {
@@ -315,18 +297,26 @@ function getProgressBarClass(used: number | undefined, limit: number | null | un
   return 'bg-green-500'
 }
 
-function formatCompactExpirationDate(expiresAt: string): string {
+function formatExpirationDate(expiresAt: string): string {
   const now = new Date()
   const expires = new Date(expiresAt)
   const diff = expires.getTime() - now.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
 
-  if (days < 0) return t('userSubscriptions.status.expired')
-  if (days === 0) return t('common.today')
-  if (days === 1) return t('common.tomorrow')
-  if (days <= 30) return t('userSubscriptions.daysRemaining', { days })
+  if (days < 0) {
+    return t('userSubscriptions.status.expired')
+  }
 
-  return formatDateOnly(expires)
+  const dateStr = formatDateOnly(expires)
+
+  if (days === 0) {
+    return `${dateStr} (${t('common.today')})`
+  }
+  if (days === 1) {
+    return `${dateStr} (${t('common.tomorrow')})`
+  }
+
+  return t('userSubscriptions.daysRemaining', { days }) + ` (${dateStr})`
 }
 
 function getExpirationClass(expiresAt: string): string {
@@ -379,359 +369,3 @@ onMounted(() => {
   loadSubscriptions()
 })
 </script>
-
-<style scoped>
-.subscriptions-page {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.subscriptions-head {
-  display: grid;
-  grid-template-columns: minmax(16rem, 0.9fr) minmax(20rem, 1fr);
-  align-items: stretch;
-  gap: 0.875rem;
-}
-
-.subscriptions-head-copy,
-.subscriptions-stat-card,
-.subscription-card,
-.subscriptions-empty {
-  border: 1px solid rgb(17 24 39 / 0.06);
-  border-radius: 1rem;
-  background: rgb(255 255 255);
-  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
-}
-
-.subscriptions-head-copy {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.875rem 1rem;
-}
-
-.subscriptions-stat-card span {
-  font-size: 0.75rem;
-  font-weight: 600;
-  line-height: 1rem;
-  color: rgb(100 116 139);
-}
-
-.subscriptions-head-copy span {
-  display: block;
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  color: rgb(71 85 105);
-}
-
-.subscriptions-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
-}
-
-.subscriptions-stat-card {
-  display: grid;
-  align-content: center;
-  gap: 0.125rem;
-  min-height: 4rem;
-  padding: 0.75rem 0.875rem;
-}
-
-.subscriptions-stat-card span {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-}
-
-.subscriptions-stat-card strong {
-  color: rgb(15 23 42);
-  font-variant-numeric: tabular-nums;
-  font-size: 1.125rem;
-  font-weight: 750;
-  line-height: 1.5rem;
-}
-
-.subscriptions-loading,
-.subscriptions-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18.5rem, 22rem));
-  gap: 0.875rem;
-  justify-content: start;
-}
-
-.subscriptions-skeleton-card {
-  min-height: 13rem;
-  border-radius: 1rem;
-  border: 1px solid rgb(17 24 39 / 0.06);
-  background: linear-gradient(90deg, rgb(255 255 255), rgb(248 250 252), rgb(255 255 255));
-  background-size: 200% 100%;
-  animation: subscriptions-skeleton 1.1s ease-in-out infinite;
-}
-
-.subscriptions-empty {
-  display: flex;
-  min-height: 18rem;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem;
-  text-align: center;
-}
-
-.subscription-card {
-  overflow: hidden;
-}
-
-.subscription-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  border-bottom: 1px solid rgb(226 232 240);
-  padding: 0.875rem;
-}
-
-.subscription-platform-dot {
-  margin-top: 0.5rem;
-  height: 0.5rem;
-  width: 0.5rem;
-  flex-shrink: 0;
-  border-radius: 999px;
-}
-
-.subscription-title {
-  color: rgb(15 23 42);
-  font-weight: 700;
-  max-width: 10.5rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.subscription-platform-badge {
-  border-radius: 999px;
-  border-width: 1px;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.6875rem;
-  font-weight: 650;
-  line-height: 1rem;
-}
-
-.subscription-description {
-  margin-top: 0.25rem;
-  color: rgb(100 116 139);
-  font-size: 0.75rem;
-  line-height: 1rem;
-}
-
-.subscription-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.5rem;
-}
-
-.subscription-status-pill {
-  border-radius: 999px;
-  padding: 0.25rem 0.625rem;
-  font-size: 0.75rem;
-  font-weight: 650;
-  line-height: 1rem;
-}
-
-.subscription-renew-button {
-  border-radius: 999px;
-  border: 1px solid rgb(191 219 254);
-  background: rgb(219 234 254);
-  padding: 0.375rem 0.75rem;
-  color: rgb(29 78 216);
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1rem;
-  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
-}
-
-.subscription-renew-button:hover {
-  border-color: rgb(147 197 253);
-  background: rgb(191 219 254);
-  color: rgb(30 64 175);
-}
-
-.subscription-card-body {
-  display: grid;
-  gap: 0.75rem;
-  padding: 0.875rem;
-}
-
-.subscription-meta-row,
-.subscription-quota-row > div:first-child {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.8125rem;
-}
-
-.subscription-meta-row > span:first-child,
-.subscription-quota-row span {
-  color: rgb(100 116 139);
-}
-
-.subscription-quota-row {
-  display: grid;
-  gap: 0.375rem;
-}
-
-.subscription-quota-row strong {
-  color: rgb(71 85 105);
-  font-size: 0.8125rem;
-  font-weight: 650;
-}
-
-.subscription-progress-track {
-  position: relative;
-  height: 0.375rem;
-  overflow: hidden;
-  border-radius: 999px;
-  background: rgb(226 232 240);
-}
-
-.subscription-progress-bar {
-  position: absolute;
-  inset: 0 auto 0 0;
-  border-radius: 999px;
-  transition: width 0.3s ease;
-}
-
-.subscription-unlimited {
-  display: flex;
-  justify-content: center;
-  border-radius: 0.875rem;
-  border: 1px solid rgb(187 247 208);
-  background: rgb(240 253 244);
-  padding: 1.25rem;
-}
-
-.subscription-unlimited span {
-  color: rgb(22 101 52);
-  font-size: 2rem;
-  line-height: 1;
-}
-
-.subscription-unlimited p {
-  color: rgb(21 128 61);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
-.subscription-unlimited small {
-  color: rgb(22 101 52);
-  font-size: 0.75rem;
-}
-
-@keyframes subscriptions-skeleton {
-  0% {
-    background-position: 100% 50%;
-  }
-
-  100% {
-    background-position: -100% 50%;
-  }
-}
-
-:global(.dark) .subscriptions-head-copy,
-:global(.dark) .subscriptions-stat-card,
-:global(.dark) .subscription-card,
-:global(.dark) .subscriptions-empty {
-  border-color: rgb(255 255 255 / 0.1);
-  background: rgb(15 23 42 / 0.52);
-  box-shadow: none;
-}
-
-:global(.dark) .subscriptions-head-copy span,
-:global(.dark) .subscriptions-stat-card span,
-:global(.dark) .subscription-description,
-:global(.dark) .subscription-meta-row > span:first-child,
-:global(.dark) .subscription-quota-row span {
-  color: rgb(148 163 184);
-}
-
-:global(.dark) .subscriptions-stat-card strong,
-:global(.dark) .subscription-title {
-  color: rgb(255 255 255);
-}
-
-:global(.dark) .subscription-card-header {
-  border-color: rgb(51 65 85);
-}
-
-:global(.dark) .subscription-quota-row strong {
-  color: rgb(203 213 225);
-}
-
-:global(.dark) .subscription-progress-track {
-  background: rgb(51 65 85);
-}
-
-:global(.dark) .subscription-renew-button {
-  border-color: rgb(59 130 246 / 0.28);
-  background: rgb(59 130 246 / 0.16);
-  color: rgb(147 197 253);
-}
-
-:global(.dark) .subscription-renew-button:hover {
-  border-color: rgb(96 165 250 / 0.42);
-  background: rgb(59 130 246 / 0.24);
-  color: rgb(191 219 254);
-}
-
-:global(.dark) .subscription-unlimited {
-  border-color: rgb(34 197 94 / 0.24);
-  background: rgb(34 197 94 / 0.12);
-}
-
-:global(.dark) .subscription-unlimited span,
-:global(.dark) .subscription-unlimited p,
-:global(.dark) .subscription-unlimited small {
-  color: rgb(134 239 172);
-}
-
-:global(.dark) .subscriptions-skeleton-card {
-  border-color: rgb(255 255 255 / 0.1);
-  background: linear-gradient(90deg, rgb(15 23 42 / 0.52), rgb(30 41 59), rgb(15 23 42 / 0.52));
-  background-size: 200% 100%;
-}
-
-@media (max-width: 900px) {
-  .subscriptions-head {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 640px) {
-  .subscriptions-stat-grid,
-  .subscriptions-loading,
-  .subscriptions-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .subscription-card-header {
-    flex-direction: column;
-  }
-
-  .subscription-actions {
-    justify-content: flex-start;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .subscriptions-skeleton-card,
-  .subscription-progress-bar {
-    animation: none;
-    transition: none;
-  }
-}
-</style>

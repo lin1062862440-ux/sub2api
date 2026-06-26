@@ -1,9 +1,9 @@
 <template>
-  <section class="monitor-toolbar">
-    <div class="monitor-toolbar-controls">
+  <section class="py-3 md:py-4">
+    <div class="flex items-center justify-end gap-3 flex-wrap">
       <div
         role="tablist"
-        class="monitor-window-tabs"
+        class="inline-flex p-0.5 rounded-xl bg-gray-100 dark:bg-dark-800 border border-gray-200/60 dark:border-dark-700/60 text-xs"
       >
         <button
           v-for="opt in windowOptions"
@@ -11,9 +11,9 @@
           type="button"
           role="tab"
           :aria-selected="window === opt.value"
-          class="monitor-window-tab"
+          class="px-3 py-1 rounded-lg transition-colors"
           :class="window === opt.value
-            ? 'monitor-window-tab-active'
+            ? 'bg-white dark:bg-dark-700 shadow-sm text-gray-900 dark:text-white font-semibold'
             : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'"
           @click="emit('update:window', opt.value)"
         >
@@ -34,7 +34,7 @@
 
       <button
         type="button"
-        class="monitor-refresh-button"
+        class="h-8 w-8 rounded-lg flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-dark-700 transition-colors disabled:opacity-50"
         :disabled="loading"
         :title="t('common.refresh')"
         @click="emit('refresh')"
@@ -114,101 +114,3 @@ const overallDotClass = computed(() => {
 })
 
 </script>
-
-<style scoped>
-.monitor-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1rem;
-  margin-bottom: 1rem;
-  border: 1px solid rgb(17 24 39 / 0.06);
-  border-radius: 1rem;
-  background: rgb(255 255 255);
-  padding: 1rem;
-  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
-}
-
-.monitor-toolbar-controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-}
-
-.monitor-window-tabs {
-  display: inline-flex;
-  border-radius: 999px;
-  border: 1px solid rgb(226 232 240);
-  background: rgb(248 250 252);
-  padding: 0.1875rem;
-  font-size: 0.75rem;
-}
-
-.monitor-window-tab {
-  border-radius: 999px;
-  padding: 0.375rem 0.75rem;
-  transition: background-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
-}
-
-.monitor-window-tab-active {
-  background: rgb(255 255 255);
-  color: rgb(15 23 42);
-  font-weight: 700;
-  box-shadow: 0 1px 2px rgb(15 23 42 / 0.08);
-}
-
-.monitor-refresh-button {
-  display: flex;
-  height: 2.25rem;
-  width: 2.25rem;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  color: rgb(100 116 139);
-  transition: background-color 0.18s ease, color 0.18s ease;
-}
-
-.monitor-refresh-button:hover {
-  background: rgb(241 245 249);
-  color: rgb(15 23 42);
-}
-
-.monitor-refresh-button:disabled {
-  opacity: 0.5;
-}
-
-:global(.dark) .monitor-toolbar {
-  border-color: rgb(255 255 255 / 0.1);
-  background: rgb(15 23 42 / 0.52);
-  box-shadow: none;
-}
-
-:global(.dark) .monitor-window-tabs {
-  border-color: rgb(51 65 85);
-  background: rgb(15 23 42 / 0.72);
-}
-
-:global(.dark) .monitor-window-tab-active {
-  background: rgb(30 41 59);
-  color: rgb(255 255 255);
-  box-shadow: none;
-}
-
-:global(.dark) .monitor-refresh-button:hover {
-  background: rgb(30 41 59);
-  color: rgb(255 255 255);
-}
-
-@media (max-width: 760px) {
-  .monitor-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .monitor-toolbar-controls {
-    justify-content: flex-start;
-  }
-}
-</style>
