@@ -180,15 +180,8 @@
         >
           <template #cell-user="{ row }">
             <div class="flex items-center gap-2">
-              <div
-                class="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 dark:bg-primary-900/30"
-              >
-                <span class="text-sm font-medium text-primary-700 dark:text-primary-300">
-                  {{ userColumnMode === 'email'
-                    ? (row.user?.email?.charAt(0).toUpperCase() || '?')
-                    : (row.user?.username?.charAt(0).toUpperCase() || '?')
-                  }}
-                </span>
+              <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-gray-950/10 dark:bg-dark-900 dark:ring-white/10">
+                <img :src="resolveAvatarUrl(row.user?.avatar_url)" :alt="row.user?.email || row.user?.username || ''" class="h-full w-full object-cover">
               </div>
               <span class="font-medium text-gray-900 dark:text-white">
                 {{ userColumnMode === 'email'
@@ -758,6 +751,7 @@ import Select from '@/components/common/Select.vue'
 import GroupBadge from '@/components/common/GroupBadge.vue'
 import GroupOptionItem from '@/components/common/GroupOptionItem.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 import { getRemainingDurationParts, isOneTimeDailyQuota, type RemainingDurationParts } from '@/utils/subscriptionQuota'
 
 const { t } = useI18n()

@@ -1,11 +1,11 @@
 <template>
   <AppLayout>
-    <div class="space-y-6">
+    <div class="usage-page">
       <UsageStatsCards :stats="usageStats" :show-account-cost="false" :strike-standard-cost="true" />
 
-      <div class="space-y-4">
-        <div class="card p-4">
-          <div class="flex flex-wrap items-center gap-4">
+      <div class="usage-analytics-stack">
+        <div class="usage-filter-card">
+          <div class="usage-filter-toolbar">
             <div class="flex items-center gap-2">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.timeRange') }}:</span>
               <DateRangePicker
@@ -14,7 +14,7 @@
                 @change="onDateRangeChange"
               />
             </div>
-            <div class="ml-auto flex items-center gap-2">
+            <div class="usage-filter-actions">
               <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t('admin.dashboard.granularity') }}:</span>
               <div class="w-28">
                 <Select v-model="granularity" :options="granularityOptions" @change="loadChartData" />
@@ -66,9 +66,9 @@
         </div>
       </div>
 
-      <div class="card p-6">
-        <div class="flex flex-wrap items-end justify-between gap-4">
-          <div class="flex flex-1 flex-wrap items-end gap-4">
+      <div class="usage-filter-card">
+        <div class="usage-filter-toolbar">
+          <div class="usage-filter-fields">
             <div class="w-full sm:w-auto sm:min-w-[220px]">
               <label class="input-label">{{ t('usage.apiKeyFilter') }}</label>
               <Select v-model="filters.api_key_id" :options="apiKeyOptions" @change="applyFilters" />
@@ -95,11 +95,13 @@
             </div>
           </div>
 
-          <div class="flex w-full flex-wrap items-center justify-end gap-3 sm:w-auto">
+          <div class="usage-filter-actions">
             <button type="button" @click="refreshData" :disabled="loading" class="btn btn-secondary">
+              <Icon name="refresh" size="sm" />
               {{ t('common.refresh') }}
             </button>
             <button type="button" @click="resetFilters" class="btn btn-secondary">
+              <Icon name="x" size="sm" />
               {{ t('common.reset') }}
             </button>
             <div class="relative" ref="columnDropdownRef">
@@ -129,33 +131,36 @@
               </div>
             </div>
             <button type="button" @click="exportToCSV" :disabled="exporting" class="btn btn-primary">
+              <Icon name="download" size="sm" />
               {{ exporting ? t('usage.exporting') : t('usage.exportCsv') }}
             </button>
           </div>
         </div>
       </div>
 
-      <div v-if="errorViewEnabled" class="flex gap-2 border-b border-gray-200 dark:border-dark-700">
-        <button class="tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
+      <div v-if="errorViewEnabled" class="usage-tabs-bar">
+        <button class="tab usage-tab" :class="{ 'tab-active': activeTab === 'usage' }" @click="activeTab = 'usage'">
           {{ t('usage.tabs.usage') }}
         </button>
-        <button class="tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
+        <button class="tab usage-tab" :class="{ 'tab-active': activeTab === 'errors' }" @click="switchToErrors">
           {{ t('usage.tabs.errors') }}
         </button>
       </div>
 
       <template v-if="activeTab === 'usage'">
-        <UsageTable
-          :data="usageLogs"
-          :loading="loading"
-          :columns="visibleColumns"
-          :server-side-sort="true"
-          :show-account-billing="false"
-          :show-upstream-endpoint="false"
-          default-sort-key="created_at"
-          default-sort-order="desc"
-          @sort="handleSort"
-        />
+        <div class="usage-table-shell">
+          <UsageTable
+            :data="usageLogs"
+            :loading="loading"
+            :columns="visibleColumns"
+            :server-side-sort="true"
+            :show-account-billing="false"
+            :show-upstream-endpoint="false"
+            default-sort-key="created_at"
+            default-sort-order="desc"
+            @sort="handleSort"
+          />
+        </div>
 
         <Pagination
           v-if="pagination.total > 0"
@@ -749,3 +754,97 @@ watch(endpointDistributionSource, () => {
   // Endpoint source switching is handled by the chart component using already loaded stats.
 })
 </script>
+
+<style scoped>
+.usage-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.usage-analytics-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.usage-filter-card,
+.usage-table-shell {
+  border: 1px solid rgb(17 24 39 / 0.06);
+  border-radius: 1rem;
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.usage-filter-card {
+  padding: 1rem;
+}
+
+.usage-filter-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.usage-filter-fields {
+  display: flex;
+  flex: 1 1 42rem;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 1rem;
+}
+
+.usage-filter-actions {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.usage-tabs-bar {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid rgb(226 232 240);
+  padding: 0.25rem 0 0;
+}
+
+.usage-tab {
+  border-radius: 999px 999px 0 0;
+}
+
+.usage-table-shell {
+  overflow: hidden;
+}
+
+:global(.dark) .usage-filter-card,
+:global(.dark) .usage-table-shell {
+  border-color: rgb(255 255 255 / 0.1);
+  background: rgb(15 23 42 / 0.52);
+  box-shadow: none;
+}
+
+:global(.dark) .usage-tabs-bar {
+  border-color: rgb(51 65 85);
+}
+
+@media (max-width: 720px) {
+  .usage-filter-toolbar,
+  .usage-filter-fields {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .usage-filter-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
+  .usage-filter-actions .btn {
+    flex: 1 1 auto;
+  }
+}
+</style>

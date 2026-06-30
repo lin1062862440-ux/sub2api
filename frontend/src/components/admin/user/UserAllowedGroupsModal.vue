@@ -3,8 +3,8 @@
     <div v-if="user" class="space-y-6">
       <!-- 用户信息头部 -->
       <div class="flex items-center gap-4 rounded-2xl bg-gradient-to-r from-primary-50 to-primary-100 p-5 dark:from-primary-900/30 dark:to-primary-800/20">
-        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-white shadow-sm dark:bg-dark-700">
-          <span class="text-2xl font-semibold text-primary-600 dark:text-primary-400">{{ user.email.charAt(0).toUpperCase() }}</span>
+        <div class="flex h-14 w-14 items-center justify-center overflow-hidden rounded-full bg-white shadow-sm ring-1 ring-gray-950/10 dark:bg-dark-900 dark:ring-white/10">
+          <img :src="resolveAvatarUrl(user.avatar_url)" :alt="user.email" class="h-full w-full object-cover">
         </div>
         <div class="flex-1">
           <p class="text-lg font-semibold text-gray-900 dark:text-white">{{ user.email }}</p>
@@ -186,6 +186,7 @@ import { adminAPI } from '@/api/admin'
 import type { AdminUser, Group, GroupPlatform } from '@/types'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import PlatformIcon from '@/components/common/PlatformIcon.vue'
+import { resolveAvatarUrl } from '@/utils/avatar'
 
 interface GroupRateConfig {
   groupId: number

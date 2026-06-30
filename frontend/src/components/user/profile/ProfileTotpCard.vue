@@ -1,22 +1,22 @@
 <template>
-  <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+  <div class="profile-totp-card">
+    <div class="profile-totp-header">
+      <h2>
         {{ t('profile.totp.title') }}
       </h2>
-      <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+      <p>
         {{ t('profile.totp.description') }}
       </p>
     </div>
-    <div class="px-6 py-6">
+    <div class="profile-totp-body">
       <!-- Loading state -->
       <div v-if="loading" class="flex items-center justify-center py-8">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div>
       </div>
 
       <!-- Feature disabled globally -->
-      <div v-else-if="status && !status.feature_enabled" class="flex items-center gap-4 py-4">
-        <div class="flex-shrink-0 rounded-full bg-gray-100 p-3 dark:bg-dark-700">
+      <div v-else-if="status && !status.feature_enabled" class="profile-totp-state">
+        <div class="profile-totp-icon">
           <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
           </svg>
@@ -32,9 +32,9 @@
       </div>
 
       <!-- 2FA Enabled -->
-      <div v-else-if="status?.enabled" class="flex items-center justify-between">
+      <div v-else-if="status?.enabled" class="profile-totp-state justify-between">
         <div class="flex items-center gap-4">
-          <div class="flex-shrink-0 rounded-full bg-green-100 p-3 dark:bg-green-900/30">
+          <div class="profile-totp-icon profile-totp-icon-success">
             <svg class="h-6 w-6 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
             </svg>
@@ -58,9 +58,9 @@
       </div>
 
       <!-- 2FA Not Enabled -->
-      <div v-else class="flex items-center justify-between">
+      <div v-else class="profile-totp-state justify-between">
         <div class="flex items-center gap-4">
-          <div class="flex-shrink-0 rounded-full bg-gray-100 p-3 dark:bg-dark-700">
+          <div class="profile-totp-icon">
             <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
               <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
             </svg>
@@ -152,3 +152,87 @@ onMounted(() => {
   loadStatus()
 })
 </script>
+
+<style scoped>
+.profile-totp-card {
+  border: 1px solid rgb(17 24 39 / 0.06);
+  border-radius: 1rem;
+  background: rgb(255 255 255);
+  box-shadow: 0 1px 3px rgb(15 23 42 / 0.04), 0 1px 2px rgb(15 23 42 / 0.03);
+}
+
+.profile-totp-header {
+  border-bottom: 1px solid rgb(226 232 240);
+  padding: 1rem 1.25rem;
+}
+
+.profile-totp-header h2 {
+  color: rgb(15 23 42);
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.5rem;
+}
+
+.profile-totp-header p {
+  margin-top: 0.25rem;
+  color: rgb(100 116 139);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.profile-totp-body {
+  padding: 1.25rem;
+}
+
+.profile-totp-state {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.profile-totp-icon {
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgb(248 250 252);
+  padding: 0.75rem;
+  box-shadow: inset 0 0 0 1px rgb(17 24 39 / 0.06);
+}
+
+.profile-totp-icon-success {
+  background: rgb(236 253 245);
+}
+
+:global(.dark) .profile-totp-card {
+  border-color: rgb(255 255 255 / 0.1);
+  background: rgb(15 23 42 / 0.52);
+  box-shadow: none;
+}
+
+:global(.dark) .profile-totp-header {
+  border-color: rgb(51 65 85);
+}
+
+:global(.dark) .profile-totp-header h2 {
+  color: rgb(255 255 255);
+}
+
+:global(.dark) .profile-totp-header p {
+  color: rgb(148 163 184);
+}
+
+:global(.dark) .profile-totp-icon {
+  background: rgb(15 23 42 / 0.72);
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.1);
+}
+
+:global(.dark) .profile-totp-icon-success {
+  background: rgb(16 185 129 / 0.14);
+}
+
+@media (max-width: 640px) {
+  .profile-totp-state {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+</style>

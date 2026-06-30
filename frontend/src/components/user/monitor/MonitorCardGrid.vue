@@ -1,13 +1,10 @@
 <template>
   <div>
-    <div
-      v-if="loading && items.length === 0"
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-    >
+    <div v-if="loading && items.length === 0" class="monitor-card-grid">
       <div
         v-for="i in 6"
         :key="i"
-        class="p-5 rounded-2xl min-h-[280px] bg-white/70 dark:bg-dark-800/60 border border-gray-200/80 dark:border-dark-700/70 animate-pulse"
+        class="monitor-skeleton-card"
       >
         <div class="flex items-start gap-3">
           <div class="w-9 h-9 rounded-xl bg-gray-200 dark:bg-dark-700"></div>
@@ -31,10 +28,7 @@
       :description="t('channelStatus.empty.description')"
     />
 
-    <div
-      v-else
-      class="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4"
-    >
+    <div v-else class="monitor-card-grid">
       <MonitorCard
         v-for="item in items"
         :key="item.id"
@@ -79,3 +73,26 @@ function resolveAvailability(item: UserMonitorView): number | null {
   return props.window === '15d' ? primary.availability_15d ?? null : primary.availability_30d ?? null
 }
 </script>
+
+<style scoped>
+.monitor-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17.5rem, 21rem));
+  gap: 0.875rem;
+  justify-content: start;
+}
+
+.monitor-skeleton-card {
+  min-height: 15rem;
+  border-radius: 1rem;
+  border: 1px solid rgb(17 24 39 / 0.06);
+  background: rgb(255 255 255);
+  padding: 1.25rem;
+  animation: pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+:global(.dark) .monitor-skeleton-card {
+  border-color: rgb(255 255 255 / 0.1);
+  background: rgb(15 23 42 / 0.52);
+}
+</style>
