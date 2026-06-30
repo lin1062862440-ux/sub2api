@@ -1,20 +1,36 @@
 <template>
-  <AuthLayout>
+  <AuthLayout
+    panel-kicker="安全登录"
+    panel-title="登录后继续管理 API、额度和账单"
+    panel-icon="key"
+    :panel-items="[
+      { icon: 'shield', text: '安全登录' },
+      { icon: 'database', text: '账号池' },
+      { icon: 'chart', text: '用量明细' }
+    ]"
+  >
     <div class="space-y-6">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <div>
+        <h2>
           {{ t('auth.welcomeBack') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="mt-2 text-sm">
           {{ t('auth.signInToAccount') }}
         </p>
       </div>
       <!-- Login Form -->
       <form @submit.prevent="handleLogin" class="space-y-5">
+        <div
+          v-if="errorMessage"
+          class="auth-state auth-state-error"
+        >
+          {{ errorMessage }}
+        </div>
+
         <!-- Email Input -->
         <div>
-          <label for="email" class="input-label">
+          <label for="email" class="auth-label">
             {{ t('auth.emailLabel') }}
           </label>
           <div class="relative">
@@ -29,8 +45,8 @@
               autofocus
               autocomplete="email"
               :disabled="authActionDisabled"
-              class="input pl-11"
-              :class="{ 'input-error': errors.email }"
+              class="auth-input pl-11"
+              :class="{ 'auth-input-error': errors.email }"
               :placeholder="t('auth.emailPlaceholder')"
             />
           </div>
@@ -38,9 +54,18 @@
 
         <!-- Password Input -->
         <div>
-          <label for="password" class="input-label">
-            {{ t('auth.passwordLabel') }}
-          </label>
+          <div class="flex items-center justify-between gap-4">
+            <label for="password" class="auth-label mb-0">
+              {{ t('auth.passwordLabel') }}
+            </label>
+            <router-link
+              v-if="passwordResetEnabled && !backendModeEnabled"
+              to="/forgot-password"
+              class="auth-link text-sm"
+            >
+              {{ t('auth.forgotPassword') }}
+            </router-link>
+          </div>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
               <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
@@ -52,29 +77,19 @@
               required
               autocomplete="current-password"
               :disabled="authActionDisabled"
-              class="input pl-11 pr-11"
-              :class="{ 'input-error': errors.password }"
+              class="auth-input pl-11 pr-11"
+              :class="{ 'auth-input-error': errors.password }"
               :placeholder="t('auth.passwordPlaceholder')"
             />
             <button
               type="button"
               @click="showPassword = !showPassword"
               :disabled="authActionDisabled"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50 dark:hover:text-dark-200"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
             </button>
-          </div>
-          <div class="mt-1 flex items-center justify-between">
-            <span></span>
-            <router-link
-              v-if="passwordResetEnabled && !backendModeEnabled"
-              to="/forgot-password"
-              class="text-sm font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
-            >
-              {{ t('auth.forgotPassword') }}
-            </router-link>
           </div>
         </div>
 
@@ -93,7 +108,7 @@
         <button
           type="submit"
           :disabled="authActionDisabled || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          class="auth-primary-button"
         >
           <svg
             v-if="isLoading"
@@ -133,11 +148,11 @@
 
         <div v-if="showOAuthLogin" class="space-y-3 pt-1">
           <div class="flex items-center gap-3">
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+            <div class="auth-divider"></div>
             <span class="text-xs text-gray-500 dark:text-dark-400">
               {{ t('auth.oauthOrContinue') }}
             </span>
-            <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
+            <div class="auth-divider"></div>
           </div>
 
           <EmailOAuthButtons
@@ -178,7 +193,7 @@
         {{ t('auth.dontHaveAccount') }}
         <router-link
           to="/register"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="auth-link"
         >
           {{ t('auth.signUp') }}
         </router-link>

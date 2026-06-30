@@ -1,12 +1,21 @@
 <template>
-  <AuthLayout>
+  <AuthLayout
+    panel-kicker="邮箱验证"
+    panel-title="输入验证码后创建账户"
+    panel-icon="mail"
+    :panel-items="[
+      { icon: 'mail', text: '接收验证码' },
+      { icon: 'shield', text: '验证身份' },
+      { icon: 'userPlus', text: '创建账户' }
+    ]"
+  >
     <div class="space-y-6">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <div>
+        <h2>
           {{ t('auth.verifyYourEmail') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="mt-2 text-sm">
           {{ t('auth.sendCodeDesc') }}
           <span class="font-medium text-gray-700 dark:text-gray-300">{{ email }}</span>
         </p>
@@ -15,7 +24,7 @@
       <!-- No Data Warning -->
       <div
         v-if="!hasRegisterData"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
+        class="auth-state auth-state-warning"
       >
         <div class="flex items-start gap-3">
           <div class="flex-shrink-0">
@@ -30,9 +39,16 @@
 
       <!-- Verification Form -->
       <form v-else @submit.prevent="handleVerify" class="space-y-5">
+        <div
+          v-if="errorMessage"
+          class="auth-state auth-state-error"
+        >
+          {{ errorMessage }}
+        </div>
+
         <!-- Verification Code Input -->
         <div>
-          <label for="code" class="input-label text-center">
+          <label for="code" class="auth-label text-center">
             {{ t('auth.verificationCode') }}
           </label>
           <input
@@ -44,23 +60,23 @@
             inputmode="numeric"
             maxlength="6"
             :disabled="isLoading"
-            class="input py-3 text-center font-mono text-xl tracking-[0.5em]"
-            :class="{ 'input-error': errors.code }"
+            class="auth-input py-3 text-center font-mono text-xl tracking-[0.5em]"
+            :class="{ 'auth-input-error': errors.code }"
             placeholder="000000"
           />
-          <p class="input-hint text-center">{{ t('auth.verificationCodeHint') }}</p>
+          <p class="auth-hint text-center">{{ t('auth.verificationCodeHint') }}</p>
         </div>
 
         <!-- Code Status -->
         <div
           v-if="codeSent"
-          class="rounded-xl border border-green-200 bg-green-50 p-4 dark:border-green-800/50 dark:bg-green-900/20"
+          class="auth-state auth-state-success"
         >
           <div class="flex items-start gap-3">
             <div class="flex-shrink-0">
-              <Icon name="checkCircle" size="md" class="text-green-500" />
+              <Icon name="checkCircle" size="md" class="text-gray-950 dark:text-white" />
             </div>
-            <p class="text-sm text-green-700 dark:text-green-400">
+            <p class="text-sm text-gray-700 dark:text-dark-300">
               {{ t('auth.codeSentSuccess') }}
             </p>
           </div>
@@ -78,7 +94,7 @@
         </div>
 
         <!-- Submit Button -->
-        <button type="submit" :disabled="isLoading || !verifyCode" class="btn btn-primary w-full">
+        <button type="submit" :disabled="isLoading || !verifyCode" class="auth-primary-button">
           <svg
             v-if="isLoading"
             class="-ml-1 mr-2 h-4 w-4 animate-spin text-white"
@@ -120,7 +136,7 @@
             :disabled="
               isSendingCode || (turnstileEnabled && showResendTurnstile && !resendTurnstileToken)
             "
-            class="text-sm text-primary-600 transition-colors hover:text-primary-500 disabled:cursor-not-allowed disabled:opacity-50 dark:text-primary-400 dark:hover:text-primary-300"
+            class="auth-link text-sm disabled:cursor-not-allowed disabled:opacity-50"
           >
             <span v-if="isSendingCode">{{ t('auth.sendingCode') }}</span>
             <span v-else-if="turnstileEnabled && !showResendTurnstile">
@@ -136,7 +152,7 @@
     <template #footer>
       <button
         @click="handleBack"
-        class="flex items-center gap-2 text-gray-500 transition-colors hover:text-gray-700 dark:text-dark-400 dark:hover:text-gray-300"
+        class="auth-link inline-flex items-center gap-2"
       >
         <Icon name="arrowLeft" size="sm" />
         {{ t('auth.backToRegistration') }}

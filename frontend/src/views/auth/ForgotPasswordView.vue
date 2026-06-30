@@ -1,28 +1,37 @@
 <template>
-  <AuthLayout>
+  <AuthLayout
+    panel-kicker="找回密码"
+    panel-title="通过邮箱链接重设密码"
+    panel-icon="mail"
+    :panel-items="[
+      { icon: 'mail', text: '邮箱确认' },
+      { icon: 'shield', text: '链接校验' },
+      { icon: 'lock', text: '重设密码' }
+    ]"
+  >
     <div class="space-y-6">
       <!-- Title -->
-      <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+      <div>
+        <h2>
           {{ t('auth.forgotPasswordTitle') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="mt-2 text-sm">
           {{ t('auth.forgotPasswordHint') }}
         </p>
       </div>
 
       <!-- Success State -->
       <div v-if="isSubmitted" class="space-y-6">
-        <div class="rounded-xl border border-green-200 bg-green-50 p-6 dark:border-green-800/50 dark:bg-green-900/20">
+        <div class="auth-state auth-state-success">
           <div class="flex flex-col items-center gap-4 text-center">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-800/50">
-              <Icon name="checkCircle" size="lg" class="text-green-600 dark:text-green-400" />
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white dark:bg-dark-900">
+              <Icon name="checkCircle" size="lg" class="text-gray-950 dark:text-white" />
             </div>
             <div>
-              <h3 class="text-lg font-semibold text-green-800 dark:text-green-200">
+              <h3 class="text-lg font-semibold text-gray-950 dark:text-white">
                 {{ t('auth.resetEmailSent') }}
               </h3>
-              <p class="mt-2 text-sm text-green-700 dark:text-green-300">
+              <p class="mt-2 text-sm leading-6 text-gray-600 dark:text-dark-300">
                 {{ t('auth.resetEmailSentHint') }}
               </p>
             </div>
@@ -32,7 +41,7 @@
         <div class="text-center">
           <router-link
             to="/login"
-            class="inline-flex items-center gap-2 font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+            class="auth-link inline-flex items-center gap-2"
           >
             <Icon name="arrowLeft" size="sm" />
             {{ t('auth.backToLogin') }}
@@ -42,9 +51,16 @@
 
       <!-- Form State -->
       <form v-else @submit.prevent="handleSubmit" class="space-y-5">
+        <div
+          v-if="errorMessage"
+          class="auth-state auth-state-error"
+        >
+          {{ errorMessage }}
+        </div>
+
         <!-- Email Input -->
         <div>
-          <label for="email" class="input-label">
+          <label for="email" class="auth-label">
             {{ t('auth.emailLabel') }}
           </label>
           <div class="relative">
@@ -59,8 +75,8 @@
               autofocus
               autocomplete="email"
               :disabled="isLoading"
-              class="input pl-11"
-              :class="{ 'input-error': errors.email }"
+              class="auth-input pl-11"
+              :class="{ 'auth-input-error': errors.email }"
               :placeholder="t('auth.emailPlaceholder')"
             />
           </div>
@@ -81,7 +97,7 @@
         <button
           type="submit"
           :disabled="isLoading || (turnstileEnabled && !turnstileToken)"
-          class="btn btn-primary w-full"
+          class="auth-primary-button"
         >
           <svg
             v-if="isLoading"
@@ -115,7 +131,7 @@
         {{ t('auth.rememberedPassword') }}
         <router-link
           to="/login"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="auth-link"
         >
           {{ t('auth.signIn') }}
         </router-link>
