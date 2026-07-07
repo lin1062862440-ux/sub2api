@@ -135,6 +135,7 @@ describe('EmailVerifyView', () => {
     sessionStorage.setItem(
       'register_data',
       JSON.stringify({
+        username: 'fresh-user',
         email: 'fresh@example.com',
         password: 'secret-123',
       })
@@ -176,6 +177,7 @@ describe('EmailVerifyView', () => {
     sessionStorage.setItem(
       'register_data',
       JSON.stringify({
+        username: 'fresh-user',
         email: 'fresh@example.com',
         password: 'secret-123',
       })
@@ -217,6 +219,7 @@ describe('EmailVerifyView', () => {
     sessionStorage.setItem(
       'register_data',
       JSON.stringify({
+        username: 'fresh-user',
         email: 'fresh@example.com',
         password: 'secret-123',
       })
@@ -264,6 +267,7 @@ describe('EmailVerifyView', () => {
     sessionStorage.setItem(
       'register_data',
       JSON.stringify({
+        username: 'fresh-user',
         email: 'fresh@example.com',
         password: 'secret-123',
       })
@@ -302,6 +306,7 @@ describe('EmailVerifyView', () => {
     sessionStorage.setItem(
       'register_data',
       JSON.stringify({
+        username: 'fresh-user',
         email: 'fresh@example.com',
         password: 'secret-123',
         aff_code: 'AFF123',
@@ -366,6 +371,7 @@ describe('EmailVerifyView', () => {
     sessionStorage.setItem(
       'register_data',
       JSON.stringify({
+        username: 'fresh-user',
         email: 'fresh@example.com',
         password: 'secret-123',
       })
@@ -418,6 +424,7 @@ describe('EmailVerifyView', () => {
     sessionStorage.setItem(
       'register_data',
       JSON.stringify({
+        username: 'normal-user',
         email: 'normal@example.com',
         password: 'secret-456',
         promo_code: 'PROMO',
@@ -443,6 +450,7 @@ describe('EmailVerifyView', () => {
     await flushPromises()
 
     expect(registerMock).toHaveBeenCalledWith({
+      username: 'normal-user',
       email: 'normal@example.com',
       password: 'secret-456',
       verify_code: '654321',
