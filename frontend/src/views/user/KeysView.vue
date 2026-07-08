@@ -171,6 +171,7 @@
                 class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
               >
+                <!-- Future restore: use backend values with :rate-multiplier="row.group.rate_multiplier" and :user-rate-multiplier="userGroupRates[row.group.id] ?? null". -->
                 <GroupBadge
                   v-if="row.group"
                   :name="row.group.name"
@@ -1408,7 +1409,9 @@ const groupOptions = computed(() =>
     value: group.id,
     label: group.name,
     description: group.description,
+    // Future restore: rate: group.rate_multiplier,
     rate: 1,
+    // Future restore: userRate: userGroupRates.value[group.id] ?? null,
     userRate: null,
     subscriptionType: group.subscription_type,
     platform: group.platform
