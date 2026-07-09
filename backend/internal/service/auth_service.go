@@ -27,6 +27,7 @@ var (
 	ErrInvalidCredentials      = infraerrors.Unauthorized("INVALID_CREDENTIALS", "invalid email or password")
 	ErrUserNotActive           = infraerrors.Forbidden("USER_NOT_ACTIVE", "user is not active")
 	ErrEmailExists             = infraerrors.Conflict("EMAIL_EXISTS", "email already exists")
+	ErrUsernameRequired        = infraerrors.BadRequest("USERNAME_REQUIRED", "username is required")
 	ErrEmailReserved           = infraerrors.BadRequest("EMAIL_RESERVED", "email is reserved")
 	ErrInvalidToken            = infraerrors.Unauthorized("INVALID_TOKEN", "invalid token")
 	ErrTokenExpired            = infraerrors.Unauthorized("TOKEN_EXPIRED", "token has expired")
@@ -128,6 +129,14 @@ func (s *AuthService) EntClient() *dbent.Client {
 	return s.entClient
 }
 
+func defaultUsernameFromEmail(email string) string {
+	email = strings.TrimSpace(email)
+	if at := strings.IndexByte(email, '@'); at > 0 {
+		return email[:at]
+	}
+	return email
+}
+
 // Register 用户注册，返回token和用户
 func (s *AuthService) Register(ctx context.Context, email, password string) (string, *User, error) {
 	return s.RegisterWithVerification(ctx, email, password, "", "", "", "")
@@ -135,9 +144,19 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (str
 
 // RegisterWithVerification 用户注册（支持邮件验证、优惠码、邀请码和邀请返利码），返回token和用户。
 func (s *AuthService) RegisterWithVerification(ctx context.Context, email, password, verifyCode, promoCode, invitationCode, affiliateCode string) (string, *User, error) {
+	return s.RegisterWithUsernameAndVerification(ctx, defaultUsernameFromEmail(email), email, password, verifyCode, promoCode, invitationCode, affiliateCode)
+}
+
+// RegisterWithUsernameAndVerification 用户注册（支持用户名、邮件验证、优惠码、邀请码和邀请返利码），返回token和用户。
+func (s *AuthService) RegisterWithUsernameAndVerification(ctx context.Context, username, email, password, verifyCode, promoCode, invitationCode, affiliateCode string) (string, *User, error) {
 	// 检查是否开放注册（默认关闭：settingService 未配置时不允许注册）
 	if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 		return "", nil, ErrRegDisabled
+	}
+
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return "", nil, ErrUsernameRequired
 	}
 
 	// 防止用户注册 LinuxDo OAuth 合成邮箱，避免第三方登录与本地账号发生碰撞。
@@ -212,6 +231,7 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 	// 创建用户
 	user := &User{
 		Email:        email,
+		Username:     username,
 		PasswordHash: hashedPassword,
 		Role:         RoleUser,
 		Balance:      grantPlan.Balance,

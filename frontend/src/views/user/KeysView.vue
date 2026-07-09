@@ -171,6 +171,7 @@
                 class="-mx-2 -my-1 flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition-all duration-200 hover:bg-gray-100 dark:hover:bg-dark-700"
                 :title="t('keys.clickToChangeGroup')"
               >
+                <!-- Future restore: use backend values with :rate-multiplier="row.group.rate_multiplier" and :user-rate-multiplier="userGroupRates[row.group.id] ?? null". -->
                 <GroupBadge
                   v-if="row.group"
                   :name="row.group.name"
@@ -198,6 +199,19 @@
                 </svg>
               </button>
             </div>
+          </template>
+
+          <template #cell-current_concurrency="{ value }">
+            <span
+              :class="[
+                'inline-flex min-w-8 items-center justify-center rounded px-2 py-1 text-sm font-semibold tabular-nums',
+                (value ?? 0) > 0
+                  ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-900/25 dark:text-emerald-300 dark:ring-emerald-800'
+                  : 'bg-gray-100 text-gray-500 dark:bg-dark-700 dark:text-dark-400'
+              ]"
+            >
+              {{ value ?? 0 }}
+            </span>
           </template>
 
           <template #cell-usage="{ row }">
@@ -1170,6 +1184,7 @@ const allColumns = computed<Column[]>(() => [
   { key: 'name', label: t('common.name'), sortable: true },
   { key: 'key', label: t('keys.apiKey'), sortable: false },
   { key: 'group', label: t('keys.group'), sortable: false },
+  { key: 'current_concurrency', label: t('keys.currentConcurrency'), sortable: false },
   { key: 'usage', label: t('keys.usage'), sortable: false },
   { key: 'rate_limit', label: t('keys.rateLimitColumn'), sortable: false },
   { key: 'expires_at', label: t('keys.expiresAt'), sortable: true },
@@ -1394,7 +1409,9 @@ const groupOptions = computed(() =>
     value: group.id,
     label: group.name,
     description: group.description,
+    // Future restore: rate: group.rate_multiplier,
     rate: 1,
+    // Future restore: userRate: userGroupRates.value[group.id] ?? null,
     userRate: null,
     subscriptionType: group.subscription_type,
     platform: group.platform
