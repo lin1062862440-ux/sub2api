@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -149,8 +150,10 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 	needModelReplace := originalModel != mappedModel
 	streamOutputAccumulator := apicompat.NewBufferedResponseAccumulator()
+	streamRawOutputItems := make([]streamedResponseOutputItem, 0, 1)
 	streamImageOutputs := make([]json.RawMessage, 0, 1)
 	streamSeenImages := make(map[string]struct{})
+	streamOutputOrder := 0
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{
 			usage:            usage,
@@ -274,13 +277,17 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if imageOutput, ok := extractImageGenerationOutputFromSSEData(dataBytes, streamSeenImages); ok {
 				streamImageOutputs = append(streamImageOutputs, imageOutput)
 			}
+			streamOutputOrder++
+			if rawOutputItem, ok := extractCompactResponseOutputItemFromSSEData(dataBytes, streamOutputOrder); ok {
+				streamRawOutputItems = appendOrReplaceStreamedResponseOutputItem(streamRawOutputItems, rawOutputItem)
+			}
 			if responsesStreamEventMayContributeToOutput(eventType) {
 				var streamEvent apicompat.ResponsesStreamEvent
 				if err := json.Unmarshal(dataBytes, &streamEvent); err == nil {
 					streamOutputAccumulator.ProcessEvent(&streamEvent)
 				}
 			}
-			if normalizedData, normalized := normalizeResponsesStreamingTerminalOutput(dataBytes, streamOutputAccumulator, streamImageOutputs); normalized {
+			if normalizedData, normalized := normalizeResponsesStreamingTerminalOutput(dataBytes, streamOutputAccumulator, streamRawOutputItems, streamImageOutputs); normalized {
 				dataBytes = normalizedData
 				data = string(normalizedData)
 				line = "data: " + data
@@ -994,7 +1001,14 @@ func extractCodexFinalResponse(body string) ([]byte, bool) {
 	return nil, false
 }
 
-func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.BufferedResponseAccumulator, imageOutputs []json.RawMessage) ([]byte, bool) {
+type streamedResponseOutputItem struct {
+	index int
+	order int
+	id    string
+	raw   json.RawMessage
+}
+
+func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.BufferedResponseAccumulator, rawOutputItems []streamedResponseOutputItem, imageOutputs []json.RawMessage) ([]byte, bool) {
 	eventType := strings.TrimSpace(gjson.GetBytes(data, "type").String())
 	switch eventType {
 	case "response.completed", "response.done", "response.incomplete", "response.cancelled", "response.canceled":
@@ -1003,7 +1017,7 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 	}
 
 	output := gjson.GetBytes(data, "response.output")
-	hasAccumulatedOutput := (acc != nil && acc.HasContent()) || len(imageOutputs) > 0
+	hasAccumulatedOutput := (acc != nil && acc.HasContent()) || len(rawOutputItems) > 0 || len(imageOutputs) > 0
 	if output.Exists() && output.IsArray() {
 		if len(output.Array()) > 0 || !hasAccumulatedOutput {
 			return data, false
@@ -1011,7 +1025,7 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 	}
 
 	outputJSON := []byte("[]")
-	if reconstructed, ok := buildResponsesOutputJSON(acc, imageOutputs); ok {
+	if reconstructed, ok := buildResponsesOutputJSON(acc, rawOutputItems, imageOutputs); ok {
 		outputJSON = reconstructed
 	}
 	updated, err := sjson.SetRawBytes(data, "response.output", outputJSON)
@@ -1033,16 +1047,23 @@ func responsesStreamEventMayContributeToOutput(eventType string) bool {
 	}
 }
 
-// reconstructResponseOutputFromSSE scans raw SSE body text for delta events and
-// returns a JSON-encoded output array reconstructed from accumulated deltas.
-// Returns (nil, false) if no content was found in deltas.
+// reconstructResponseOutputFromSSE scans raw SSE body text and returns a
+// JSON-encoded output array reconstructed from accumulated deltas and raw
+// terminal output items that must not be narrowed through ResponsesOutput.
+// Returns (nil, false) if no output content was found.
 func reconstructResponseOutputFromSSE(bodyText string) ([]byte, bool) {
 	acc := apicompat.NewBufferedResponseAccumulator()
+	rawOutputItems := make([]streamedResponseOutputItem, 0, 1)
 	imageOutputs := make([]json.RawMessage, 0, 1)
 	seenImages := make(map[string]struct{})
+	order := 0
 	forEachOpenAISSEDataPayload(bodyText, func(data []byte) {
+		order++
 		if imageOutput, ok := extractImageGenerationOutputFromSSEData(data, seenImages); ok {
 			imageOutputs = append(imageOutputs, imageOutput)
+		}
+		if rawOutputItem, ok := extractCompactResponseOutputItemFromSSEData(data, order); ok {
+			rawOutputItems = appendOrReplaceStreamedResponseOutputItem(rawOutputItems, rawOutputItem)
 		}
 		eventType := strings.TrimSpace(gjson.GetBytes(data, "type").String())
 		if responsesStreamEventMayContributeToOutput(eventType) {
@@ -1052,11 +1073,11 @@ func reconstructResponseOutputFromSSE(bodyText string) ([]byte, bool) {
 			}
 		}
 	})
-	return buildResponsesOutputJSON(acc, imageOutputs)
+	return buildResponsesOutputJSON(acc, rawOutputItems, imageOutputs)
 }
 
-func buildResponsesOutputJSON(acc *apicompat.BufferedResponseAccumulator, imageOutputs []json.RawMessage) ([]byte, bool) {
-	if (acc == nil || !acc.HasContent()) && len(imageOutputs) == 0 {
+func buildResponsesOutputJSON(acc *apicompat.BufferedResponseAccumulator, rawOutputItems []streamedResponseOutputItem, imageOutputs []json.RawMessage) ([]byte, bool) {
+	if (acc == nil || !acc.HasContent()) && len(rawOutputItems) == 0 && len(imageOutputs) == 0 {
 		return nil, false
 	}
 	var output []json.RawMessage
@@ -1065,6 +1086,9 @@ func buildResponsesOutputJSON(acc *apicompat.BufferedResponseAccumulator, imageO
 		if err == nil {
 			_ = json.Unmarshal(outputJSON, &output)
 		}
+	}
+	for _, item := range sortedStreamedResponseOutputItems(rawOutputItems) {
+		output = append(output, item.raw)
 	}
 	output = append(output, imageOutputs...)
 	if len(output) == 0 {
@@ -1076,6 +1100,70 @@ func buildResponsesOutputJSON(acc *apicompat.BufferedResponseAccumulator, imageO
 		return nil, false
 	}
 	return outputJSON, true
+}
+
+func extractCompactResponseOutputItemFromSSEData(data []byte, order int) (streamedResponseOutputItem, bool) {
+	if len(data) == 0 || !gjson.ValidBytes(data) {
+		return streamedResponseOutputItem{}, false
+	}
+	eventType := gjson.GetBytes(data, "type").String()
+	if eventType != "response.output_item.added" && eventType != "response.output_item.done" {
+		return streamedResponseOutputItem{}, false
+	}
+	item := gjson.GetBytes(data, "item")
+	if !item.Exists() || !item.IsObject() || item.Raw == "" {
+		return streamedResponseOutputItem{}, false
+	}
+	if !isOpenAICompactionOutputItemType(item.Get("type").String()) {
+		return streamedResponseOutputItem{}, false
+	}
+
+	indexResult := gjson.GetBytes(data, "output_index")
+	index := order
+	if indexResult.Exists() {
+		index = int(indexResult.Int())
+	}
+	return streamedResponseOutputItem{
+		index: index,
+		order: order,
+		id:    strings.TrimSpace(item.Get("id").String()),
+		raw:   append(json.RawMessage(nil), item.Raw...),
+	}, true
+}
+
+func isOpenAICompactionOutputItemType(itemType string) bool {
+	switch strings.TrimSpace(itemType) {
+	case "compaction", "compaction_summary", "context_compaction":
+		return true
+	default:
+		return false
+	}
+}
+
+func appendOrReplaceStreamedResponseOutputItem(items []streamedResponseOutputItem, item streamedResponseOutputItem) []streamedResponseOutputItem {
+	for i := range items {
+		sameID := item.id != "" && items[i].id == item.id
+		sameIndex := item.id == "" && items[i].id == "" && items[i].index == item.index
+		if sameID || sameIndex {
+			items[i] = item
+			return items
+		}
+	}
+	return append(items, item)
+}
+
+func sortedStreamedResponseOutputItems(items []streamedResponseOutputItem) []streamedResponseOutputItem {
+	if len(items) <= 1 {
+		return items
+	}
+	sorted := append([]streamedResponseOutputItem(nil), items...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if sorted[i].index != sorted[j].index {
+			return sorted[i].index < sorted[j].index
+		}
+		return sorted[i].order < sorted[j].order
+	})
+	return sorted
 }
 
 func extractImageGenerationOutputFromSSEData(data []byte, seen map[string]struct{}) (json.RawMessage, bool) {
