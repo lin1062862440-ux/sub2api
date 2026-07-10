@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"sort"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -150,10 +149,8 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 	needModelReplace := originalModel != mappedModel
 	streamOutputAccumulator := apicompat.NewBufferedResponseAccumulator()
-	streamRawOutputItems := make([]streamedResponseOutputItem, 0, 1)
 	streamImageOutputs := make([]json.RawMessage, 0, 1)
 	streamSeenImages := make(map[string]struct{})
-	streamOutputOrder := 0
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{
 			usage:            usage,
@@ -296,17 +293,13 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if imageOutput, ok := extractImageGenerationOutputFromSSEData(dataBytes, streamSeenImages); ok {
 				streamImageOutputs = append(streamImageOutputs, imageOutput)
 			}
-			streamOutputOrder++
-			if rawOutputItem, ok := extractCompactResponseOutputItemFromSSEData(dataBytes, streamOutputOrder); ok {
-				streamRawOutputItems = appendOrReplaceStreamedResponseOutputItem(streamRawOutputItems, rawOutputItem)
-			}
 			if responsesStreamEventMayContributeToOutput(eventType) {
 				var streamEvent apicompat.ResponsesStreamEvent
 				if err := json.Unmarshal(dataBytes, &streamEvent); err == nil {
 					streamOutputAccumulator.ProcessEvent(&streamEvent)
 				}
 			}
-			if normalizedData, normalized := normalizeResponsesStreamingTerminalOutput(dataBytes, streamOutputAccumulator, streamRawOutputItems, streamImageOutputs); normalized {
+			if normalizedData, normalized := normalizeResponsesStreamingTerminalOutput(dataBytes, streamOutputAccumulator, streamImageOutputs); normalized {
 				dataBytes = normalizedData
 				data = string(normalizedData)
 				line = "data: " + data
@@ -763,10 +756,8 @@ func openAIUsageFromGJSON(value gjson.Result) (OpenAIUsage, bool) {
 	if outputTokens == 0 {
 		outputTokens = value.Get("completion_tokens").Int()
 	}
-	cacheReadTokens := value.Get("input_tokens_details.cached_tokens").Int()
-	if cacheReadTokens == 0 {
-		cacheReadTokens = value.Get("prompt_tokens_details.cached_tokens").Int()
-	}
+	cacheReadTokens := openAICacheReadTokensFromUsage(value)
+	cacheCreationTokens := openAICacheCreationTokensFromUsage(value)
 	imageOutputTokens := value.Get("output_tokens_details.image_tokens").Int()
 	if imageOutputTokens == 0 {
 		imageOutputTokens = value.Get("completion_tokens_details.image_tokens").Int()
@@ -774,10 +765,47 @@ func openAIUsageFromGJSON(value gjson.Result) (OpenAIUsage, bool) {
 	return OpenAIUsage{
 		InputTokens:              int(inputTokens),
 		OutputTokens:             int(outputTokens),
-		CacheCreationInputTokens: int(value.Get("cache_creation_input_tokens").Int()),
-		CacheReadInputTokens:     int(cacheReadTokens),
+		CacheCreationInputTokens: cacheCreationTokens,
+		CacheReadInputTokens:     cacheReadTokens,
 		ImageOutputTokens:        int(imageOutputTokens),
 	}, true
+}
+
+func openAICacheReadTokensFromUsage(value gjson.Result) int {
+	for _, nested := range []gjson.Result{
+		value.Get("input_tokens_details.cached_tokens"),
+		value.Get("prompt_tokens_details.cached_tokens"),
+	} {
+		if nested.Exists() {
+			return max(int(nested.Int()), 0)
+		}
+	}
+
+	return firstPositiveGJSONInt(
+		value.Get("cache_read_input_tokens"),
+		value.Get("cache_read_tokens"),
+		value.Get("cached_tokens"),
+	)
+}
+
+func openAICacheCreationTokensFromUsage(value gjson.Result) int {
+	for _, nested := range []gjson.Result{
+		value.Get("input_tokens_details.cache_write_tokens"),
+		value.Get("prompt_tokens_details.cache_write_tokens"),
+		value.Get("input_tokens_details.cache_creation_tokens"),
+		value.Get("prompt_tokens_details.cache_creation_tokens"),
+	} {
+		if nested.Exists() {
+			return max(int(nested.Int()), 0)
+		}
+	}
+
+	return firstPositiveGJSONInt(
+		value.Get("cache_write_tokens"),
+		value.Get("cache_creation_input_tokens"),
+		value.Get("cache_write_input_tokens"),
+		value.Get("cache_creation_tokens"),
+	)
 }
 
 func (s *OpenAIGatewayService) handleNonStreamingResponse(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, originalModel, mappedModel string) (*openaiNonStreamingResult, error) {
@@ -885,6 +913,7 @@ func (s *OpenAIGatewayService) handleSSEToJSON(resp *http.Response, c *gin.Conte
 				}
 			}
 		}
+		finalResponse = supplementCompactionItemFromSSE(c, finalResponse, bodyText)
 		body = finalResponse
 		if originalModel != mappedModel {
 			body = s.replaceModelInResponseBody(body, mappedModel, originalModel)
@@ -1019,6 +1048,12 @@ func (s *OpenAIGatewayService) writeOpenAINonStreamingProtocolError(resp *http.R
 		message = "Upstream returned an invalid non-streaming response"
 	}
 	setOpsUpstreamError(c, http.StatusBadGateway, message, "")
+	// body-signal compact 心跳可能已把响应头提交为 200，此时只能以
+	// response.failed 终止事件回传错误，不能再写 JSON+状态码。
+	if openAICompactClientWantsStream(c) && StopOpenAICompactSSEKeepaliveCommitted(c) {
+		writeOpenAICompactSSEFailureMessage(c, http.StatusBadGateway, "upstream_error", message)
+		return fmt.Errorf("non-streaming openai protocol error: %s", message)
+	}
 	responseheaders.WriteFilteredHeaders(c.Writer.Header(), resp.Header, s.responseHeaderFilter)
 	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	c.JSON(http.StatusBadGateway, gin.H{
@@ -1049,14 +1084,7 @@ func extractCodexFinalResponse(body string) ([]byte, bool) {
 	return nil, false
 }
 
-type streamedResponseOutputItem struct {
-	index int
-	order int
-	id    string
-	raw   json.RawMessage
-}
-
-func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.BufferedResponseAccumulator, rawOutputItems []streamedResponseOutputItem, imageOutputs []json.RawMessage) ([]byte, bool) {
+func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.BufferedResponseAccumulator, imageOutputs []json.RawMessage) ([]byte, bool) {
 	eventType := strings.TrimSpace(gjson.GetBytes(data, "type").String())
 	switch eventType {
 	case "response.completed", "response.done", "response.incomplete", "response.cancelled", "response.canceled":
@@ -1065,7 +1093,7 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 	}
 
 	output := gjson.GetBytes(data, "response.output")
-	hasAccumulatedOutput := (acc != nil && acc.HasContent()) || len(rawOutputItems) > 0 || len(imageOutputs) > 0
+	hasAccumulatedOutput := (acc != nil && acc.HasContent()) || len(imageOutputs) > 0
 	if output.Exists() && output.IsArray() {
 		if len(output.Array()) > 0 || !hasAccumulatedOutput {
 			return data, false
@@ -1073,7 +1101,7 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 	}
 
 	outputJSON := []byte("[]")
-	if reconstructed, ok := buildResponsesOutputJSON(acc, rawOutputItems, imageOutputs); ok {
+	if reconstructed, ok := buildResponsesOutputJSON(acc, imageOutputs); ok {
 		outputJSON = reconstructed
 	}
 	updated, err := sjson.SetRawBytes(data, "response.output", outputJSON)
@@ -1095,23 +1123,158 @@ func responsesStreamEventMayContributeToOutput(eventType string) bool {
 	}
 }
 
+// collectRawResponsesOutputItemsFromSSE 按到达顺序收集 SSE 流中
+// response.output_item.done 携带的原始 item。item 以 raw JSON 逐字节保留，
+// 避免经窄结构体重建时丢弃 encrypted_content/summary/opaque 等 compact
+// 专属或未来新增字段（#3777 问题 2）。若整条流没有任何 done 事件，退回
+// 收集 output_item.added 中的 compaction 类 item——compaction 结果没有
+// delta 事件，部分上游只在 added 事件中携带完整 item。
+func collectRawResponsesOutputItemsFromSSE(bodyText string) ([]byte, bool) {
+	var items []json.RawMessage
+	seen := make(map[string]struct{})
+	hasCompactionItem := false
+	appendItem := func(item gjson.Result) {
+		if !item.Exists() || !item.IsObject() {
+			return
+		}
+		key := strings.TrimSpace(item.Get("id").String())
+		if key == "" {
+			key = item.Raw
+		}
+		if _, dup := seen[key]; dup {
+			return
+		}
+		seen[key] = struct{}{}
+		if isResponsesCompactionItemType(item.Get("type").String()) {
+			hasCompactionItem = true
+		}
+		items = append(items, json.RawMessage(item.Raw))
+	}
+	forEachOpenAISSEDataPayload(bodyText, func(data []byte) {
+		if strings.TrimSpace(gjson.GetBytes(data, "type").String()) != "response.output_item.done" {
+			return
+		}
+		appendItem(gjson.GetBytes(data, "item"))
+	})
+	// done 事件未携带 compaction item 时再看 added：覆盖"其他 item 有 done、
+	// compaction 只在 added 中"的混合形态；done 已含 compaction 时跳过，
+	// 避免同一 item 在无 id 可去重时被收集两份（Codex 要求恰好一个）。
+	if !hasCompactionItem {
+		forEachOpenAISSEDataPayload(bodyText, func(data []byte) {
+			if strings.TrimSpace(gjson.GetBytes(data, "type").String()) != "response.output_item.added" {
+				return
+			}
+			item := gjson.GetBytes(data, "item")
+			if !isResponsesCompactionItemType(item.Get("type").String()) {
+				return
+			}
+			appendItem(item)
+		})
+	}
+	if len(items) == 0 {
+		return nil, false
+	}
+	outputJSON, err := json.Marshal(items)
+	if err != nil {
+		return nil, false
+	}
+	return outputJSON, true
+}
+
+// isResponsesCompactionItemType reports whether the item type is the Codex
+// remote-compact result item ("compaction", upstream alias "compaction_summary").
+func isResponsesCompactionItemType(itemType string) bool {
+	switch strings.TrimSpace(itemType) {
+	case "compaction", "compaction_summary":
+		return true
+	default:
+		return false
+	}
+}
+
+// supplementCompactionItemFromSSE 保证 compact 请求的终态 output 携带
+// compaction item：终态 output 非空但缺失 compaction、而原始事件流的
+// output_item.done（或 added）中存在时（上游不一致形态），以 raw JSON 补入。
+// Codex remote compact v2 只从 output_item.done 收集 item 且要求恰好一个
+// compaction item——纯流式透传（v0.1.146）下客户端直接读事件流天然拿得到，
+// SSE→JSON 提取链路必须给出等价结果。非 compact 请求原样返回。
+func supplementCompactionItemFromSSE(c *gin.Context, finalResponse []byte, bodyText string) []byte {
+	if !isOpenAIResponsesCompactPath(c) {
+		return finalResponse
+	}
+	if len(gjson.GetBytes(finalResponse, "output").Array()) == 0 {
+		// 空 output 由 reconstructResponseOutputFromSSE 整体修补，不在此处理。
+		return finalResponse
+	}
+	if responsesOutputHasCompactionItem(finalResponse) {
+		return finalResponse
+	}
+	item, found := findRawCompactionItemFromSSE(bodyText)
+	if !found {
+		return finalResponse
+	}
+	patched, err := sjson.SetRawBytes(finalResponse, "output.-1", item)
+	if err != nil {
+		return finalResponse
+	}
+	return patched
+}
+
+// responsesOutputHasCompactionItem reports whether the response JSON already
+// carries a compaction item in its output array.
+func responsesOutputHasCompactionItem(response []byte) bool {
+	for _, item := range gjson.GetBytes(response, "output").Array() {
+		if isResponsesCompactionItemType(item.Get("type").String()) {
+			return true
+		}
+	}
+	return false
+}
+
+// findRawCompactionItemFromSSE 从原始 SSE 事件流中提取第一个 compaction 类
+// item 的 raw JSON：output_item.done 优先，output_item.added 兜底。
+func findRawCompactionItemFromSSE(bodyText string) (json.RawMessage, bool) {
+	var found json.RawMessage
+	pick := func(eventType string) {
+		forEachOpenAISSEDataPayload(bodyText, func(data []byte) {
+			if found != nil {
+				return
+			}
+			if strings.TrimSpace(gjson.GetBytes(data, "type").String()) != eventType {
+				return
+			}
+			item := gjson.GetBytes(data, "item")
+			if !item.IsObject() || !isResponsesCompactionItemType(item.Get("type").String()) {
+				return
+			}
+			found = json.RawMessage(item.Raw)
+		})
+	}
+	pick("response.output_item.done")
+	if found == nil {
+		pick("response.output_item.added")
+	}
+	return found, found != nil
+}
+
 // reconstructResponseOutputFromSSE scans raw SSE body text and returns a
-// JSON-encoded output array reconstructed from accumulated deltas and raw
-// terminal output items that must not be narrowed through ResponsesOutput.
-// Returns (nil, false) if no output content was found.
+// JSON-encoded output array for a terminal event whose output is empty.
+// Raw output_item.done items are preferred: per the Responses protocol they
+// are the authoritative final form of each item. Delta accumulation only
+// covers text/function_call/reasoning content and silently drops unknown
+// item types such as compaction — Codex remote compact v2 then fails with
+// "expected exactly one compaction output item, got 0" (#3887).
+// Returns (nil, false) if nothing could be reconstructed.
 func reconstructResponseOutputFromSSE(bodyText string) ([]byte, bool) {
+	if outputJSON, ok := collectRawResponsesOutputItemsFromSSE(bodyText); ok {
+		return outputJSON, true
+	}
 	acc := apicompat.NewBufferedResponseAccumulator()
-	rawOutputItems := make([]streamedResponseOutputItem, 0, 1)
 	imageOutputs := make([]json.RawMessage, 0, 1)
 	seenImages := make(map[string]struct{})
-	order := 0
 	forEachOpenAISSEDataPayload(bodyText, func(data []byte) {
-		order++
 		if imageOutput, ok := extractImageGenerationOutputFromSSEData(data, seenImages); ok {
 			imageOutputs = append(imageOutputs, imageOutput)
-		}
-		if rawOutputItem, ok := extractCompactResponseOutputItemFromSSEData(data, order); ok {
-			rawOutputItems = appendOrReplaceStreamedResponseOutputItem(rawOutputItems, rawOutputItem)
 		}
 		eventType := strings.TrimSpace(gjson.GetBytes(data, "type").String())
 		if responsesStreamEventMayContributeToOutput(eventType) {
@@ -1121,11 +1284,11 @@ func reconstructResponseOutputFromSSE(bodyText string) ([]byte, bool) {
 			}
 		}
 	})
-	return buildResponsesOutputJSON(acc, rawOutputItems, imageOutputs)
+	return buildResponsesOutputJSON(acc, imageOutputs)
 }
 
-func buildResponsesOutputJSON(acc *apicompat.BufferedResponseAccumulator, rawOutputItems []streamedResponseOutputItem, imageOutputs []json.RawMessage) ([]byte, bool) {
-	if (acc == nil || !acc.HasContent()) && len(rawOutputItems) == 0 && len(imageOutputs) == 0 {
+func buildResponsesOutputJSON(acc *apicompat.BufferedResponseAccumulator, imageOutputs []json.RawMessage) ([]byte, bool) {
+	if (acc == nil || !acc.HasContent()) && len(imageOutputs) == 0 {
 		return nil, false
 	}
 	var output []json.RawMessage
@@ -1134,9 +1297,6 @@ func buildResponsesOutputJSON(acc *apicompat.BufferedResponseAccumulator, rawOut
 		if err == nil {
 			_ = json.Unmarshal(outputJSON, &output)
 		}
-	}
-	for _, item := range sortedStreamedResponseOutputItems(rawOutputItems) {
-		output = append(output, item.raw)
 	}
 	output = append(output, imageOutputs...)
 	if len(output) == 0 {
@@ -1148,70 +1308,6 @@ func buildResponsesOutputJSON(acc *apicompat.BufferedResponseAccumulator, rawOut
 		return nil, false
 	}
 	return outputJSON, true
-}
-
-func extractCompactResponseOutputItemFromSSEData(data []byte, order int) (streamedResponseOutputItem, bool) {
-	if len(data) == 0 || !gjson.ValidBytes(data) {
-		return streamedResponseOutputItem{}, false
-	}
-	eventType := gjson.GetBytes(data, "type").String()
-	if eventType != "response.output_item.added" && eventType != "response.output_item.done" {
-		return streamedResponseOutputItem{}, false
-	}
-	item := gjson.GetBytes(data, "item")
-	if !item.Exists() || !item.IsObject() || item.Raw == "" {
-		return streamedResponseOutputItem{}, false
-	}
-	if !isOpenAICompactionOutputItemType(item.Get("type").String()) {
-		return streamedResponseOutputItem{}, false
-	}
-
-	indexResult := gjson.GetBytes(data, "output_index")
-	index := order
-	if indexResult.Exists() {
-		index = int(indexResult.Int())
-	}
-	return streamedResponseOutputItem{
-		index: index,
-		order: order,
-		id:    strings.TrimSpace(item.Get("id").String()),
-		raw:   append(json.RawMessage(nil), item.Raw...),
-	}, true
-}
-
-func isOpenAICompactionOutputItemType(itemType string) bool {
-	switch strings.TrimSpace(itemType) {
-	case "compaction", "compaction_summary", "context_compaction":
-		return true
-	default:
-		return false
-	}
-}
-
-func appendOrReplaceStreamedResponseOutputItem(items []streamedResponseOutputItem, item streamedResponseOutputItem) []streamedResponseOutputItem {
-	for i := range items {
-		sameID := item.id != "" && items[i].id == item.id
-		sameIndex := item.id == "" && items[i].id == "" && items[i].index == item.index
-		if sameID || sameIndex {
-			items[i] = item
-			return items
-		}
-	}
-	return append(items, item)
-}
-
-func sortedStreamedResponseOutputItems(items []streamedResponseOutputItem) []streamedResponseOutputItem {
-	if len(items) <= 1 {
-		return items
-	}
-	sorted := append([]streamedResponseOutputItem(nil), items...)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		if sorted[i].index != sorted[j].index {
-			return sorted[i].index < sorted[j].index
-		}
-		return sorted[i].order < sorted[j].order
-	})
-	return sorted
 }
 
 func extractImageGenerationOutputFromSSEData(data []byte, seen map[string]struct{}) (json.RawMessage, bool) {
