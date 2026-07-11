@@ -149,8 +149,24 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 
 	needModelReplace := originalModel != mappedModel
 	streamOutputAccumulator := apicompat.NewBufferedResponseAccumulator()
+	streamRawOutputItems := make([]json.RawMessage, 0, 1)
+	streamRawOutputItemKeys := make(map[string]struct{})
 	streamImageOutputs := make([]json.RawMessage, 0, 1)
 	streamSeenImages := make(map[string]struct{})
+	appendStreamRawOutputItem := func(item gjson.Result) {
+		if !item.Exists() || !item.IsObject() {
+			return
+		}
+		key := strings.TrimSpace(item.Get("id").String())
+		if key == "" {
+			key = item.Raw
+		}
+		if _, dup := streamRawOutputItemKeys[key]; dup {
+			return
+		}
+		streamRawOutputItemKeys[key] = struct{}{}
+		streamRawOutputItems = append(streamRawOutputItems, json.RawMessage(item.Raw))
+	}
 	resultWithUsage := func() *openaiStreamingResult {
 		return &openaiStreamingResult{
 			usage:            usage,
@@ -293,13 +309,22 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 			if imageOutput, ok := extractImageGenerationOutputFromSSEData(dataBytes, streamSeenImages); ok {
 				streamImageOutputs = append(streamImageOutputs, imageOutput)
 			}
+			switch eventType {
+			case "response.output_item.done":
+				appendStreamRawOutputItem(gjson.GetBytes(dataBytes, "item"))
+			case "response.output_item.added":
+				item := gjson.GetBytes(dataBytes, "item")
+				if isResponsesCompactionItemType(item.Get("type").String()) {
+					appendStreamRawOutputItem(item)
+				}
+			}
 			if responsesStreamEventMayContributeToOutput(eventType) {
 				var streamEvent apicompat.ResponsesStreamEvent
 				if err := json.Unmarshal(dataBytes, &streamEvent); err == nil {
 					streamOutputAccumulator.ProcessEvent(&streamEvent)
 				}
 			}
-			if normalizedData, normalized := normalizeResponsesStreamingTerminalOutput(dataBytes, streamOutputAccumulator, streamImageOutputs); normalized {
+			if normalizedData, normalized := normalizeResponsesStreamingTerminalOutput(dataBytes, streamOutputAccumulator, streamRawOutputItems, streamImageOutputs); normalized {
 				dataBytes = normalizedData
 				data = string(normalizedData)
 				line = "data: " + data
@@ -1084,7 +1109,7 @@ func extractCodexFinalResponse(body string) ([]byte, bool) {
 	return nil, false
 }
 
-func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.BufferedResponseAccumulator, imageOutputs []json.RawMessage) ([]byte, bool) {
+func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.BufferedResponseAccumulator, rawOutputItems []json.RawMessage, imageOutputs []json.RawMessage) ([]byte, bool) {
 	eventType := strings.TrimSpace(gjson.GetBytes(data, "type").String())
 	switch eventType {
 	case "response.completed", "response.done", "response.incomplete", "response.cancelled", "response.canceled":
@@ -1093,7 +1118,7 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 	}
 
 	output := gjson.GetBytes(data, "response.output")
-	hasAccumulatedOutput := (acc != nil && acc.HasContent()) || len(imageOutputs) > 0
+	hasAccumulatedOutput := len(rawOutputItems) > 0 || (acc != nil && acc.HasContent()) || len(imageOutputs) > 0
 	if output.Exists() && output.IsArray() {
 		if len(output.Array()) > 0 || !hasAccumulatedOutput {
 			return data, false
@@ -1101,7 +1126,9 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 	}
 
 	outputJSON := []byte("[]")
-	if reconstructed, ok := buildResponsesOutputJSON(acc, imageOutputs); ok {
+	if rawOutputItemsJSON, ok := buildRawResponsesOutputItemsJSON(rawOutputItems); ok {
+		outputJSON = rawOutputItemsJSON
+	} else if reconstructed, ok := buildResponsesOutputJSON(acc, imageOutputs); ok {
 		outputJSON = reconstructed
 	}
 	updated, err := sjson.SetRawBytes(data, "response.output", outputJSON)
@@ -1109,6 +1136,17 @@ func normalizeResponsesStreamingTerminalOutput(data []byte, acc *apicompat.Buffe
 		return data, false
 	}
 	return updated, true
+}
+
+func buildRawResponsesOutputItemsJSON(items []json.RawMessage) ([]byte, bool) {
+	if len(items) == 0 {
+		return nil, false
+	}
+	outputJSON, err := json.Marshal(items)
+	if err != nil {
+		return nil, false
+	}
+	return outputJSON, true
 }
 
 func responsesStreamEventMayContributeToOutput(eventType string) bool {
