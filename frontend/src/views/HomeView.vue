@@ -25,7 +25,7 @@
           <span
             class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white dark:bg-dark-900"
           >
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+            <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
           </span>
           <span class="truncate text-sm font-semibold sm:text-base">{{ siteName }}</span>
         </router-link>

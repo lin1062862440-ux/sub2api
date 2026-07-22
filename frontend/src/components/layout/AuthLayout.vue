@@ -11,7 +11,7 @@
           <span
             class="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white dark:bg-dark-900"
           >
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+            <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
           </span>
           <span class="truncate text-sm font-semibold sm:text-base">{{ siteName }}</span>
         </router-link>
@@ -32,7 +32,7 @@
             <div
               class="mb-7 flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl bg-white dark:bg-dark-900"
             >
-              <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+              <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
             </div>
             <h1 class="auth-display-title text-5xl font-semibold leading-[1.04] text-gray-950 dark:text-white">
               {{ siteName }}
@@ -69,7 +69,7 @@
             <div
               class="mx-auto mb-5 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white dark:bg-dark-900"
             >
-              <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+              <img :src="siteLogo || '/logo.svg'" alt="Logo" class="h-full w-full object-contain" />
             </div>
             <h1 class="text-3xl font-semibold text-gray-950 dark:text-white">
               {{ siteName }}

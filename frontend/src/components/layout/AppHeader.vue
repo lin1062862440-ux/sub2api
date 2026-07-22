@@ -2,11 +2,11 @@
   <header class="sticky top-0 z-30 px-3 pt-3 md:px-5 lg:px-7">
     <div class="flex h-14 items-center justify-between rounded-2xl border border-white/70 bg-white/82 px-3 shadow-[0_10px_30px_rgb(15_23_42/0.08)] backdrop-blur-xl dark:border-white/10 dark:bg-dark-950/72 dark:shadow-none md:px-4">
       <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex items-center gap-4">
+      <div class="flex shrink-0 items-center gap-2 sm:gap-4">
         <button
           @click="toggleMobileSidebar"
           class="inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-600 transition-colors hover:bg-white hover:text-gray-950 focus:outline-none focus:ring-2 focus:ring-gray-950/15 dark:text-dark-300 dark:hover:bg-dark-900 dark:hover:text-white dark:focus:ring-white/20 lg:hidden"
-          aria-label="Toggle Menu"
+          :aria-label="t('common.toggleMenu')"
         >
           <Icon name="menu" size="md" />
         </button>
@@ -81,7 +81,7 @@
           <button
             @click="toggleDropdown"
             class="flex h-11 items-center gap-2 rounded-full px-1.5 pr-2 transition-colors hover:bg-white focus:outline-none focus:ring-2 focus:ring-gray-950/15 dark:hover:bg-dark-900 dark:focus:ring-white/20"
-            aria-label="User Menu"
+            :aria-label="t('common.userMenu')"
           >
             <div class="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-gray-950 text-xs font-semibold text-white ring-1 ring-gray-950/10 dark:bg-white dark:text-gray-950 dark:ring-white/10">
               <img

@@ -5,7 +5,7 @@
         <div class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-gray-950/10 dark:bg-dark-900 dark:ring-white/10">
           <img :src="resolveAvatarUrl(user.avatar_url)" :alt="user.email" class="h-full w-full object-cover">
         </div>
-        <div class="flex-1"><p class="font-medium text-gray-900">{{ user.email }}</p><p class="text-sm text-gray-500">{{ t('admin.users.currentBalance') }}: ${{ formatBalance(user.balance) }}</p></div>
+        <div class="flex-1"><p class="font-medium text-gray-900 dark:text-gray-100">{{ user.email }}</p><p class="text-sm text-gray-500 dark:text-gray-400">{{ t('admin.users.currentBalance') }}: ${{ formatBalance(user.balance) }}</p></div>
       </div>
       <div>
         <label class="input-label">{{ operation === 'add' ? t('admin.users.depositAmount') : t('admin.users.withdrawAmount') }}</label>
