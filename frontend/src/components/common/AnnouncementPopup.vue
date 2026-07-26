@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition name="popup-fade">
       <div
-        v-if="announcementStore.currentPopup"
+        v-if="displayedAnnouncement"
         class="fixed inset-0 z-[120] flex items-start justify-center overflow-y-auto bg-gray-950/60 px-4 py-6 backdrop-blur-sm sm:py-[8vh]"
       >
         <div
@@ -23,12 +23,12 @@
                   </span>
                   <span class="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-dark-300">
                     <Icon name="clock" size="xs" />
-                    <time>{{ formatRelativeWithDateTime(announcementStore.currentPopup.created_at) }}</time>
+                    <time>{{ formatRelativeWithDateTime(displayedAnnouncement.created_at) }}</time>
                   </span>
                 </div>
 
                 <h2 class="text-xl font-semibold leading-snug text-gray-950 dark:text-white sm:text-2xl">
-                  {{ announcementStore.currentPopup.title }}
+                  {{ displayedAnnouncement.title }}
                 </h2>
               </div>
             </div>
@@ -43,17 +43,18 @@
 
           <div class="border-t border-gray-100 bg-gray-50 px-5 py-4 dark:border-dark-700 dark:bg-dark-950/50 sm:px-6">
             <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div class="flex items-center gap-2 text-xs text-gray-500 dark:text-dark-300">
+              <div v-if="!preview" class="flex items-center gap-2 text-xs text-gray-500 dark:text-dark-300">
                 <Icon name="infoCircle" size="sm" />
                 <span>{{ t('announcements.markReadHint') }}</span>
-            </div>
+              </div>
 
               <button
                 @click="handleDismiss"
+                data-testid="announcement-popup-dismiss"
                 class="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 text-sm font-semibold text-white shadow-sm shadow-primary-600/20 transition-colors hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 focus:ring-offset-2 focus:ring-offset-gray-50 active:bg-primary-800 dark:bg-primary-500 dark:hover:bg-primary-400 dark:focus:ring-primary-400/40 dark:focus:ring-offset-dark-950"
               >
-                <Icon name="check" size="sm" />
-                {{ t('announcements.markRead') }}
+                <Icon :name="preview ? 'x' : 'check'" size="sm" />
+                {{ preview ? t('common.close') : t('announcements.markRead') }}
               </button>
             </div>
           </div>
@@ -71,9 +72,28 @@ import DOMPurify from 'dompurify'
 import { useAnnouncementStore } from '@/stores/announcements'
 import { formatRelativeWithDateTime } from '@/utils/format'
 import Icon from '@/components/icons/Icon.vue'
+import type { Announcement, UserAnnouncement } from '@/types'
+import '@/styles/announcement-markdown.css'
+
+type PreviewAnnouncement = Pick<Announcement | UserAnnouncement, 'title' | 'content' | 'created_at'>
+
+const props = withDefaults(defineProps<{
+  announcement?: PreviewAnnouncement | null
+  preview?: boolean
+}>(), {
+  announcement: null,
+  preview: false,
+})
+
+const emit = defineEmits<{
+  close: []
+}>()
 
 const { t } = useI18n()
 const announcementStore = useAnnouncementStore()
+const displayedAnnouncement = computed(() => (
+  props.preview ? props.announcement : announcementStore.currentPopup
+))
 
 marked.setOptions({
   breaks: true,
@@ -81,22 +101,26 @@ marked.setOptions({
 })
 
 const renderedContent = computed(() => {
-  const content = announcementStore.currentPopup?.content
+  const content = displayedAnnouncement.value?.content
   if (!content) return ''
   const html = marked.parse(content) as string
   return DOMPurify.sanitize(html)
 })
 
 function handleDismiss() {
+  if (props.preview) {
+    emit('close')
+    return
+  }
   announcementStore.dismissPopup()
 }
 
 watch(
-  () => announcementStore.currentPopup,
+  displayedAnnouncement,
   (popup) => {
     document.body.style.overflow = popup ? 'hidden' : ''
   },
-  { immediate: true }
+  { immediate: true },
 )
 
 onBeforeUnmount(() => {
