@@ -35,6 +35,16 @@
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
         </a>
 
+        <!-- Model Plaza Entry -->
+        <router-link
+          v-if="user && modelPlazaEnabled"
+          :to="{ path: '/model-plaza', query: { embedded: '1' } }"
+          class="hidden h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-gray-600 transition-colors hover:bg-white hover:text-gray-950 dark:text-dark-300 dark:hover:bg-dark-900 dark:hover:text-white sm:flex"
+        >
+          <Icon name="grid" size="sm" />
+          <span class="hidden sm:inline">{{ t('nav.modelPlaza') }}</span>
+        </router-link>
+
         <!-- Language Switcher -->
         <LocaleSwitcher />
 
@@ -235,6 +245,7 @@ import Icon from '@/components/icons/Icon.vue'
 import ProductIcon from '@/components/common/ProductIcon.vue'
 import { resolveAvatarUrl } from '@/utils/avatar'
 import { sanitizeUrl } from '@/utils/url'
+import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 
 const router = useRouter()
 const route = useRoute()
@@ -249,6 +260,7 @@ const dropdownOpen = ref(false)
 const dropdownRef = ref<HTMLElement | null>(null)
 const contactInfo = computed(() => appStore.contactInfo)
 const docUrl = computed(() => sanitizeUrl(appStore.docUrl))
+const modelPlazaEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.modelPlaza))
 const avatarUrl = computed(() => resolveAvatarUrl(user.value?.avatar_url))
 const availableBalance = computed(() => Number(user.value?.balance || 0))
 const frozenBalance = computed(() => Number(user.value?.frozen_balance || 0))
