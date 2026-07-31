@@ -8,9 +8,12 @@ import { http } from '@/lib/http'
 import type {
   AuthResponse,
   DashboardStats,
+  ForgotPasswordResponse,
   LoginResponse,
   ModelStatsResponse,
   PublicSettings,
+  ResetPasswordResponse,
+  SendVerifyCodeResponse,
   TrendResponse,
   User,
 } from './types'
@@ -24,6 +27,37 @@ export function login(payload: { email: string; password: string; turnstile_toke
 
 export function loginWith2FA(payload: { temp_token: string; totp_code: string }) {
   return http.post<AuthResponse>('/auth/login/2fa', payload, { anonymous: true })
+}
+
+export interface RegisterPayload {
+  username: string
+  email: string
+  password: string
+  verify_code?: string
+  turnstile_token?: string
+  promo_code?: string
+  invitation_code?: string
+  aff_code?: string
+}
+
+export function register(payload: RegisterPayload) {
+  return http.post<AuthResponse>('/auth/register', payload, { anonymous: true })
+}
+
+export function sendVerifyCode(payload: { email: string; turnstile_token?: string }) {
+  return http.post<SendVerifyCodeResponse>('/auth/send-verify-code', payload, { anonymous: true })
+}
+
+export function forgotPassword(payload: {
+  email: string
+  turnstile_token?: string
+  reset_target?: 'web' | 'desktop'
+}) {
+  return http.post<ForgotPasswordResponse>('/auth/forgot-password', payload, { anonymous: true })
+}
+
+export function resetPassword(payload: { email: string; token: string; new_password: string }) {
+  return http.post<ResetPasswordResponse>('/auth/reset-password', payload, { anonymous: true })
 }
 
 export function logout(refreshToken: string | null) {

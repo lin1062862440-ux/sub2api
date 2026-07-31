@@ -1,11 +1,32 @@
 import { createApp } from 'vue'
+import { listen } from '@tauri-apps/api/event'
+import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import App from './App.vue'
 import { router } from './router'
+import { parseResetDeepLink, setResetHandoff } from '@/lib/deep-link'
 import { bootstrap } from '@/stores/session'
 import './style.css'
 
-// Restore the persisted backend URL and session before the first navigation, so
-// the router guard sees final state instead of redirecting to /login and back.
-bootstrap().finally(() => {
+async function handleDeepLinks(urls: string[]) {
+  const handoff = urls.map(parseResetDeepLink).find((value) => value !== null)
+  if (!handoff) return
+  setResetHandoff(handoff)
+  await router.replace({ name: 'reset-password' })
+}
+
+async function start() {
+  await bootstrap()
+
+  try {
+    const current = await getCurrent()
+    if (current?.length) await handleDeepLinks(current)
+    await onOpenUrl((urls) => void handleDeepLinks(urls))
+    await listen<string[]>('linai://new-url', (event) => void handleDeepLinks(event.payload))
+  } catch {
+    // Deep-link APIs are unavailable in browser/Vite preview mode.
+  }
+
   createApp(App).use(router).mount('#app')
-})
+}
+
+void start()

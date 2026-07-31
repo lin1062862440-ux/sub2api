@@ -1,6 +1,23 @@
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // Forward a second-instance deep link to the running window on Windows/Linux.
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            use tauri::{Emitter, Manager};
+
+            let urls: Vec<String> = argv
+                .into_iter()
+                .filter(|arg| arg.starts_with("linai://"))
+                .collect();
+            if !urls.is_empty() {
+                let _ = app.emit("linai://new-url", urls);
+            }
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_deep_link::init())
         // HTTP requests go through Rust (reqwest), so they are not subject to
         // the webview's CORS policy. The frontend must import `fetch` from
         // `@tauri-apps/plugin-http` rather than using the global fetch.

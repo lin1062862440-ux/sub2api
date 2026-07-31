@@ -261,7 +261,7 @@ function openAccountPage(path: string) {
                 class="text-action"
                 type="button"
                 data-testid="password-reset-link"
-                @click="openAccountPage('/forgot-password')"
+                @click="router.push({ name: 'forgot-password' })"
               >
                 找回密码
               </button>
@@ -369,7 +369,7 @@ function openAccountPage(path: string) {
             class="text-action"
             type="button"
             data-testid="registration-link"
-            @click="openAccountPage('/register')"
+            @click="router.push({ name: 'register' })"
           >
             创建账号
             <ExternalLink :size="14" />

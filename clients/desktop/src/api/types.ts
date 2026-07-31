@@ -124,6 +124,16 @@ export interface PublicSettings {
   site_subtitle: string
   version: string
   registration_enabled: boolean
+  email_verify_enabled?: boolean
+  registration_email_suffix_whitelist?: string[]
+  promo_code_enabled?: boolean
+  invitation_code_enabled?: boolean
+  affiliate_enabled?: boolean
+  login_agreement_enabled?: boolean
+  login_agreement_mode?: 'modal' | 'checkbox' | string
+  login_agreement_updated_at?: string
+  login_agreement_revision?: string
+  login_agreement_documents?: LoginAgreementDocument[]
   password_reset_enabled: boolean
   turnstile_enabled: boolean
   turnstile_site_key: string
@@ -138,4 +148,23 @@ export interface PublicSettings {
   payment_enabled: boolean
   doc_url: string
   contact_info: string
+}
+
+export interface LoginAgreementDocument {
+  id: string
+  title: string
+  content_md: string
+}
+
+export interface SendVerifyCodeResponse {
+  message: string
+  countdown: number
+}
+
+export interface ForgotPasswordResponse {
+  message: string
+}
+
+export interface ResetPasswordResponse {
+  message: string
 }
