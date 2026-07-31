@@ -63,6 +63,12 @@
                 <p v-if="subscription.group?.description" class="subscription-description">
                   {{ subscription.group.description }}
                 </p>
+                <div class="subscription-rate-line">
+                  <span>{{ t('payment.planCard.rate') }}: ×{{ subscription.group?.rate_multiplier ?? 1 }}</span>
+                  <span v-if="subscriptionHasPeakRate(subscription)" class="subscription-peak-rate">
+                    {{ t('payment.planCard.peakRate') }}: {{ subscriptionPeakRateLabel(subscription) }}
+                  </span>
+                </div>
               </div>
             </div>
             <div class="subscription-actions">
@@ -256,9 +262,15 @@ import subscriptionsAPI from '@/api/subscriptions'
 import type { UserSubscription } from '@/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ProductIcon from '@/components/common/ProductIcon.vue'
-import { formatDateOnly } from '@/utils/format'
+import { formatDateTimeToMinute } from '@/utils/format'
+import { hasPeakRate, formatPeakRateWindow, serverTimezoneLabel } from '@/utils/peak-rate'
 import { platformBadgeClass, platformLabel } from '@/utils/platformColors'
-import { getRemainingDurationParts, isOneTimeDailyQuota, type RemainingDurationParts } from '@/utils/subscriptionQuota'
+import {
+  getExpirationDateRelation,
+  getRemainingDurationParts,
+  isOneTimeDailyQuota,
+  type RemainingDurationParts
+} from '@/utils/subscriptionQuota'
 
 function platformAccentDotClass(p: string): string {
   switch (p) {
@@ -288,6 +300,17 @@ const expiringSoonCount = computed(() =>
     return days >= 0 && days <= 7
   }).length
 )
+
+function subscriptionHasPeakRate(subscription: UserSubscription): boolean {
+  return hasPeakRate(subscription.group)
+}
+
+function subscriptionPeakRateLabel(subscription: UserSubscription): string {
+  return formatPeakRateWindow(
+    subscription.group,
+    serverTimezoneLabel(appStore.cachedPublicSettings?.server_utc_offset)
+  )
+}
 
 async function loadSubscriptions() {
   try {
@@ -320,13 +343,24 @@ function formatCompactExpirationDate(expiresAt: string): string {
   const expires = new Date(expiresAt)
   const diff = expires.getTime() - now.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
+  const relation = getExpirationDateRelation(expires, now)
 
-  if (days < 0) return t('userSubscriptions.status.expired')
-  if (days === 0) return t('common.today')
-  if (days === 1) return t('common.tomorrow')
-  if (days <= 30) return t('userSubscriptions.daysRemaining', { days })
+  if (relation === null) return ''
 
-  return formatDateOnly(expires)
+  if (relation === 'expired') {
+    return t('userSubscriptions.status.expired')
+  }
+
+  const dateStr = formatDateTimeToMinute(expires)
+
+  if (relation === 'today') {
+    return `${dateStr} (${t('common.today')})`
+  }
+  if (relation === 'tomorrow') {
+    return `${dateStr} (${t('common.tomorrow')})`
+  }
+
+  return t('userSubscriptions.daysRemaining', { days }) + ` (${dateStr})`
 }
 
 function getExpirationClass(expiresAt: string): string {
@@ -335,7 +369,7 @@ function getExpirationClass(expiresAt: string): string {
   const diff = expires.getTime() - now.getTime()
   const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
 
-  if (days <= 0) return 'text-red-600 dark:text-red-400 font-medium'
+  if (diff <= 0) return 'text-red-600 dark:text-red-400 font-medium'
   if (days <= 3) return 'text-red-600 dark:text-red-400'
   if (days <= 7) return 'text-orange-600 dark:text-orange-400'
   return 'text-gray-700 dark:text-gray-300'
@@ -526,6 +560,20 @@ onMounted(() => {
   line-height: 1rem;
 }
 
+.subscription-rate-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.375rem;
+  color: rgb(100 116 139);
+  font-size: 0.6875rem;
+  line-height: 1rem;
+}
+
+.subscription-peak-rate {
+  color: rgb(180 83 9);
+}
+
 .subscription-actions {
   display: flex;
   flex-wrap: wrap;
@@ -654,9 +702,14 @@ onMounted(() => {
 :global(.dark) .subscriptions-head-copy span,
 :global(.dark) .subscriptions-stat-card span,
 :global(.dark) .subscription-description,
+:global(.dark) .subscription-rate-line,
 :global(.dark) .subscription-meta-row > span:first-child,
 :global(.dark) .subscription-quota-row span {
   color: rgb(148 163 184);
+}
+
+:global(.dark) .subscription-peak-rate {
+  color: rgb(252 211 77);
 }
 
 :global(.dark) .subscriptions-stat-card strong,
