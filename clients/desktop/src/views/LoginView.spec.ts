@@ -57,8 +57,8 @@ const settings = {
   wechat_oauth_enabled: false,
 }
 
-function mountLogin() {
-  return mount(LoginView)
+function mountLogin(options = {}) {
+  return mount(LoginView, options)
 }
 
 describe('LoginView', () => {
@@ -105,6 +105,44 @@ describe('LoginView', () => {
     expect(mocks.login).toHaveBeenCalledWith({ email: 'lin@example.com', password: 'secret' })
     expect(mocks.completeLogin).toHaveBeenCalledWith(auth)
     expect(mocks.replace).toHaveBeenCalledWith({ name: 'dashboard' })
+  })
+
+  it('requires Turnstile verification and submits its token when enabled', async () => {
+    mocks.session.settings = {
+      ...settings,
+      turnstile_enabled: true,
+      turnstile_site_key: 'site-key',
+    }
+    mocks.login.mockResolvedValue({
+      access_token: 'access',
+      token_type: 'Bearer',
+      user: { id: 1, username: 'lin', email: 'lin@example.com' },
+    })
+    const wrapper = mountLogin({
+      global: {
+        stubs: {
+          TurnstileWidget: {
+            emits: ['verify'],
+            template:
+              '<button data-testid="turnstile-verify" type="button" @click="$emit(\'verify\', \'turnstile-token\')">verify</button>',
+          },
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="email-input"]').setValue('lin@example.com')
+    await wrapper.get('[data-testid="password-input"]').setValue('secret')
+    expect(wrapper.get('[data-testid="login-submit"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.get('[data-testid="turnstile-verify"]').trigger('click')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.login).toHaveBeenCalledWith({
+      email: 'lin@example.com',
+      password: 'secret',
+      turnstile_token: 'turnstile-token',
+    })
   })
 
   it('moves to the TOTP stage when the backend requires it', async () => {

@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import App from './App.vue'
 import { router } from './router'
-import { bootstrap } from './stores/session'
+import { bootstrap } from '@/stores/session'
 import './style.css'
 
 // Restore the persisted backend URL and session before the first navigation, so

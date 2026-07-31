@@ -18,7 +18,7 @@ import type {
 // ==================== Auth ====================
 
 /** The backend authenticates by email address, not username. */
-export function login(payload: { email: string; password: string }) {
+export function login(payload: { email: string; password: string; turnstile_token?: string }) {
   return http.post<LoginResponse>('/auth/login', payload, { anonymous: true })
 }
 

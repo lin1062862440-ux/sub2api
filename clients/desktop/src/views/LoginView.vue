@@ -18,6 +18,7 @@ import {
 import * as api from '@/api'
 import { isTotpRequired } from '@/api'
 import BrandLogo from '@/components/BrandLogo.vue'
+import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { webUrl } from '@/config'
 import { normalizeBrand } from '@/lib/brand'
 import { ApiError } from '@/lib/http'
@@ -28,6 +29,8 @@ const router = useRouter()
 const email = ref('')
 const password = ref('')
 const showPassword = ref(false)
+const turnstileToken = ref('')
+const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
 const totpCode = ref('')
 const tempToken = ref('')
 const maskedEmail = ref('')
@@ -38,8 +41,15 @@ const error = ref('')
 
 const settings = computed(() => session.settings)
 const brand = computed(() => normalizeBrand(settings.value))
+const turnstileRequired = computed(
+  () => settings.value?.turnstile_enabled === true && Boolean(settings.value.turnstile_site_key),
+)
 const canSubmitCredentials = computed(
-  () => email.value.trim().length > 0 && password.value.length > 0 && !submitting.value,
+  () =>
+    email.value.trim().length > 0 &&
+    password.value.length > 0 &&
+    (!turnstileRequired.value || turnstileToken.value.length > 0) &&
+    !submitting.value,
 )
 const canSubmitTotp = computed(
   () => /^\d{6}$/.test(totpCode.value.replace(/\s/g, '')) && !submitting.value,
@@ -75,6 +85,7 @@ async function submitCredentials() {
     const response = await api.login({
       email: email.value.trim(),
       password: password.value,
+      ...(turnstileRequired.value ? { turnstile_token: turnstileToken.value } : {}),
     })
 
     if (isTotpRequired(response)) {
@@ -88,10 +99,29 @@ async function submitCredentials() {
     if (!settings.value) void reloadSettings()
     await router.replace({ name: 'dashboard' })
   } catch (reason) {
+    if (turnstileRequired.value) {
+      turnstileToken.value = ''
+      turnstileRef.value?.reset()
+    }
     error.value = messageFor(reason, '邮箱或密码不正确')
   } finally {
     submitting.value = false
   }
+}
+
+function acceptTurnstile(token: string) {
+  turnstileToken.value = token
+  error.value = ''
+}
+
+function expireTurnstile() {
+  turnstileToken.value = ''
+  error.value = '验证已过期，请重新验证'
+}
+
+function failTurnstile() {
+  turnstileToken.value = ''
+  error.value = '人机验证失败，请重试'
 }
 
 async function submitTotp() {
@@ -257,6 +287,18 @@ function openAccountPage(path: string) {
               </button>
             </span>
           </label>
+
+          <div v-if="turnstileRequired" class="turnstile-slot" data-testid="turnstile-widget">
+            <TurnstileWidget
+              ref="turnstileRef"
+              :site-key="settings?.turnstile_site_key ?? ''"
+              theme="light"
+              size="flexible"
+              @verify="acceptTurnstile"
+              @expire="expireTurnstile"
+              @error="failTurnstile"
+            />
+          </div>
 
           <div class="message-slot" aria-live="polite">
             <p v-if="error" class="form-error" role="alert">{{ error }}</p>
@@ -498,6 +540,10 @@ function openAccountPage(path: string) {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+.turnstile-slot {
+  min-height: 65px;
 }
 
 .control {

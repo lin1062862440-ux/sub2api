@@ -125,6 +125,8 @@ export interface PublicSettings {
   version: string
   registration_enabled: boolean
   password_reset_enabled: boolean
+  turnstile_enabled: boolean
+  turnstile_site_key: string
   passkey_enabled?: boolean
   linuxdo_oauth_enabled: boolean
   dingtalk_oauth_enabled?: boolean
