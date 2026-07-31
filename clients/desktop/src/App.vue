@@ -18,5 +18,11 @@ watch(
 </script>
 
 <template>
+  <div
+    class="window-drag-region"
+    data-testid="window-drag-region"
+    data-tauri-drag-region
+    aria-hidden="true"
+  />
   <RouterView />
 </template>
