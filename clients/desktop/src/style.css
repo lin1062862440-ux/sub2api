@@ -1,47 +1,42 @@
-/**
- * Design tokens and base styles.
- *
- * Dark-first, low-chroma surfaces with a single accent reserved for primary
- * actions and live values — closer to a native macOS utility than the web
- * console's light theme.
- */
-
 :root {
-  --bg-base: #0b0d10;
-  --bg-surface: #12151a;
-  --bg-surface-raised: #171b21;
-  --bg-surface-hover: #1d222a;
-  --bg-inset: #0e1114;
+  --bg-base: #f4f7fb;
+  --bg-rail: #edf2f7;
+  --bg-surface: #ffffff;
+  --bg-surface-hover: #f7f9fc;
+  --bg-inset: #edf1f6;
 
-  --border-subtle: #21262e;
-  --border-strong: #2c333d;
+  --border-subtle: #dfe5ee;
+  --border-strong: #cfd7e3;
 
-  --text-primary: #e8ecf1;
-  --text-secondary: #98a3b3;
-  --text-tertiary: #697585;
+  --text-primary: #171b24;
+  --text-secondary: #526070;
+  --text-tertiary: #667085;
 
-  --accent: #4c8dff;
-  --accent-hover: #6ba0ff;
-  --accent-muted: rgba(76, 141, 255, 0.12);
-  --accent-border: rgba(76, 141, 255, 0.35);
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: #dce8ff;
+  --cyan: #087f9b;
 
-  --success: #3fb950;
-  --warning: #d29922;
-  --danger: #f85149;
-  --danger-muted: rgba(248, 81, 73, 0.12);
+  --success: #087f5b;
+  --success-soft: rgba(8, 127, 91, 0.12);
+  --warning: #7a5300;
+  --warning-soft: #fff7df;
+  --warning-border: #ead7a0;
+  --coral: #b93855;
+  --coral-soft: #fff0f3;
+  --coral-border: #efc4ce;
+  --danger: #b4233c;
+
+  --skeleton: #e8edf4;
 
   --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
-
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.45);
+  --radius-md: 8px;
 
   --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue',
     'PingFang SC', 'Hiragino Sans GB', sans-serif;
-  --font-mono: 'SF Mono', ui-monospace, 'JetBrains Mono', Menlo, monospace;
+  --font-mono: 'SF Mono', ui-monospace, Menlo, Monaco, monospace;
 
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 *,
@@ -53,11 +48,13 @@
 html,
 body,
 #app {
+  width: 100%;
   height: 100%;
   margin: 0;
 }
 
 body {
+  overflow: hidden;
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -65,35 +62,29 @@ body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  /* The window uses an overlay title bar, so nothing should rubber-band. */
-  overflow: hidden;
 }
 
 h1,
 h2,
 h3,
-h4 {
-  margin: 0;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
+h4,
 p {
   margin: 0;
+  letter-spacing: 0;
 }
 
 a {
-  color: var(--accent);
+  color: inherit;
   text-decoration: none;
 }
 
-a:hover {
-  color: var(--accent-hover);
+button,
+input {
+  font: inherit;
+  letter-spacing: 0;
 }
 
 button {
-  font-family: inherit;
-  font-size: inherit;
   cursor: pointer;
 }
 
@@ -101,153 +92,15 @@ button:disabled {
   cursor: not-allowed;
 }
 
-input {
-  font-family: inherit;
-  font-size: inherit;
-}
-
-/* Visible focus for keyboard users without ringing on mouse clicks. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
 ::selection {
-  background: var(--accent-muted);
+  background: var(--accent-soft);
 }
 
-/* ==================== Scrollbars ==================== */
-
-::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border-strong);
-  border: 2px solid transparent;
-  border-radius: 6px;
-  background-clip: content-box;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #3a4351;
-  background-clip: content-box;
-}
-
-/* ==================== Shared primitives ==================== */
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.field-label {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-}
-
-.field-input {
-  width: 100%;
-  padding: 10px 12px;
-  background: var(--bg-inset);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.field-input::placeholder {
-  color: var(--text-tertiary);
-}
-
-.field-input:hover:not(:disabled) {
-  border-color: var(--border-strong);
-}
-
-.field-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--bg-surface);
-}
-
-.field-input:disabled {
-  opacity: 0.5;
-}
-
-.field-hint {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 10px 16px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font-weight: 500;
-  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
-}
-
-.btn-primary {
-  background: var(--accent);
-  color: #fff;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-}
-
-.btn-ghost {
-  background: transparent;
-  border-color: var(--border-strong);
-  color: var(--text-secondary);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--bg-surface-hover);
-  color: var(--text-primary);
-}
-
-.btn-block {
-  width: 100%;
-}
-
-.alert {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-}
-
-.alert-danger {
-  background: var(--danger-muted);
-  border: 1px solid rgba(248, 81, 73, 0.3);
-  color: #ff8a80;
-}
-
-.card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-}
-
-/* Non-interactive regions of the window can be used to drag it. */
 .drag-region {
   -webkit-app-region: drag;
 }
@@ -261,6 +114,7 @@ input {
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
 }

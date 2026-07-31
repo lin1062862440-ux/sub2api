@@ -1,19 +1,25 @@
 <script setup lang="ts">
-/**
- * Login.
- *
- * Username/password and TOTP run natively. Third-party OAuth cannot complete
- * inside the webview — the callback redirects to the web origin — so those
- * providers open the deployment's login page in the system browser instead. The
- * button set comes from `/settings/public`, so the client offers exactly what
- * the deployment has enabled.
- */
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { openUrl } from '@tauri-apps/plugin-opener'
+import {
+  ArrowLeft,
+  ArrowRight,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  LockKeyhole,
+  Mail,
+  RefreshCw,
+  ShieldCheck,
+  WifiOff,
+} from '@lucide/vue'
+
 import * as api from '@/api'
 import { isTotpRequired } from '@/api'
+import BrandLogo from '@/components/BrandLogo.vue'
 import { webUrl } from '@/config'
+import { normalizeBrand } from '@/lib/brand'
 import { ApiError } from '@/lib/http'
 import { completeLogin, reloadSettings, session } from '@/stores/session'
 
@@ -21,6 +27,7 @@ const router = useRouter()
 
 const email = ref('')
 const password = ref('')
+const showPassword = ref(false)
 const totpCode = ref('')
 const tempToken = ref('')
 const maskedEmail = ref('')
@@ -30,7 +37,13 @@ const retrying = ref(false)
 const error = ref('')
 
 const settings = computed(() => session.settings)
-const siteName = computed(() => settings.value?.site_name?.trim() || 'LinAI')
+const brand = computed(() => normalizeBrand(settings.value))
+const canSubmitCredentials = computed(
+  () => email.value.trim().length > 0 && password.value.length > 0 && !submitting.value,
+)
+const canSubmitTotp = computed(
+  () => /^\d{6}$/.test(totpCode.value.replace(/\s/g, '')) && !submitting.value,
+)
 
 interface OAuthProvider {
   key: string
@@ -38,25 +51,23 @@ interface OAuthProvider {
 }
 
 const oauthProviders = computed<OAuthProvider[]>(() => {
-  const s = settings.value
-  if (!s) return []
+  const value = settings.value
+  if (!value) return []
+
   const providers: OAuthProvider[] = []
-  if (s.linuxdo_oauth_enabled) providers.push({ key: 'linuxdo', label: 'LinuxDo' })
-  if (s.oidc_oauth_enabled) {
-    providers.push({ key: 'oidc', label: s.oidc_oauth_provider_name?.trim() || 'SSO' })
+  if (value.linuxdo_oauth_enabled) providers.push({ key: 'linuxdo', label: 'LinuxDo' })
+  if (value.oidc_oauth_enabled) {
+    providers.push({ key: 'oidc', label: value.oidc_oauth_provider_name?.trim() || 'SSO' })
   }
-  if (s.github_oauth_enabled) providers.push({ key: 'github', label: 'GitHub' })
-  if (s.google_oauth_enabled) providers.push({ key: 'google', label: 'Google' })
-  if (s.wechat_oauth_enabled) providers.push({ key: 'wechat', label: '微信' })
-  if (s.dingtalk_oauth_enabled) providers.push({ key: 'dingtalk', label: '钉钉' })
+  if (value.github_oauth_enabled) providers.push({ key: 'github', label: 'GitHub' })
+  if (value.google_oauth_enabled) providers.push({ key: 'google', label: 'Google' })
+  if (value.wechat_oauth_enabled) providers.push({ key: 'wechat', label: '微信' })
+  if (value.dingtalk_oauth_enabled) providers.push({ key: 'dingtalk', label: '钉钉' })
   return providers
 })
 
 async function submitCredentials() {
-  if (!email.value.trim() || !password.value) {
-    error.value = '请输入邮箱和密码'
-    return
-  }
+  if (!canSubmitCredentials.value) return
 
   submitting.value = true
   error.value = ''
@@ -74,32 +85,30 @@ async function submitCredentials() {
     }
 
     await completeLogin(response)
-    // Settings may not have loaded at launch if the network was down.
     if (!settings.value) void reloadSettings()
     await router.replace({ name: 'dashboard' })
-  } catch (err) {
-    error.value = messageFor(err, '登录失败，请检查用户名和密码')
+  } catch (reason) {
+    error.value = messageFor(reason, '邮箱或密码不正确')
   } finally {
     submitting.value = false
   }
 }
 
 async function submitTotp() {
-  const code = totpCode.value.replace(/\s/g, '')
-  if (code.length < 6) {
-    error.value = '请输入 6 位验证码'
-    return
-  }
+  if (!canSubmitTotp.value) return
 
   submitting.value = true
   error.value = ''
   try {
-    const response = await api.loginWith2FA({ temp_token: tempToken.value, totp_code: code })
+    const response = await api.loginWith2FA({
+      temp_token: tempToken.value,
+      totp_code: totpCode.value.replace(/\s/g, ''),
+    })
     await completeLogin(response)
     if (!settings.value) void reloadSettings()
     await router.replace({ name: 'dashboard' })
-  } catch (err) {
-    error.value = messageFor(err, '验证码不正确')
+  } catch (reason) {
+    error.value = messageFor(reason, '验证码不正确')
   } finally {
     submitting.value = false
   }
@@ -113,10 +122,10 @@ function backToCredentials() {
   error.value = ''
 }
 
-function messageFor(err: unknown, fallback: string): string {
-  if (err instanceof ApiError) {
-    if (err.status === 0) return '无法连接到服务器，请检查网络'
-    return err.message || fallback
+function messageFor(reason: unknown, fallback: string): string {
+  if (reason instanceof ApiError) {
+    if (reason.status === 0) return '无法连接到 LinAI，请检查网络后重试'
+    return reason.message || fallback
   }
   return fallback
 }
@@ -126,262 +135,586 @@ async function retryConnection() {
   error.value = ''
   try {
     await reloadSettings()
-    if (session.offline) error.value = '仍然无法连接到服务器'
+    if (session.offline) error.value = '仍然无法连接到 LinAI'
   } finally {
     retrying.value = false
   }
 }
+
+function openAccountPage(path: string) {
+  void openUrl(webUrl(path))
+}
 </script>
 
 <template>
-  <div class="login drag-region">
-    <div class="panel no-drag">
-      <header class="head">
-        <div class="mark">{{ siteName.slice(0, 2).toUpperCase() }}</div>
-        <h1>{{ siteName }}</h1>
-        <p class="sub">
-          <template v-if="stage === 'credentials'">
-            {{ settings?.site_subtitle?.trim() || '登录以继续' }}
-          </template>
-          <template v-else>
-            {{ maskedEmail ? `请输入 ${maskedEmail} 的验证码` : '请输入两步验证码' }}
-          </template>
-        </p>
-      </header>
-
-      <div v-if="session.offline" class="offline">
-        <span>无法连接到服务器</span>
-        <button class="link" type="button" :disabled="retrying" @click="retryConnection">
-          {{ retrying ? '重试中…' : '重试' }}
-        </button>
+  <div class="auth-window drag-region">
+    <section class="brand-pane">
+      <div class="brand-lockup">
+        <BrandLogo :src="brand.logo" :alt="brand.name" :size="42" />
+        <span data-testid="brand-name">{{ brand.name }}</span>
       </div>
 
-      <form v-if="stage === 'credentials'" class="form" @submit.prevent="submitCredentials">
-        <label class="field">
-          <span class="field-label">邮箱</span>
-          <input
-            v-model="email"
-            class="field-input"
-            type="email"
-            autocomplete="username"
-            spellcheck="false"
-            placeholder="you@example.com"
-            :disabled="submitting"
-            autofocus
-          />
-        </label>
-
-        <label class="field">
-          <span class="field-label">密码</span>
-          <input
-            v-model="password"
-            class="field-input"
-            type="password"
-            autocomplete="current-password"
-            :disabled="submitting"
-          />
-        </label>
-
-        <p v-if="error" class="alert alert-danger" role="alert">{{ error }}</p>
-
-        <button class="btn btn-primary btn-block" type="submit" :disabled="submitting">
-          {{ submitting ? '登录中…' : '登录' }}
-        </button>
-      </form>
-
-      <form v-else class="form" @submit.prevent="submitTotp">
-        <label class="field">
-          <span class="field-label">验证码</span>
-          <input
-            v-model="totpCode"
-            class="field-input code-input"
-            type="text"
-            inputmode="numeric"
-            maxlength="6"
-            autocomplete="one-time-code"
-            :disabled="submitting"
-            autofocus
-          />
-        </label>
-
-        <p v-if="error" class="alert alert-danger" role="alert">{{ error }}</p>
-
-        <button class="btn btn-primary btn-block" type="submit" :disabled="submitting">
-          {{ submitting ? '验证中…' : '验证并登录' }}
-        </button>
-        <button class="btn btn-ghost btn-block" type="button" @click="backToCredentials">
-          返回
-        </button>
-      </form>
-
-      <template v-if="stage === 'credentials' && oauthProviders.length">
-        <div class="divider"><span>其他登录方式</span></div>
-        <div class="oauth">
-          <button
-            v-for="provider in oauthProviders"
-            :key="provider.key"
-            class="btn btn-ghost oauth-btn"
-            type="button"
-            @click="openUrl(webUrl('/login'))"
-          >
-            {{ provider.label }}
-          </button>
+      <div class="brand-message">
+        <div class="signal-field" aria-hidden="true">
+          <span class="signal-axis signal-axis-x" />
+          <span class="signal-axis signal-axis-y" />
+          <BrandLogo :src="brand.logo" alt="" :size="112" />
         </div>
-        <p class="field-hint oauth-hint">第三方登录将在浏览器中完成</p>
-      </template>
+        <p>{{ brand.subtitle }}</p>
+      </div>
 
-      <footer v-if="settings?.registration_enabled || settings?.password_reset_enabled" class="foot">
+      <div
+        class="connection-status"
+        :class="{ 'connection-status-offline': session.offline }"
+        data-testid="offline-status"
+      >
+        <component :is="session.offline ? WifiOff : ShieldCheck" :size="17" aria-hidden="true" />
+        <div>
+          <strong>{{ session.offline ? '暂时无法连接' : '安全连接已就绪' }}</strong>
+          <span>lynn.lat</span>
+        </div>
         <button
-          v-if="settings?.registration_enabled"
-          class="link"
+          v-if="session.offline"
+          class="icon-action no-drag"
           type="button"
-          @click="openUrl(webUrl('/register'))"
+          title="重新连接"
+          aria-label="重新连接"
+          data-testid="offline-retry"
+          :disabled="retrying"
+          @click="retryConnection"
         >
-          注册账号
+          <RefreshCw :size="16" :class="{ spinning: retrying }" />
         </button>
-        <button
-          v-if="settings?.password_reset_enabled"
-          class="link"
-          type="button"
-          @click="openUrl(webUrl('/forgot-password'))"
-        >
-          忘记密码
-        </button>
-      </footer>
-    </div>
+      </div>
+    </section>
+
+    <main class="form-pane">
+      <div class="form-wrap no-drag">
+        <header class="form-head">
+          <template v-if="stage === 'credentials'">
+            <h1>登录 LinAI</h1>
+            <p>使用你的账户继续访问用量与服务状态。</p>
+          </template>
+          <template v-else>
+            <button class="back-action" type="button" @click="backToCredentials">
+              <ArrowLeft :size="16" />
+              返回账户登录
+            </button>
+            <h1>两步验证</h1>
+            <p>{{ maskedEmail ? `输入发送至 ${maskedEmail} 的验证码。` : '输入你的 6 位验证码。' }}</p>
+          </template>
+        </header>
+
+        <form v-if="stage === 'credentials'" class="auth-form" @submit.prevent="submitCredentials">
+          <label class="control">
+            <span>邮箱</span>
+            <span class="input-shell">
+              <Mail :size="17" aria-hidden="true" />
+              <input
+                v-model="email"
+                data-testid="email-input"
+                type="email"
+                autocomplete="username"
+                spellcheck="false"
+                placeholder="name@example.com"
+                :disabled="submitting"
+                autofocus
+              />
+            </span>
+          </label>
+
+          <label class="control">
+            <span class="control-line">
+              <span>密码</span>
+              <button
+                v-if="settings?.password_reset_enabled"
+                class="text-action"
+                type="button"
+                data-testid="password-reset-link"
+                @click="openAccountPage('/forgot-password')"
+              >
+                找回密码
+              </button>
+            </span>
+            <span class="input-shell">
+              <LockKeyhole :size="17" aria-hidden="true" />
+              <input
+                v-model="password"
+                data-testid="password-input"
+                :type="showPassword ? 'text' : 'password'"
+                autocomplete="current-password"
+                placeholder="输入密码"
+                :disabled="submitting"
+              />
+              <button
+                class="reveal-action"
+                type="button"
+                :title="showPassword ? '隐藏密码' : '显示密码'"
+                :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+                @click="showPassword = !showPassword"
+              >
+                <component :is="showPassword ? EyeOff : Eye" :size="17" />
+              </button>
+            </span>
+          </label>
+
+          <div class="message-slot" aria-live="polite">
+            <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+          </div>
+
+          <button
+            class="primary-action"
+            data-testid="login-submit"
+            type="submit"
+            :disabled="!canSubmitCredentials"
+          >
+            <span>{{ submitting ? '正在登录' : '登录' }}</span>
+            <RefreshCw v-if="submitting" :size="17" class="spinning" />
+            <ArrowRight v-else :size="17" />
+          </button>
+        </form>
+
+        <form v-else class="auth-form" @submit.prevent="submitTotp">
+          <label class="control">
+            <span>验证码</span>
+            <span class="input-shell code-shell">
+              <ShieldCheck :size="18" aria-hidden="true" />
+              <input
+                v-model="totpCode"
+                data-testid="totp-input"
+                type="text"
+                inputmode="numeric"
+                pattern="[0-9]*"
+                maxlength="6"
+                autocomplete="one-time-code"
+                placeholder="6 位数字"
+                :disabled="submitting"
+                autofocus
+              />
+            </span>
+          </label>
+
+          <div class="message-slot" aria-live="polite">
+            <p v-if="error" class="form-error" role="alert">{{ error }}</p>
+          </div>
+
+          <button class="primary-action" type="submit" :disabled="!canSubmitTotp">
+            <span>{{ submitting ? '正在验证' : '验证并登录' }}</span>
+            <RefreshCw v-if="submitting" :size="17" class="spinning" />
+            <ArrowRight v-else :size="17" />
+          </button>
+        </form>
+
+        <template v-if="stage === 'credentials' && oauthProviders.length">
+          <div class="divider"><span>或使用其他方式</span></div>
+          <div class="oauth-actions">
+            <button
+              v-for="provider in oauthProviders"
+              :key="provider.key"
+              class="secondary-action"
+              type="button"
+              @click="openAccountPage('/login')"
+            >
+              <span>{{ provider.label }}</span>
+              <ExternalLink :size="15" />
+            </button>
+          </div>
+        </template>
+
+        <footer v-if="stage === 'credentials' && settings?.registration_enabled" class="form-foot">
+          <span>还没有账户？</span>
+          <button
+            class="text-action"
+            type="button"
+            data-testid="registration-link"
+            @click="openAccountPage('/register')"
+          >
+            创建账号
+            <ExternalLink :size="14" />
+          </button>
+        </footer>
+      </div>
+    </main>
   </div>
 </template>
 
 <style scoped>
-.login {
+.auth-window {
   display: grid;
-  place-items: center;
-  height: 100%;
-  padding: 24px;
-  overflow-y: auto;
-  background:
-    radial-gradient(120% 90% at 50% -20%, rgba(76, 141, 255, 0.1), transparent 60%),
-    var(--bg-base);
-}
-
-.panel {
+  grid-template-columns: minmax(340px, 0.88fr) minmax(460px, 1.12fr);
   width: 100%;
-  max-width: 380px;
-  padding: 32px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  height: 100%;
+  min-height: 620px;
+  overflow: auto;
+  background: #f7f9fc;
+  color: #171b24;
 }
 
-.head {
-  margin-bottom: 26px;
-  text-align: center;
+.brand-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 620px;
+  padding: 52px 54px 38px;
+  overflow: hidden;
+  background: #edf3ff;
+  border-right: 1px solid #dce5f4;
 }
 
-.mark {
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 18px;
+  font-weight: 720;
+}
+
+.brand-message {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 28px;
+  padding: 24px 0;
+}
+
+.brand-message p {
+  max-width: 18ch;
+  font-size: 24px;
+  font-weight: 640;
+  line-height: 1.45;
+  color: #24344f;
+  text-wrap: balance;
+}
+
+.signal-field {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 14px;
-  background: linear-gradient(150deg, var(--accent), #7b5cff);
-  border-radius: 12px;
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: #fff;
+  width: min(300px, 100%);
+  aspect-ratio: 1;
+  border: 1px solid #c8d8f1;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.42);
 }
 
-h1 {
-  font-size: 18px;
+.signal-field::before,
+.signal-field::after {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  content: '';
+  background: #2563eb;
 }
 
-.sub {
-  margin-top: 4px;
+.signal-field::before {
+  top: -4px;
+  left: -4px;
+}
+
+.signal-field::after {
+  right: -4px;
+  bottom: -4px;
+}
+
+.signal-axis {
+  position: absolute;
+  background: #d3dff1;
+}
+
+.signal-axis-x {
+  right: 0;
+  left: 0;
+  height: 1px;
+}
+
+.signal-axis-y {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-height: 46px;
+  color: #087f5b;
+}
+
+.connection-status-offline {
+  color: #b5455b;
+}
+
+.connection-status div {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.connection-status strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.connection-status span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #667085;
+}
+
+.form-pane {
+  display: grid;
+  min-height: 620px;
+  padding: 72px 64px 48px;
+  place-items: center;
+  background: #ffffff;
+}
+
+.form-wrap {
+  width: 100%;
+  max-width: 390px;
+}
+
+.form-head {
+  margin-bottom: 34px;
+}
+
+.form-head h1 {
+  font-size: 28px;
+  font-weight: 690;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
+
+.form-head p {
+  margin-top: 10px;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.control > span:first-child,
+.control-line {
+  color: #344054;
   font-size: 13px;
-  color: var(--text-secondary);
+  font-weight: 620;
 }
 
-.offline {
+.control-line {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 18px;
-  padding: 9px 12px;
-  background: rgba(210, 153, 34, 0.1);
-  border: 1px solid rgba(210, 153, 34, 0.3);
-  border-radius: var(--radius-sm);
-  font-size: 12px;
-  color: var(--warning);
-}
-
-.form {
-  display: flex;
-  flex-direction: column;
   gap: 16px;
 }
 
-.code-input {
-  font-family: var(--font-mono);
-  font-size: 18px;
-  letter-spacing: 0.4em;
-  text-align: center;
+.input-shell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 46px;
+  padding: 0 13px;
+  background: #ffffff;
+  border: 1px solid #d7dde8;
+  border-radius: 8px;
+  color: #7a8493;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.input-shell:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.input-shell:has(input:disabled) {
+  background: #f4f6f9;
+  opacity: 0.7;
+}
+
+.input-shell input {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: #171b24;
+  font-size: 14px;
+}
+
+.input-shell input::placeholder {
+  color: #667085;
+  opacity: 1;
+}
+
+.reveal-action,
+.icon-action,
+.back-action,
+.text-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+
+.reveal-action {
+  width: 28px;
+  height: 28px;
+  color: #667085;
+}
+
+.icon-action {
+  width: 32px;
+  height: 32px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+}
+
+.back-action {
+  gap: 7px;
+  margin-bottom: 22px;
+  color: #526070;
+  font-size: 13px;
+}
+
+.text-action {
+  gap: 5px;
+  color: #245ccc;
+  font-size: 13px;
+  font-weight: 620;
+}
+
+.message-slot {
+  min-height: 19px;
+  margin-top: -4px;
+}
+
+.form-error {
+  color: #b4233c;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.primary-action,
+.secondary-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  height: 46px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-weight: 650;
+  transition: background 180ms ease, border-color 180ms ease, transform 180ms ease;
+}
+
+.primary-action {
+  background: #1f5bd5;
+  border: 1px solid #1f5bd5;
+  color: #ffffff;
+}
+
+.primary-action:hover:not(:disabled) {
+  background: #184db9;
+  border-color: #184db9;
+}
+
+.primary-action:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.primary-action:disabled {
+  background: #9fb7e8;
+  border-color: #9fb7e8;
+  cursor: not-allowed;
 }
 
 .divider {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 22px 0 16px;
+  gap: 14px;
+  margin: 30px 0 16px;
+  color: #667085;
   font-size: 12px;
-  color: var(--text-tertiary);
 }
 
 .divider::before,
 .divider::after {
-  content: '';
   flex: 1;
   height: 1px;
-  background: var(--border-subtle);
+  content: '';
+  background: #e1e6ee;
 }
 
-.oauth {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+.oauth-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
-.oauth-btn {
-  padding: 9px 12px;
+.secondary-action {
+  flex: 1 1 120px;
+  background: #ffffff;
+  border: 1px solid #d7dde8;
+  color: #344054;
   font-size: 13px;
 }
 
-.oauth-hint {
-  margin-top: 10px;
-  text-align: center;
+.secondary-action:hover {
+  background: #f7f9fc;
+  border-color: #aab4c4;
 }
 
-.foot {
+.form-foot {
   display: flex;
+  align-items: center;
   justify-content: center;
-  gap: 16px;
-  margin-top: 26px;
-  padding-top: 18px;
-  border-top: 1px solid var(--border-subtle);
+  gap: 8px;
+  margin-top: 30px;
+  color: #667085;
+  font-size: 13px;
 }
 
-.link {
-  padding: 0;
-  background: none;
-  border: none;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  transition: color 0.15s ease;
+.spinning {
+  animation: spin 800ms linear infinite;
 }
 
-.link:hover:not(:disabled) {
-  color: var(--accent);
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .brand-pane {
+    padding-right: 38px;
+    padding-left: 38px;
+  }
+
+  .form-pane {
+    padding-right: 44px;
+    padding-left: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinning {
+    animation: none;
+  }
 }
 </style>
