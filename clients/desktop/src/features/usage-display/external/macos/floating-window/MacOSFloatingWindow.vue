@@ -8,6 +8,7 @@ import {
 } from '@/features/usage-display/core/host'
 import { usageDisplayStore } from '@/features/usage-display/core/store'
 import FloatingUsageCard from './FloatingUsageCard.vue'
+import FloatingUsageBar from './FloatingUsageBar.vue'
 import FloatingUsageOrb from './FloatingUsageOrb.vue'
 import { resolveFloatingQuotaPresentation } from './quota-presentation'
 
@@ -39,6 +40,7 @@ const configIdentity = computed(() => [
   state.config.source,
   state.config.subscriptionId ?? '',
   state.config.appearance,
+  state.config.floatingStyle,
 ].join(':'))
 
 function cancelCollapse() {
@@ -111,8 +113,17 @@ onBeforeUnmount(() => cancelCollapse())
       @drag="drag"
     />
     <FloatingUsageOrb
+      v-else-if="state.config.floatingStyle === 'orb'"
+      :value="orbValue"
+      :appearance="state.config.appearance"
+      :native-error="nativeError"
+      @enter="expand"
+      @drag="drag"
+    />
+    <FloatingUsageBar
       v-else
       :value="orbValue"
+      :label="state.config.source === 'balance' ? '可用余额' : '剩余额度'"
       :appearance="state.config.appearance"
       :native-error="nativeError"
       @enter="expand"

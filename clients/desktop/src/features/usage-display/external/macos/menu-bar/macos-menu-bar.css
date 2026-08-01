@@ -11,7 +11,7 @@ body,
   background: transparent;
 }
 
-body { padding: 6px; }
+body { box-sizing: border-box; padding: 8px; }
 button { -webkit-app-region: no-drag; }
 
 .macos-menu-bar-popover {
@@ -19,8 +19,4 @@ button { -webkit-app-region: no-drag; }
   height: 100%;
   min-height: 0;
   outline: 0;
-}
-
-.macos-menu-bar-popover .usage-quota-card {
-  border-radius: 28px;
 }

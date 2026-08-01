@@ -30,6 +30,23 @@ enum UsageSurface {
     FloatingWindow,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum FloatingStyle {
+    #[default]
+    Orb,
+    Bar,
+}
+
+impl FloatingStyle {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "orb" => Ok(Self::Orb),
+            "bar" => Ok(Self::Bar),
+            _ => Err("未知的悬浮窗形态".to_string()),
+        }
+    }
+}
+
 impl UsageSurface {
     fn parse(value: &str) -> Result<Self, String> {
         match value {
@@ -69,7 +86,7 @@ fn surface_transition(enabled: bool, surface: UsageSurface) -> HostTransition {
 
 fn validate_appearance(value: &str) -> Result<(), String> {
     match value {
-        "default" | "dark" | "blur" => Ok(()),
+        "sky" | "meadow" | "sunset" => Ok(()),
         _ => Err("未知的用量展示样式".to_string()),
     }
 }
@@ -110,9 +127,11 @@ pub fn configure_usage_display(
     surface: String,
     title: String,
     appearance: String,
+    floating_style: String,
 ) -> Result<(), String> {
     let surface = UsageSurface::parse(&surface)?;
     validate_appearance(&appearance)?;
+    let floating_style = FloatingStyle::parse(&floating_style)?;
 
     #[cfg(target_os = "macos")]
     {
@@ -124,7 +143,13 @@ pub fn configure_usage_display(
             }
         }
         macos::configure_menu_bar(&app, &state, transition.show_menu_bar, &title, &appearance)?;
-        macos::configure_floating(&app, &state, transition.show_floating, &appearance)?;
+        macos::configure_floating(
+            &app,
+            &state,
+            transition.show_floating,
+            floating_style,
+            &appearance,
+        )?;
         if let Ok(mut active) = state.active_surface.lock() {
             *active = enabled.then_some(surface);
         }
@@ -133,7 +158,7 @@ pub fn configure_usage_display(
 
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = (app, title, surface, appearance);
+        let _ = (app, title, surface, appearance, floating_style);
         state.enabled.store(false, Ordering::SeqCst);
         if let Ok(mut active) = state.active_surface.lock() {
             *active = None;
@@ -294,8 +319,8 @@ fn setup_macos(app: &mut tauri::App) -> tauri::Result<()> {
     )
     .title("LinAI 用量悬浮窗")
     .inner_size(
-        macos::floating_window::COLLAPSED_LOGICAL_SIZE,
-        macos::floating_window::COLLAPSED_LOGICAL_SIZE,
+        macos::floating_window::ORB_LOGICAL_WIDTH,
+        macos::floating_window::ORB_LOGICAL_HEIGHT,
     )
     .resizable(false)
     .maximizable(false)
@@ -371,5 +396,12 @@ mod surface_tests {
             surface_transition(true, UsageSurface::FloatingWindow),
             HostTransition::new(false, true, true),
         );
+    }
+
+    #[test]
+    fn floating_style_accepts_only_supported_collapsed_forms() {
+        assert_eq!(FloatingStyle::parse("orb"), Ok(FloatingStyle::Orb));
+        assert_eq!(FloatingStyle::parse("bar"), Ok(FloatingStyle::Bar));
+        assert!(FloatingStyle::parse("pill").is_err());
     }
 }

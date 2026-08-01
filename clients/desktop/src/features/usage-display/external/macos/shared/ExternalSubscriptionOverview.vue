@@ -3,16 +3,16 @@ import { computed } from 'vue'
 
 import type { UserSubscription } from '@/api'
 import type { UsageQuotaSummary } from '@/features/usage-display/core/format'
-import QuotaRow from '@/features/usage-display/external/macos/shared/QuotaRow.vue'
-import FloatingMetricValue from './FloatingMetricValue.vue'
-import { resolveFloatingQuotaPresentation } from './quota-presentation'
+import ExternalMetricValue from './ExternalMetricValue.vue'
+import QuotaRow from './QuotaRow.vue'
+import { resolveExternalQuotaPresentation } from './quota-presentation'
 
 const props = defineProps<{
   subscription: UserSubscription | null
   quotaSummary: UsageQuotaSummary | null
 }>()
 
-const presentation = computed(() => resolveFloatingQuotaPresentation(props.quotaSummary))
+const presentation = computed(() => resolveExternalQuotaPresentation(props.quotaSummary))
 const primaryQuota = computed(() => presentation.value.primary)
 const secondaryQuotas = computed(() => presentation.value.secondary)
 const primaryProgressStyle = computed(() => ({
@@ -37,26 +37,25 @@ function resetLabel(value: Date | null) {
 </script>
 
 <template>
-  <section
-    class="usage-overview subscription-overview"
-    data-testid="floating-subscription-overview"
-  >
-    <div v-if="subscription && quotaSummary" class="subscription-content">
+  <section class="usage-overview subscription-overview" data-testid="floating-subscription-overview">
+    <div
+      v-if="subscription && quotaSummary"
+      class="subscription-content"
+      :data-quota-count="quotaSummary.quotas.length"
+    >
       <div
         v-if="primaryQuota"
         class="subscription-primary"
         :class="{ constrained: primaryQuota.remainingPercent <= 20 }"
       >
         <div class="external-primary">
-          <span data-testid="floating-primary-label">{{ primaryQuota.label }}剩余</span>
-          <FloatingMetricValue :value="`${primaryQuota.remainingPercent}%`" />
-          <div
-            class="floating-primary-track"
-            data-testid="floating-primary-progress"
-            aria-hidden="true"
-          ><span :style="primaryProgressStyle" /></div>
-          <div class="floating-primary-meta">
-            <span>${{ primaryQuota.used.toFixed(2) }} / ${{ primaryQuota.limit.toFixed(2) }}</span>
+          <span data-testid="floating-primary-label">剩余额度</span>
+          <ExternalMetricValue :value="`${primaryQuota.remainingPercent}%`" />
+          <div class="floating-primary-track" data-testid="floating-primary-progress" aria-hidden="true">
+            <span :style="primaryProgressStyle" />
+          </div>
+          <div class="floating-primary-meta" data-testid="floating-primary-meta">
+            <span>{{ primaryQuota.label }} · ${{ primaryQuota.used.toFixed(2) }} / ${{ primaryQuota.limit.toFixed(2) }}</span>
             <small>{{ resetLabel(primaryQuota.resetAt) }}</small>
           </div>
         </div>

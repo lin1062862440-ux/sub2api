@@ -6,7 +6,7 @@ import FloatingUsageCard from './FloatingUsageCard.vue'
 function props(overrides: Record<string, unknown> = {}) {
   return {
     source: 'balance',
-    appearance: 'default',
+    appearance: 'sky',
     balance: { available: 128.6, today: 2.18, last7Days: 12.42, thisMonth: 35.6 },
     subscription: null,
     quotaSummary: null,
@@ -18,10 +18,10 @@ function props(overrides: Record<string, unknown> = {}) {
 }
 
 describe('FloatingUsageCard', () => {
-  it.each(['default', 'dark', 'blur'])('renders an action-free %s balance card', (appearance) => {
+  it.each(['sky', 'meadow', 'sunset'])('renders an action-free %s balance card', (appearance) => {
     const wrapper = mount(FloatingUsageCard, { props: props({ appearance }) as never })
 
-    expect(wrapper.get('[data-testid="floating-usage-card"]').attributes('data-appearance')).toBe(appearance)
+    expect(wrapper.get('[data-testid="external-usage-detail-card"]').attributes('data-appearance')).toBe(appearance)
     expect(wrapper.text()).toContain('账户余额')
     expect(wrapper.text()).toContain('$128.60')
     expect(wrapper.find('[data-testid="usage-refresh"]').exists()).toBe(false)
@@ -106,11 +106,12 @@ describe('FloatingUsageCard', () => {
     })
 
     expect(wrapper.text().match(/45 订阅/g) ?? []).toHaveLength(1)
-    expect(wrapper.get('[data-testid="floating-primary-label"]').text()).toBe('月额度剩余')
+    expect(wrapper.get('[data-testid="floating-primary-label"]').text()).toBe('剩余额度')
     expect(wrapper.text()).not.toContain('最紧额度剩余')
     expect(wrapper.get('[data-testid="floating-metric-number"]').text()).toBe('76')
     expect(wrapper.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
     expect(wrapper.get('[data-testid="floating-primary-progress"] span').attributes('style')).toContain('width: 76%')
+    expect(wrapper.get('[data-testid="floating-primary-meta"]').text()).toContain('月额度')
     const rows = wrapper.findAll('[data-testid="usage-quota-row"]')
     expect(rows).toHaveLength(2)
     expect(rows[0].text()).toContain('周额度')

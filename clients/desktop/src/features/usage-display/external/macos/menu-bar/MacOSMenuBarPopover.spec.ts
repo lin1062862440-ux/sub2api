@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
       source: 'balance' as 'balance' | 'subscription',
       subscriptionId: null as number | null,
       surface: 'menu-bar' as 'menu-bar' | 'floating-window',
-      appearance: 'default' as 'default' | 'dark' | 'blur',
+      appearance: 'sky' as 'sky' | 'meadow' | 'sunset',
+      floatingStyle: 'orb' as 'orb' | 'bar',
     },
     balance: { available: 128.6, today: 2.18, last7Days: 12.42, thisMonth: 35.6 },
     subscriptions: [
@@ -26,14 +27,12 @@ const mocks = vi.hoisted(() => ({
     refreshing: false,
     error: '',
     lastUpdatedAt: new Date('2026-08-01T08:00:00Z'),
-    trayTitle: '余额 $128.60',
+    trayTitle: '$128.60',
   },
   updateConfig: vi.fn(),
   loadSubscriptions: vi.fn(),
   refresh: vi.fn(),
   hide: vi.fn(),
-  openMain: vi.fn(),
-  quit: vi.fn(),
 }))
 
 vi.mock('@/features/usage-display/core/store', () => ({
@@ -47,8 +46,6 @@ vi.mock('@/features/usage-display/core/store', () => ({
 
 vi.mock('@/features/usage-display/core/host', () => ({
   hideUsageDisplay: mocks.hide,
-  openMainWindow: mocks.openMain,
-  quitDesktopApp: mocks.quit,
 }))
 
 import MacOSMenuBarPopover from './MacOSMenuBarPopover.vue'
@@ -61,39 +58,37 @@ describe('MacOSMenuBarPopover', () => {
       source: 'balance',
       subscriptionId: null,
       surface: 'menu-bar',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     }
     mocks.state.subscription = null
     mocks.state.quotaSummary = null
     mocks.state.error = ''
-    mocks.state.trayTitle = '余额 $128.60'
+    mocks.state.trayTitle = '$128.60'
     mocks.updateConfig.mockReset().mockResolvedValue(undefined)
     mocks.loadSubscriptions.mockReset().mockResolvedValue(undefined)
     mocks.refresh.mockReset().mockResolvedValue(undefined)
     mocks.hide.mockReset().mockResolvedValue(undefined)
-    mocks.openMain.mockReset().mockResolvedValue(undefined)
-    mocks.quit.mockReset().mockResolvedValue(undefined)
   })
 
-  it('shows the balance overview and common actions', async () => {
+  it('shows the balance overview in the shared action-free detail card', async () => {
     const wrapper = mount(MacOSMenuBarPopover)
 
     expect(wrapper.find('[data-testid="macos-menu-bar-popover"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="usage-quota-card"]').attributes('data-appearance')).toBe('default')
+    expect(wrapper.get('[data-testid="external-usage-detail-card"]').attributes('data-appearance')).toBe('sky')
     expect(wrapper.text()).toContain('$128.60')
     expect(wrapper.text()).toContain('$2.18')
     expect(wrapper.text()).toContain('$12.42')
     expect(wrapper.text()).toContain('$35.60')
 
-    await wrapper.get('[data-testid="usage-refresh"]').trigger('click')
-    await wrapper.get('[data-testid="usage-open-main"]').trigger('click')
-    await wrapper.get('[data-testid="usage-quit"]').trigger('click')
+    expect(wrapper.find('[data-testid="usage-refresh"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="usage-open-main"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="usage-quit"]').exists()).toBe(false)
+    expect(wrapper.find('svg').exists()).toBe(false)
     await wrapper.trigger('keydown', { key: 'Escape' })
 
-    expect(mocks.refresh).toHaveBeenCalledTimes(2)
-    expect(mocks.openMain).toHaveBeenCalledOnce()
-    expect(mocks.quit).toHaveBeenCalledOnce()
-    expect(mocks.hide).toHaveBeenCalledTimes(2)
+    expect(mocks.refresh).toHaveBeenCalledOnce()
+    expect(mocks.hide).toHaveBeenCalledOnce()
   })
 
   it('does not expose internal configuration controls', () => {
@@ -110,7 +105,8 @@ describe('MacOSMenuBarPopover', () => {
       source: 'subscription',
       subscriptionId: 9,
       surface: 'menu-bar',
-      appearance: 'dark',
+      appearance: 'meadow',
+      floatingStyle: 'orb',
     }
     mocks.state.subscription = {
       id: 9,
@@ -128,12 +124,14 @@ describe('MacOSMenuBarPopover', () => {
     }
     const wrapper = mount(MacOSMenuBarPopover)
 
-    expect(wrapper.get('[data-testid="usage-quota-card"]').attributes('data-appearance')).toBe('dark')
+    expect(wrapper.get('[data-testid="external-usage-detail-card"]').attributes('data-appearance')).toBe('meadow')
     expect(wrapper.text()).toContain('Claude Pro')
     expect(wrapper.text()).toContain('20%')
     expect(wrapper.text()).toContain('日额度')
     expect(wrapper.text()).toContain('周额度')
     expect(wrapper.text()).toContain('$8.00 / $10.00')
+    expect(wrapper.get('[data-testid="floating-primary-label"]').text()).toBe('剩余额度')
+    expect(wrapper.findAll('.quota-track').length).toBeGreaterThan(0)
   })
 
 })

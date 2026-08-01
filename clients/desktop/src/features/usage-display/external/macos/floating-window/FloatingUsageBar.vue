@@ -4,6 +4,7 @@ import ExternalMetricValue from '@/features/usage-display/external/macos/shared/
 
 defineProps<{
   value: string
+  label: string
   appearance: UsageDisplayAppearance
   nativeError: string
 }>()
@@ -14,15 +15,16 @@ defineEmits<{ enter: []; drag: [] }>()
 <template>
   <button
     type="button"
-    class="floating-usage-orb"
+    class="floating-usage-bar"
     :data-appearance="appearance"
-    data-testid="floating-usage-orb"
+    data-testid="floating-usage-bar"
     aria-label="展开用量详情"
     :aria-description="nativeError || undefined"
     @mouseenter="$emit('enter')"
     @mousedown="$emit('drag')"
     @click="$emit('enter')"
   >
+    <span>{{ label }}</span>
     <ExternalMetricValue :value="value" />
   </button>
 </template>

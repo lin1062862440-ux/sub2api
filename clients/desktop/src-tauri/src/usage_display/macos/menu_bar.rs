@@ -2,6 +2,13 @@
 use std::sync::Mutex;
 
 #[cfg(target_os = "macos")]
+use objc2::MainThreadMarker;
+#[cfg(target_os = "macos")]
+use objc2_app_kit::NSColor;
+#[cfg(target_os = "macos")]
+use objc2_foundation::NSString;
+
+#[cfg(target_os = "macos")]
 use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, PhysicalPosition, Position, Size, WebviewWindow,
@@ -12,6 +19,46 @@ use super::super::{show_popover, PopoverAnchor, UsageDisplayHost, POPOVER_LABEL}
 
 #[cfg(target_os = "macos")]
 const TRAY_ID: &str = "usage-display";
+#[cfg(target_os = "macos")]
+const TRAY_AUTOSAVE_NAME: &str = "com.linai.desktop.usage-display";
+
+#[derive(Debug, PartialEq, Eq)]
+struct TrayMetricPresentation {
+    text: String,
+    color: Option<(u8, u8, u8)>,
+    hollow: bool,
+}
+
+fn quota_metric_color(percent: u8) -> (u8, u8, u8) {
+    let ratio = percent.min(100) as f64 / 100.0;
+    let mix = |low: u8, high: u8| (low as f64 + (high as f64 - low as f64) * ratio).round() as u8;
+    (mix(205, 50), mix(76, 154), mix(67, 105))
+}
+
+fn tray_metric_presentation(title: &str) -> TrayMetricPresentation {
+    let trimmed = title.trim();
+    let percentage = trimmed
+        .strip_suffix('%')
+        .and_then(|value| value.parse::<u8>().ok())
+        .map(|value| value.min(100));
+    match percentage {
+        Some(0) => TrayMetricPresentation {
+            text: "○ 0%".to_string(),
+            color: Some(quota_metric_color(0)),
+            hollow: true,
+        },
+        Some(value) => TrayMetricPresentation {
+            text: format!("● {value}%"),
+            color: Some(quota_metric_color(value)),
+            hollow: false,
+        },
+        None => TrayMetricPresentation {
+            text: trimmed.to_string(),
+            color: None,
+            hollow: false,
+        },
+    }
+}
 
 #[cfg(target_os = "macos")]
 #[derive(Clone, Copy, Debug)]
@@ -188,6 +235,39 @@ fn toggle_popover(app: &tauri::AppHandle) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
+fn apply_native_metric(tray: &tauri::tray::TrayIcon, title: &str) -> Result<(), String> {
+    let presentation = tray_metric_presentation(title);
+    tray.set_title(None::<&str>)
+        .map_err(|error| error.to_string())?;
+    tray.with_inner_tray_icon(move |inner| {
+        let mtm =
+            MainThreadMarker::new().ok_or_else(|| "状态栏更新必须在主线程执行".to_string())?;
+        let status_item = inner
+            .ns_status_item()
+            .ok_or_else(|| "macOS 状态栏项目不可用".to_string())?;
+        let autosave_name = NSString::from_str(TRAY_AUTOSAVE_NAME);
+        status_item.setAutosaveName(Some(&autosave_name));
+        let button = status_item
+            .button(mtm)
+            .ok_or_else(|| "macOS 状态栏按钮不可用".to_string())?;
+        let native_title = NSString::from_str(&presentation.text);
+        button.setTitle(&native_title);
+        let color = match presentation.color {
+            Some((red, green, blue)) => NSColor::colorWithSRGBRed_green_blue_alpha(
+                red as f64 / 255.0,
+                green as f64 / 255.0,
+                blue as f64 / 255.0,
+                1.0,
+            ),
+            None => NSColor::secondaryLabelColor(),
+        };
+        button.setContentTintColor(Some(&color));
+        Ok::<(), String>(())
+    })
+    .map_err(|error| error.to_string())?
+}
+
+#[cfg(target_os = "macos")]
 fn build(app: &tauri::AppHandle, title: &str) -> Result<(), String> {
     let app_icon = app
         .default_window_icon()
@@ -197,10 +277,9 @@ fn build(app: &tauri::AppHandle, title: &str) -> Result<(), String> {
         app_icon.width(),
         app_icon.height(),
     );
-    TrayIconBuilder::with_id(TRAY_ID)
+    let tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .icon_as_template(true)
-        .title(title)
         .tooltip("LinAI 用量显示")
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {
@@ -221,8 +300,8 @@ fn build(app: &tauri::AppHandle, title: &str) -> Result<(), String> {
             }
         })
         .build(app)
-        .map(|_| ())
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    apply_native_metric(&tray, title)
 }
 
 #[cfg(target_os = "macos")]
@@ -244,8 +323,7 @@ pub(in crate::usage_display) fn configure(
         super::floating_window::apply_appearance(&window, appearance);
     }
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        tray.set_title(Some(title))
-            .map_err(|error| error.to_string())?;
+        apply_native_metric(&tray, title)?;
         tray.set_visible(true).map_err(|error| error.to_string())?;
         return Ok(());
     }
@@ -258,8 +336,7 @@ pub(in crate::usage_display) fn set_title(
     title: &str,
 ) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        tray.set_title(Some(title))
-            .map_err(|error| error.to_string())?;
+        apply_native_metric(&tray, title)?;
     }
     Ok(())
 }
@@ -318,5 +395,30 @@ mod tests {
             ),
             (-1088.0, 50.0),
         );
+    }
+
+    #[test]
+    fn usage_display_builds_compact_balance_and_subscription_metrics() {
+        assert_eq!(tray_metric_presentation("$128.60").text, "$128.60");
+
+        let subscription = tray_metric_presentation("73%");
+        assert_eq!(subscription.text, "● 73%");
+        assert!(!subscription.hollow);
+
+        let empty = tray_metric_presentation("0%");
+        assert_eq!(empty.text, "○ 0%");
+        assert!(empty.hollow);
+    }
+
+    #[test]
+    fn usage_display_interpolates_subscription_color_from_red_to_green() {
+        let low = quota_metric_color(0);
+        let middle = quota_metric_color(50);
+        let high = quota_metric_color(100);
+
+        assert!(low.0 > low.1);
+        assert!(high.1 > high.0);
+        assert_ne!(middle, low);
+        assert_ne!(middle, high);
     }
 }

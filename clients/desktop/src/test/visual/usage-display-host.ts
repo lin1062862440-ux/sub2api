@@ -1,10 +1,15 @@
-import type { UsageDisplayAppearance, UsageDisplaySurface } from '@/features/usage-display/core/storage'
+import type {
+  FloatingUsageStyle,
+  UsageDisplayAppearance,
+  UsageDisplaySurface,
+} from '@/features/usage-display/core/storage'
 
 export interface UsageDisplayHostConfig {
   enabled: boolean
   surface: UsageDisplaySurface
   title: string
   appearance: UsageDisplayAppearance
+  floatingStyle: FloatingUsageStyle
 }
 
 export async function configureUsageDisplay(_config: UsageDisplayHostConfig): Promise<void> {}

@@ -3,7 +3,8 @@ export interface UsageDisplayConfig {
   source: 'balance' | 'subscription'
   subscriptionId: number | null
   surface: 'menu-bar' | 'floating-window'
-  appearance: 'default' | 'dark' | 'blur'
+  appearance: 'sky' | 'meadow' | 'sunset'
+  floatingStyle: 'orb' | 'bar'
 }
 
 let config: UsageDisplayConfig = defaultUsageDisplayConfig()
@@ -13,13 +14,15 @@ export function defaultUsageDisplayConfig(): UsageDisplayConfig {
   const source = params?.get('source') === 'subscription' ? 'subscription' : 'balance'
   const surface = params?.get('surface') === 'floating-window' ? 'floating-window' : 'menu-bar'
   const appearanceValue = params?.get('appearance')
-  const appearance = appearanceValue === 'dark' || appearanceValue === 'blur' ? appearanceValue : 'default'
+  const appearance = appearanceValue === 'meadow' || appearanceValue === 'sunset' ? appearanceValue : 'sky'
+  const floatingStyle = params?.get('floatingStyle') === 'bar' ? 'bar' : 'orb'
   return {
     enabled: true,
     source,
     subscriptionId: source === 'subscription' ? 11 : null,
     surface,
     appearance,
+    floatingStyle,
   }
 }
 

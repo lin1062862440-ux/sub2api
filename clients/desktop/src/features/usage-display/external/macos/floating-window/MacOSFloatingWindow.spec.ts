@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
       source: 'balance' as 'balance' | 'subscription',
       subscriptionId: null as number | null,
       surface: 'floating-window' as const,
-      appearance: 'default' as 'default' | 'dark' | 'blur',
+      appearance: 'sky' as 'sky' | 'meadow' | 'sunset',
+      floatingStyle: 'orb' as 'orb' | 'bar',
     },
     balance: { available: 128.6, today: 2.18, last7Days: 12.42, thisMonth: 35.6 },
     subscription: null as { id: number; expires_at: string | null; group: { name: string } } | null,
@@ -51,7 +52,8 @@ describe('MacOSFloatingWindow', () => {
     vi.useRealTimers()
     mocks.state.config.source = 'balance'
     mocks.state.config.subscriptionId = null
-    mocks.state.config.appearance = 'default'
+    mocks.state.config.appearance = 'sky'
+    mocks.state.config.floatingStyle = 'orb'
     mocks.state.balance = { available: 128.6, today: 2.18, last7Days: 12.42, thisMonth: 35.6 }
     mocks.state.subscription = null
     mocks.state.quotaSummary = null
@@ -63,8 +65,8 @@ describe('MacOSFloatingWindow', () => {
     mocks.quit.mockReset().mockResolvedValue(undefined)
   })
 
-  it.each(['default', 'dark', 'blur'])('renders a stable collapsed orb for %s', async (appearance) => {
-    mocks.state.config.appearance = appearance as 'default' | 'dark' | 'blur'
+  it.each(['sky', 'meadow', 'sunset'])('renders a stable collapsed orb for %s', async (appearance) => {
+    mocks.state.config.appearance = appearance as 'sky' | 'meadow' | 'sunset'
     const wrapper = mount(MacOSFloatingWindow)
 
     const orb = wrapper.get('[data-testid="floating-usage-orb"]')
@@ -86,11 +88,11 @@ describe('MacOSFloatingWindow', () => {
 
     await wrapper.get('[data-testid="floating-usage-orb"]').trigger('mouseenter')
     expect(mocks.setExpanded).toHaveBeenCalledWith(true)
-    expect(wrapper.find('[data-testid="floating-usage-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(false)
 
     resolveExpansion?.()
     await flushPromises()
-    expect(wrapper.find('[data-testid="floating-usage-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(true)
   })
 
   it('expands when the orb button is activated', async () => {
@@ -100,7 +102,7 @@ describe('MacOSFloatingWindow', () => {
     await flushPromises()
 
     expect(mocks.setExpanded).toHaveBeenCalledWith(true)
-    expect(wrapper.find('[data-testid="floating-usage-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(true)
   })
 
   it('collapses after 180 milliseconds and cancels collapse on re-entry', async () => {
@@ -109,14 +111,14 @@ describe('MacOSFloatingWindow', () => {
     await wrapper.get('[data-testid="floating-usage-orb"]').trigger('mouseenter')
     await flushPromises()
 
-    await wrapper.get('[data-testid="floating-usage-card"]').trigger('mouseleave')
+    await wrapper.get('[data-testid="external-usage-detail-card"]').trigger('mouseleave')
     await vi.advanceTimersByTimeAsync(179)
-    expect(wrapper.find('[data-testid="floating-usage-card"]').exists()).toBe(true)
-    await wrapper.get('[data-testid="floating-usage-card"]').trigger('mouseenter')
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(true)
+    await wrapper.get('[data-testid="external-usage-detail-card"]').trigger('mouseenter')
     await vi.advanceTimersByTimeAsync(1)
-    expect(wrapper.find('[data-testid="floating-usage-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(true)
 
-    await wrapper.get('[data-testid="floating-usage-card"]').trigger('mouseleave')
+    await wrapper.get('[data-testid="external-usage-detail-card"]').trigger('mouseleave')
     await vi.advanceTimersByTimeAsync(180)
     await flushPromises()
     expect(mocks.setExpanded).toHaveBeenLastCalledWith(false)
@@ -140,13 +142,13 @@ describe('MacOSFloatingWindow', () => {
     const wrapper = mount(MacOSFloatingWindow)
     await wrapper.get('[data-testid="floating-usage-orb"]').trigger('mouseenter')
     await flushPromises()
-    expect(wrapper.find('[data-testid="floating-usage-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(true)
 
     mocks.state.config.source = 'subscription'
     mocks.state.config.subscriptionId = 9
     await nextTick()
 
-    expect(wrapper.find('[data-testid="floating-usage-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="floating-usage-orb"]').text()).toBe('--')
     expect(mocks.setExpanded).toHaveBeenLastCalledWith(false)
   })
@@ -195,11 +197,39 @@ describe('MacOSFloatingWindow', () => {
     await wrapper.get('[data-testid="floating-usage-orb"]').trigger('mouseenter')
     await flushPromises()
 
-    mocks.state.config.appearance = 'blur'
+    mocks.state.config.appearance = 'sunset'
     await nextTick()
 
-    expect(wrapper.find('[data-testid="floating-usage-card"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="floating-usage-orb"]').attributes('data-appearance')).toBe('blur')
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="floating-usage-orb"]').attributes('data-appearance')).toBe('sunset')
+    expect(mocks.setExpanded).toHaveBeenLastCalledWith(false)
+  })
+
+  it('renders the selected compact bar with the same usage value', async () => {
+    mocks.state.config.floatingStyle = 'bar'
+    const wrapper = mount(MacOSFloatingWindow)
+
+    expect(wrapper.find('[data-testid="floating-usage-orb"]').exists()).toBe(false)
+    const bar = wrapper.get('[data-testid="floating-usage-bar"]')
+    expect(bar.text()).toContain('可用余额')
+    expect(bar.get('[data-testid="floating-metric-number"]').text()).toBe('$129')
+
+    await bar.trigger('click')
+    await flushPromises()
+    expect(mocks.setExpanded).toHaveBeenCalledWith(true)
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(true)
+  })
+
+  it('collapses before changing the native floating form', async () => {
+    const wrapper = mount(MacOSFloatingWindow)
+    await wrapper.get('[data-testid="floating-usage-orb"]').trigger('mouseenter')
+    await flushPromises()
+
+    mocks.state.config.floatingStyle = 'bar'
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="floating-usage-bar"]').exists()).toBe(true)
     expect(mocks.setExpanded).toHaveBeenLastCalledWith(false)
   })
 })

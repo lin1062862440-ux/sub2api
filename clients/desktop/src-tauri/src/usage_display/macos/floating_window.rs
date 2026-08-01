@@ -11,10 +11,14 @@ use tauri::{Manager, Monitor, PhysicalPosition, PhysicalSize, Position, Size, We
 use tauri_plugin_store::StoreExt;
 
 #[cfg(target_os = "macos")]
-use super::super::{UsageDisplayHost, FLOATING_LABEL};
+use super::super::{FloatingStyle, UsageDisplayHost, FLOATING_LABEL};
 
-pub(in crate::usage_display) const COLLAPSED_LOGICAL_SIZE: f64 = 88.0;
-pub(in crate::usage_display) const EXPANDED_LOGICAL_SIZE: f64 = 352.0;
+pub(in crate::usage_display) const ORB_LOGICAL_WIDTH: f64 = 88.0;
+pub(in crate::usage_display) const ORB_LOGICAL_HEIGHT: f64 = 88.0;
+const BAR_LOGICAL_WIDTH: f64 = 176.0;
+const BAR_LOGICAL_HEIGHT: f64 = 52.0;
+const EXPANDED_LOGICAL_WIDTH: f64 = 352.0;
+const EXPANDED_LOGICAL_HEIGHT: f64 = 352.0;
 const EDGE_MARGIN_LOGICAL: f64 = 20.0;
 const POSITION_KEY: &str = "usage_display:floating_position";
 
@@ -114,9 +118,21 @@ fn expand_from_anchor(collapsed: WindowRect, expanded: WindowSize, area: WorkAre
     clamp_to_work_area(point, expanded, area)
 }
 
+const fn collapsed_logical_size(style: FloatingStyle) -> (f64, f64) {
+    match style {
+        FloatingStyle::Orb => (ORB_LOGICAL_WIDTH, ORB_LOGICAL_HEIGHT),
+        FloatingStyle::Bar => (BAR_LOGICAL_WIDTH, BAR_LOGICAL_HEIGHT),
+    }
+}
+
+const fn expanded_logical_size() -> (f64, f64) {
+    (EXPANDED_LOGICAL_WIDTH, EXPANDED_LOGICAL_HEIGHT)
+}
+
 #[derive(Default)]
 pub(in crate::usage_display) struct FloatingWindowState {
     expanded: AtomicBool,
+    collapsed_style: Mutex<FloatingStyle>,
     collapsed_anchor: Mutex<Option<WindowPoint>>,
     expand_offset: Mutex<WindowPoint>,
     persist_generation: AtomicU64,
@@ -140,9 +156,11 @@ struct FloatingPositionRecord {
 }
 
 #[cfg(target_os = "macos")]
-fn physical_size(logical: f64, scale: f64) -> WindowSize {
-    let value = (logical * scale).round().max(1.0) as u32;
-    WindowSize::new(value, value)
+fn physical_size(logical: (f64, f64), scale: f64) -> WindowSize {
+    WindowSize::new(
+        (logical.0 * scale).round().max(1.0) as u32,
+        (logical.1 * scale).round().max(1.0) as u32,
+    )
 }
 
 #[cfg(target_os = "macos")]
@@ -234,16 +252,7 @@ fn restored_anchor(
 #[cfg(target_os = "macos")]
 pub(in crate::usage_display) fn apply_appearance(window: &WebviewWindow, appearance: &str) {
     let _ = window_vibrancy::clear_vibrancy(window);
-    if appearance == "blur" {
-        if let Err(error) = window_vibrancy::apply_vibrancy(
-            window,
-            window_vibrancy::NSVisualEffectMaterial::Popover,
-            Some(window_vibrancy::NSVisualEffectState::Active),
-            Some(30.0),
-        ) {
-            log::warn!("failed to apply floating usage vibrancy: {error}");
-        }
-    }
+    let _ = appearance;
 }
 
 #[cfg(target_os = "macos")]
@@ -251,6 +260,7 @@ pub(in crate::usage_display) fn configure(
     app: &tauri::AppHandle,
     state: &UsageDisplayHost,
     visible: bool,
+    style: FloatingStyle,
     _appearance: &str,
 ) -> Result<(), String> {
     let window = app
@@ -264,7 +274,10 @@ pub(in crate::usage_display) fn configure(
     let _ = window_vibrancy::clear_vibrancy(&window);
     let monitor = default_monitor(app)?;
     let scale = monitor.scale_factor();
-    let size = physical_size(COLLAPSED_LOGICAL_SIZE, scale);
+    let size = physical_size(collapsed_logical_size(style), scale);
+    if let Ok(mut value) = state.floating.collapsed_style.lock() {
+        *value = style;
+    }
     let anchor = state
         .floating
         .collapsed_anchor
@@ -272,6 +285,7 @@ pub(in crate::usage_display) fn configure(
         .ok()
         .and_then(|value| *value)
         .or_else(|| load_position(app).and_then(|record| restored_anchor(app, record, size).ok()))
+        .map(|point| clamp_to_work_area(point, size, work_area(&monitor)))
         .unwrap_or_else(|| {
             bottom_right(
                 work_area(&monitor),
@@ -302,8 +316,14 @@ pub(in crate::usage_display) fn set_expanded(
         .get_webview_window(FLOATING_LABEL)
         .ok_or_else(|| "用量悬浮窗尚未初始化".to_string())?;
     let scale = window.scale_factor().map_err(|error| error.to_string())?;
-    let collapsed_size = physical_size(COLLAPSED_LOGICAL_SIZE, scale);
-    let expanded_size = physical_size(EXPANDED_LOGICAL_SIZE, scale);
+    let style = state
+        .floating
+        .collapsed_style
+        .lock()
+        .map(|value| *value)
+        .unwrap_or_default();
+    let collapsed_size = physical_size(collapsed_logical_size(style), scale);
+    let expanded_size = physical_size(expanded_logical_size(), scale);
     let current = window.outer_position().map_err(|error| error.to_string())?;
 
     if expanded {
@@ -413,8 +433,9 @@ mod tests {
 
     #[test]
     fn floating_usage_hosts_include_shadow_gutters() {
-        assert_eq!(COLLAPSED_LOGICAL_SIZE, 88.0);
-        assert_eq!(EXPANDED_LOGICAL_SIZE, 352.0);
+        assert_eq!(collapsed_logical_size(FloatingStyle::Orb), (88.0, 88.0));
+        assert_eq!(collapsed_logical_size(FloatingStyle::Bar), (176.0, 52.0));
+        assert_eq!(expanded_logical_size(), (352.0, 352.0));
     }
 
     #[test]
