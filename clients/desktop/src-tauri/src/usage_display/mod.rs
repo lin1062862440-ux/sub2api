@@ -14,9 +14,9 @@ mod macos;
 const POPOVER_LABEL: &str = "usage-popover";
 const FLOATING_LABEL: &str = "usage-floating-window";
 #[cfg(target_os = "macos")]
-const POPOVER_WIDTH: f64 = 348.0;
+const POPOVER_WIDTH: f64 = 352.0;
 #[cfg(target_os = "macos")]
-const POPOVER_HEIGHT: f64 = 348.0;
+const POPOVER_HEIGHT: f64 = 352.0;
 
 #[derive(Clone, Copy)]
 pub(super) enum PopoverAnchor {
@@ -403,5 +403,11 @@ mod surface_tests {
         assert_eq!(FloatingStyle::parse("orb"), Ok(FloatingStyle::Orb));
         assert_eq!(FloatingStyle::parse("bar"), Ok(FloatingStyle::Bar));
         assert!(FloatingStyle::parse("pill").is_err());
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn menu_bar_popover_matches_the_expanded_usage_card_host_size() {
+        assert_eq!((POPOVER_WIDTH, POPOVER_HEIGHT), (352.0, 352.0));
     }
 }
