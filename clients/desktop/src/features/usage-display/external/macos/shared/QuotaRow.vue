@@ -4,7 +4,10 @@ import { Clock3 } from '@lucide/vue'
 
 import type { ResolvedUsageQuota } from '@/features/usage-display/core/format'
 
-const props = defineProps<{ quota: ResolvedUsageQuota }>()
+const props = withDefaults(defineProps<{
+  quota: ResolvedUsageQuota
+  showIcon?: boolean
+}>(), { showIcon: true })
 const progressStyle = computed(() => ({ width: `${100 - props.quota.remainingPercent}%` }))
 
 function resetLabel(value: Date | null) {
@@ -28,6 +31,6 @@ function resetLabel(value: Date | null) {
       <b>{{ quota.remainingPercent }}%</b>
     </div>
     <div class="quota-track" aria-hidden="true"><span :style="progressStyle" /></div>
-    <small><Clock3 :size="11" />{{ resetLabel(quota.resetAt) }}</small>
+    <small><Clock3 v-if="showIcon" :size="11" />{{ resetLabel(quota.resetAt) }}</small>
   </div>
 </template>

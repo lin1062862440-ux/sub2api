@@ -98,7 +98,6 @@ onBeforeUnmount(() => cancelCollapse())
       v-else
       :value="orbValue"
       :appearance="state.config.appearance"
-      :stale="Boolean(state.error)"
       :native-error="nativeError"
       @enter="expand"
       @drag="drag"

@@ -56,7 +56,9 @@ describe('MacOSFloatingWindow', () => {
 
     const orb = wrapper.get('[data-testid="floating-usage-orb"]')
     expect(orb.attributes('data-appearance')).toBe(appearance)
-    expect(orb.text()).toContain('$129')
+    expect(orb.text()).toBe('$129')
+    expect(orb.find('.orb-brand').exists()).toBe(false)
+    expect(orb.find('i').exists()).toBe(false)
 
     await orb.trigger('mousedown')
     expect(mocks.startDrag).toHaveBeenCalledOnce()
@@ -114,6 +116,8 @@ describe('MacOSFloatingWindow', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="floating-usage-orb"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="floating-native-error"]').text()).toContain('展开失败')
+    const orb = wrapper.get('[data-testid="floating-usage-orb"]')
+    expect(orb.find('[data-testid="floating-native-error"]').exists()).toBe(false)
+    expect(orb.attributes('aria-description')).toBe('展开失败')
   })
 })

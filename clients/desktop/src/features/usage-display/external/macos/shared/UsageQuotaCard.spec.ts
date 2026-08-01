@@ -41,6 +41,7 @@ describe('UsageQuotaCard', () => {
     expect(wrapper.emitted('open-main')).toHaveLength(1)
     expect(wrapper.emitted('quit')).toHaveLength(1)
     expect(wrapper.find('[data-testid="usage-settings-action"]').exists()).toBe(false)
+    expect(wrapper.find('svg').exists()).toBe(true)
   })
 
   it('shows the constrained subscription quota and stale state', () => {
