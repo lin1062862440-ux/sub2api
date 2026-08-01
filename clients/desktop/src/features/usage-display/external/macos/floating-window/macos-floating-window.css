@@ -123,24 +123,24 @@ button { -webkit-app-region: no-drag; }
 
 .floating-card-head {
   display: grid;
-  min-height: 70px;
+  min-height: 64px;
   box-sizing: border-box;
   flex: 0 0 auto;
   align-content: center;
-  gap: 4px;
-  padding: 10px 22px 9px;
-  border-bottom: 1px solid var(--floating-line);
+  gap: 2px;
+  padding: 7px 20px 6px;
   cursor: grab;
 }
 .floating-card-head:active { cursor: grabbing; }
 .floating-card-head p,
 .floating-card-head strong,
 .floating-card-head span { margin: 0; }
-.floating-card-head p { color: var(--floating-text); font-size: 10px; font-weight: 720; }
+.floating-card-head p { color: var(--floating-text); font-size: 10px; font-weight: 720; line-height: 1.1; }
 .floating-card-head strong {
   overflow: hidden;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 680;
+  line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -149,7 +149,8 @@ button { -webkit-app-region: no-drag; }
   align-items: center;
   gap: 6px;
   color: var(--floating-muted);
-  font-size: 9px;
+  font-size: 10px;
+  line-height: 1.2;
 }
 .floating-card-head i {
   width: 6px;
@@ -179,11 +180,11 @@ button { -webkit-app-region: no-drag; }
 .floating-usage-card .usage-overview::-webkit-scrollbar { display: none; }
 .floating-usage-card .balance-overview { display: flex; flex-direction: column; }
 .floating-usage-card .external-primary { display: grid; min-width: 0; gap: 5px; }
-.floating-usage-card .external-primary span { color: var(--floating-muted); font-size: 10px; font-weight: 620; }
+.floating-usage-card .external-primary span { color: var(--floating-muted); font-size: 11px; font-weight: 620; }
 .floating-usage-card .external-primary strong {
   overflow: hidden;
   color: var(--floating-text);
-  font-size: 40px;
+  font-size: 44px;
   font-weight: 560;
   line-height: 1;
   text-overflow: ellipsis;
@@ -225,28 +226,14 @@ button { -webkit-app-region: no-drag; }
 .floating-usage-card .subscription-content { display: flex; min-height: 100%; flex-direction: column; }
 .floating-usage-card .subscription-primary {
   display: grid;
-  min-height: 88px;
+  min-height: 72px;
   box-sizing: border-box;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
-  gap: 14px;
-  padding: 8px 20px;
-  border-bottom: 1px solid var(--floating-line);
+  padding: 4px 20px;
 }
-.floating-usage-card .subscription-copy { display: grid; min-width: 0; gap: 4px; padding-bottom: 3px; }
-.floating-usage-card .subscription-copy small { color: var(--floating-muted); font-size: 9px; }
-.floating-usage-card .subscription-copy h2 {
-  margin: 0;
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: 680;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.floating-usage-card .subscription-copy > span { color: var(--floating-muted); font-size: 9px; }
-.floating-usage-card .quota-list { padding: 3px 16px 6px; }
-.floating-usage-card .quota-row { padding: 6px 0; border-bottom: 1px solid var(--floating-line); }
-.floating-usage-card .quota-row:last-child { border-bottom: 0; }
+.floating-usage-card .quota-list { padding: 3px 20px 6px; }
+.floating-usage-card .quota-row { padding: 3px 0; }
 .floating-usage-card .quota-head {
   display: grid;
   min-width: 0;
@@ -254,15 +241,15 @@ button { -webkit-app-region: no-drag; }
   align-items: baseline;
   gap: 7px;
 }
-.floating-usage-card .quota-head strong { font-size: 10px; }
+.floating-usage-card .quota-head strong { font-size: 11px; }
 .floating-usage-card .quota-head span {
   overflow: hidden;
   color: var(--floating-muted);
-  font-size: 9px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.floating-usage-card .quota-head b { color: var(--floating-good); font-size: 10px; }
+.floating-usage-card .quota-head b { color: var(--floating-good); font-size: 11px; }
 .floating-usage-card .quota-row.constrained .quota-head b { color: var(--floating-alert); }
 .floating-usage-card .quota-track {
   height: 5px;
@@ -282,7 +269,16 @@ button { -webkit-app-region: no-drag; }
   display: block;
   margin-top: 4px;
   color: var(--floating-muted);
-  font-size: 8px;
+  font-size: 10px;
+}
+.floating-usage-card .floating-subscription-expiry {
+  align-self: flex-end;
+  margin-top: auto;
+  padding: 2px 20px 10px;
+  color: var(--floating-muted);
+  font-size: 10px;
+  line-height: 1.2;
+  text-align: right;
 }
 .floating-usage-card .unlimited-state,
 .floating-usage-card .missing-subscription {

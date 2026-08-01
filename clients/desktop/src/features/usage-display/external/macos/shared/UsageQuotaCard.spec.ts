@@ -86,4 +86,30 @@ describe('UsageQuotaCard', () => {
     expect(wrapper.text()).toContain('∞')
     expect(wrapper.text()).toContain('无周期额度限制')
   })
+
+  it('keeps empty quota tracks in the shared menu-bar card', () => {
+    const wrapper = mount(UsageQuotaCard, {
+      props: props({
+        source: 'subscription',
+        subscription: { id: 9, expires_at: null, group: { name: 'Claude Pro' } },
+        quotaSummary: {
+          remainingPercent: 100,
+          constrainedKey: 'weekly',
+          unlimited: false,
+          quotas: [
+            {
+              key: 'weekly',
+              label: '周额度',
+              used: 0,
+              limit: 50,
+              remainingPercent: 100,
+              resetAt: null,
+            },
+          ],
+        },
+      }) as never,
+    })
+
+    expect(wrapper.findAll('.quota-track')).toHaveLength(1)
+  })
 })

@@ -6,7 +6,7 @@ import type { UsageQuotaSummary } from '@/features/usage-display/core/format'
 import type { BalanceDisplaySnapshot } from '@/features/usage-display/core/store'
 import type { UsageDisplayAppearance } from '@/features/usage-display/core/storage'
 import BalanceOverview from '@/features/usage-display/external/macos/shared/BalanceOverview.vue'
-import SubscriptionOverview from '@/features/usage-display/external/macos/shared/SubscriptionOverview.vue'
+import FloatingSubscriptionOverview from './FloatingSubscriptionOverview.vue'
 
 const props = defineProps<{
   source: 'balance' | 'subscription'
@@ -47,11 +47,10 @@ const updateLabel = computed(() => {
     <p v-if="error" class="floating-notice" data-testid="floating-usage-notice">{{ error }}</p>
 
     <BalanceOverview v-if="source === 'balance'" :balance="balance" />
-    <SubscriptionOverview
+    <FloatingSubscriptionOverview
       v-else
       :subscription="subscription"
       :quota-summary="quotaSummary"
-      :show-icons="false"
     />
   </section>
 </template>

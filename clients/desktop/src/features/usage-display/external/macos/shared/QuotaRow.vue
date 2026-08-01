@@ -7,7 +7,8 @@ import type { ResolvedUsageQuota } from '@/features/usage-display/core/format'
 const props = withDefaults(defineProps<{
   quota: ResolvedUsageQuota
   showIcon?: boolean
-}>(), { showIcon: true })
+  hideUnusedTrack?: boolean
+}>(), { showIcon: true, hideUnusedTrack: false })
 const progressStyle = computed(() => ({ width: `${100 - props.quota.remainingPercent}%` }))
 
 function resetLabel(value: Date | null) {
@@ -30,7 +31,11 @@ function resetLabel(value: Date | null) {
       <span>${{ quota.used.toFixed(2) }} / ${{ quota.limit.toFixed(2) }}</span>
       <b>{{ quota.remainingPercent }}%</b>
     </div>
-    <div class="quota-track" aria-hidden="true"><span :style="progressStyle" /></div>
+    <div
+      v-if="!hideUnusedTrack || quota.remainingPercent < 100"
+      class="quota-track"
+      aria-hidden="true"
+    ><span :style="progressStyle" /></div>
     <small><Clock3 v-if="showIcon" :size="11" />{{ resetLabel(quota.resetAt) }}</small>
   </div>
 </template>

@@ -61,4 +61,73 @@ describe('FloatingUsageCard', () => {
     expect(wrapper.text()).toContain('42%')
     expect(wrapper.find('svg').exists()).toBe(false)
   })
+
+  it('shows the subscription identity once and moves expiry to the footer', () => {
+    const wrapper = mount(FloatingUsageCard, {
+      props: props({
+        source: 'subscription',
+        subscription: {
+          id: 45,
+          expires_at: '2026-08-31T12:00:00Z',
+          group: { name: '45 订阅' },
+        },
+        quotaSummary: {
+          remainingPercent: 100,
+          constrainedKey: 'weekly',
+          unlimited: false,
+          quotas: [
+            {
+              key: 'weekly',
+              label: '周额度',
+              used: 0,
+              limit: 50,
+              remainingPercent: 100,
+              resetAt: new Date('2026-08-08T12:00:00Z'),
+            },
+            {
+              key: 'monthly',
+              label: '月额度',
+              used: 0,
+              limit: 220,
+              remainingPercent: 100,
+              resetAt: new Date('2026-08-31T12:00:00Z'),
+            },
+          ],
+        },
+      }) as never,
+    })
+
+    expect(wrapper.text().match(/45 订阅/g) ?? []).toHaveLength(1)
+    expect(wrapper.text()).toContain('剩余额度')
+    expect(wrapper.text()).not.toContain('最紧额度剩余')
+    expect(wrapper.get('[data-testid="floating-subscription-expiry"]').text()).toBe('有效期至 8月31日')
+    expect(wrapper.findAll('.quota-track')).toHaveLength(0)
+  })
+
+  it('keeps progress for quota windows that have usage', () => {
+    const wrapper = mount(FloatingUsageCard, {
+      props: props({
+        source: 'subscription',
+        subscription: { id: 45, expires_at: null, group: { name: '45 订阅' } },
+        quotaSummary: {
+          remainingPercent: 60,
+          constrainedKey: 'weekly',
+          unlimited: false,
+          quotas: [
+            {
+              key: 'weekly',
+              label: '周额度',
+              used: 20,
+              limit: 50,
+              remainingPercent: 60,
+              resetAt: null,
+            },
+          ],
+        },
+      }) as never,
+    })
+
+    expect(wrapper.findAll('.quota-track')).toHaveLength(1)
+    expect(wrapper.get('[data-testid="floating-subscription-expiry"]').text()).toBe('长期有效')
+  })
 })
