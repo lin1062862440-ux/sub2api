@@ -1,0 +1,101 @@
+import { describe, expect, it } from 'vitest'
+
+import {
+  createFallbackTargets,
+  createParticles,
+  frameDelta,
+  motionPhaseAt,
+  projectParticles,
+  sampleLogoTargets,
+} from './brand-motion'
+
+describe('brand motion model', () => {
+  it('moves through the full animation cycle', () => {
+    expect(motionPhaseAt(1000).name).toBe('drift')
+    expect(motionPhaseAt(3600).name).toBe('assemble')
+    expect(motionPhaseAt(5600).name).toBe('hold')
+    expect(motionPhaseAt(7800).name).toBe('release')
+    expect(motionPhaseAt(9600).name).toBe('drift')
+    expect(motionPhaseAt(10_000)).toEqual(motionPhaseAt(0))
+  })
+
+  it('keeps wall-clock progress when rendering is temporarily throttled', () => {
+    expect(frameDelta(1000, 1034)).toBe(34)
+    expect(frameDelta(1000, 2000)).toBe(1000)
+    expect(frameDelta(1000, 5000)).toBe(1000)
+  })
+
+  it('samples only opaque logo pixels into centered targets', () => {
+    const data = new Uint8ClampedArray(4 * 4 * 4)
+    data[(1 * 4 + 1) * 4 + 3] = 255
+    data[(2 * 4 + 2) * 4 + 3] = 255
+
+    const targets = sampleLogoTargets({ width: 4, height: 4, data }, 8, 320, 320)
+
+    expect(targets).toHaveLength(8)
+    expect(targets.every(({ x, y }) => x > 60 && x < 260 && y > 60 && y < 260)).toBe(true)
+  })
+
+  it('can widen a sampled mask for a horizontal wordmark', () => {
+    const data = new Uint8ClampedArray(4 * 2 * 4)
+    data[3] = 255
+    data[(1 * 4 + 3) * 4 + 3] = 255
+
+    const compact = sampleLogoTargets({ width: 4, height: 2, data }, 12, 320, 320)
+    const wide = sampleLogoTargets({ width: 4, height: 2, data }, 12, 320, 320, 0.78)
+    const span = (points: Array<{ x: number }>) =>
+      Math.max(...points.map(({ x }) => x)) - Math.min(...points.map(({ x }) => x))
+
+    expect(span(wide)).toBeGreaterThan(span(compact))
+  })
+
+  it('ignores transparent margins when scaling a mask', () => {
+    const paddedData = new Uint8ClampedArray(8 * 4 * 4)
+    paddedData[(1 * 8 + 3) * 4 + 3] = 255
+    paddedData[(2 * 8 + 4) * 4 + 3] = 255
+    const croppedData = new Uint8ClampedArray(2 * 2 * 4)
+    croppedData[3] = 255
+    croppedData[(1 * 2 + 1) * 4 + 3] = 255
+
+    const padded = sampleLogoTargets({ width: 8, height: 4, data: paddedData }, 12, 320, 320, 0.78)
+    const cropped = sampleLogoTargets({ width: 2, height: 2, data: croppedData }, 12, 320, 320, 0.78)
+
+    padded.forEach((point, index) => {
+      expect(point.x).toBeCloseTo(cropped[index].x, 5)
+      expect(point.y).toBeCloseTo(cropped[index].y, 5)
+    })
+  })
+
+  it('returns no sampled targets when a mask has no visible pixels', () => {
+    const data = new Uint8ClampedArray(4 * 4 * 4)
+
+    expect(sampleLogoTargets({ width: 4, height: 4, data }, 12, 320, 320)).toEqual([])
+  })
+
+  it('creates a deterministic LinAI fallback arrangement', () => {
+    const first = createFallbackTargets(30, 320, 320)
+    const second = createFallbackTargets(30, 320, 320)
+
+    expect(first).toEqual(second)
+    expect(first).toHaveLength(30)
+    expect(new Set(first.map((point) => Math.round(point.x))).size).toBeGreaterThan(4)
+    expect(new Set(first.map((point) => Math.round(point.y))).size).toBeGreaterThan(4)
+  })
+
+  it('creates repeatable particles for a fixed seed', () => {
+    const targets = createFallbackTargets(12, 320, 320)
+
+    expect(createParticles(targets, 320, 320, 7)).toEqual(createParticles(targets, 320, 320, 7))
+  })
+
+  it('projects particles onto the logo during the hold phase', () => {
+    const targets = createFallbackTargets(12, 320, 320)
+    const particles = createParticles(targets, 320, 320, 7)
+    const frame = projectParticles(particles, 5600, 320, 320, { x: 0, y: 0 })
+
+    expect(frame).toHaveLength(12)
+    frame.forEach((point, index) => {
+      expect(Math.hypot(point.x - targets[index].x, point.y - targets[index].y)).toBeLessThan(3)
+    })
+  })
+})

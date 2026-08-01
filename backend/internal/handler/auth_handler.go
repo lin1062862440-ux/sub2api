@@ -577,6 +577,7 @@ func (h *AuthHandler) ValidateInvitationCode(c *gin.Context) {
 type ForgotPasswordRequest struct {
 	Email          string `json:"email" binding:"required,email"`
 	TurnstileToken string `json:"turnstile_token"`
+	ResetTarget    string `json:"reset_target"`
 }
 
 // ForgotPasswordResponse 忘记密码响应
@@ -600,7 +601,12 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	}
 
 	frontendBaseURL := strings.TrimSpace(h.settingSvc.GetFrontendURL(c.Request.Context()))
-	if frontendBaseURL == "" {
+	resetURL, err := resolvePasswordResetURL(req.ResetTarget, frontendBaseURL)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	if resetURL == "" {
 		slog.Error("frontend_url not configured in settings or config; cannot build password reset link")
 		response.InternalError(c, "Password reset is not configured")
 		return
@@ -608,7 +614,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 
 	// Request password reset (async)
 	// Note: This returns success even if email doesn't exist (to prevent enumeration)
-	if err := h.authService.RequestPasswordResetAsync(c.Request.Context(), req.Email, frontendBaseURL, c.GetHeader("Accept-Language")); err != nil {
+	if err := h.authService.RequestPasswordResetAsync(c.Request.Context(), req.Email, resetURL, c.GetHeader("Accept-Language")); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -616,6 +622,17 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	response.Success(c, ForgotPasswordResponse{
 		Message: "If your email is registered, you will receive a password reset link shortly.",
 	})
+}
+
+func resolvePasswordResetURL(target, frontendBaseURL string) (string, error) {
+	switch strings.TrimSpace(target) {
+	case "", "web":
+		return frontendBaseURL, nil
+	case "desktop":
+		return "linai://reset-password", nil
+	default:
+		return "", infraerrors.BadRequest("INVALID_RESET_TARGET", "reset_target must be web or desktop")
+	}
 }
 
 // ResetPasswordRequest 重置密码请求
