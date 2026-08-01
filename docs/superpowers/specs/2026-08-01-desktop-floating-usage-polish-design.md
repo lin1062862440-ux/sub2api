@@ -62,17 +62,34 @@ The default appearance uses the approved pearl palette. Existing dark and blur a
 
 The native expanded window becomes 352 by 352 logical pixels. The visible card is inset by 8 pixels and occupies 336 by 336 pixels. This transparent outer gutter contains the CSS shadow and prevents corner clipping.
 
-The visible card uses a 16-pixel radius. Its default material is a subtle pearl blend with dark charcoal text, muted secondary text, low-contrast separators, and one solid blue progress accent. It does not use striped progress, oversized decorative circles, or icon ornaments.
+The visible card uses a 16-pixel radius. Its default material is a subtle pearl blend with dark charcoal text, muted secondary text, and one solid blue progress accent. It does not use striped progress, ornamental separators, oversized decorative circles, or icon ornaments.
 
 The header contains only:
 
 - `LinAI · Pro` or the relevant LinAI/source identity;
-- the selected source label;
+- the selected subscription name or balance label exactly once;
 - the last successful update time or a short stale state.
 
 There are no refresh, open-main, quit, settings, or provider icons. The complete header remains a drag region. Opening the card still triggers an immediate refresh; periodic refresh continues unchanged.
 
-Balance content keeps available balance plus today, last-seven-days, and current-month consumption. Subscription content keeps the primary remaining percentage, reset information, selected subscription identity, and finite quota rows. Long values truncate or compact within fixed tracks and cannot resize the card.
+Balance content keeps available balance plus today, last-seven-days, and current-month consumption.
+
+Subscription content follows the approved compact hierarchy:
+
+- the body label is `剩余额度`;
+- the selected subscription name is not repeated below the header;
+- finite daily, weekly, and monthly quota rows contain label, usage, remaining percentage, progress, and reset time;
+- row and section `border-bottom` separators are removed;
+- a quota with 100% remaining hides its empty progress track;
+- expiration appears once in a stable bottom-right footer as `有效期至 M月D日`, independent of whether a monthly quota exists.
+
+Long values truncate or compact within fixed tracks and cannot resize the card.
+
+## Typography And Display Scaling
+
+The perceived low-resolution problem is addressed through typography rather than CSS zoom. Floating-card secondary text uses at least 10 logical pixels, quota labels and percentages use at least 11 logical pixels, header identity uses at least 15 logical pixels, and the primary remaining value uses approximately 44 logical pixels with stronger contrast.
+
+The WebView continues to render in logical pixels. Rust converts the 88 and 352 logical host footprints using the active monitor scale factor whenever the window is configured, expanded, or collapsed. This keeps text crisp on Retina and standard-DPI displays without fractional transforms or bitmap scaling. Moving between displays is re-evaluated on the next expand/collapse transaction.
 
 ## Source And Subscription Switching
 
@@ -119,6 +136,10 @@ Frontend tests cover:
 - no `L` mark in the collapsed orb;
 - one fixed metric value and no rendered orb error copy;
 - floating detail card has no refresh, open-main, quit, or settings actions;
+- floating subscription content shows its name once, uses `剩余额度`, and places expiration in the bottom-right footer;
+- 100%-remaining quota rows hide their empty tracks while used quota rows retain progress;
+- floating subscription content has no ornamental section or row separators;
+- floating text stays within the approved minimum logical sizes;
 - menu-bar action behavior remains unchanged;
 - changing source or subscription while expanded synchronously renders the orb and requests native collapse;
 - a selected subscription never renders another subscription's quota summary;
@@ -135,6 +156,8 @@ Visual acceptance uses both the browser visual harness and the real macOS Tauri 
 - no `L` or accidental secondary content;
 - no clipped expanded corners or shadow;
 - no header icons in the floating card;
+- no repeated subscription name, `最紧额度剩余` copy, empty 100% track, or ornamental divider lines;
+- expiration is visible once at the bottom right and typography remains crisp at the active monitor scale factor;
 - visual direction A for the default appearance;
 - balance-to-subscription and subscription-to-subscription switches never squeeze expanded content into the orb;
 - menu-bar popover and internal settings remain visually unchanged.
