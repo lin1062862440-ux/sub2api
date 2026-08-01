@@ -4,9 +4,9 @@ use std::sync::Mutex;
 #[cfg(target_os = "macos")]
 use objc2::MainThreadMarker;
 #[cfg(target_os = "macos")]
-use objc2_app_kit::NSColor;
+use objc2_app_kit::{NSColor, NSForegroundColorAttributeName};
 #[cfg(target_os = "macos")]
-use objc2_foundation::NSString;
+use objc2_foundation::{NSAttributedString, NSDictionary, NSString};
 
 #[cfg(target_os = "macos")]
 use tauri::{
@@ -376,7 +376,17 @@ fn apply_native_metric(
             .button(mtm)
             .ok_or_else(|| "macOS 状态栏按钮不可用".to_string())?;
         let color = NSColor::colorWithWhite_alpha(1.0, update.title_opacity as f64 / 255.0);
-        button.setContentTintColor(Some(&color));
+        let color_object = color.into_super().into_super();
+        let title = NSString::from_str(&presentation.text);
+        // SAFETY: AppKit initializes this exported key, and it accepts an NSColor value.
+        let attributed_title = unsafe {
+            let attributes = NSDictionary::from_retained_objects(
+                &[NSForegroundColorAttributeName],
+                &[color_object],
+            );
+            NSAttributedString::new_with_attributes(&title, &attributes)
+        };
+        button.setAttributedTitle(&attributed_title);
         Ok::<(), String>(())
     })
     .map_err(|error| error.to_string())?
@@ -548,6 +558,20 @@ mod tests {
         let subscription = native_icon_update(&subscription_presentation.icon);
         assert!(!subscription.is_template);
         assert_eq!(subscription.title_opacity, 255);
+    }
+
+    #[test]
+    fn usage_display_sets_an_attributed_title_for_white_menu_bar_text() {
+        let implementation = include_str!("menu_bar.rs");
+        let production_code = implementation
+            .split("#[cfg(test)]\nmod tests")
+            .next()
+            .expect("production section");
+
+        assert!(
+            production_code.contains("button.setAttributedTitle("),
+            "contentTintColor does not color an NSStatusBarButton's plain title"
+        );
     }
 
     #[test]
