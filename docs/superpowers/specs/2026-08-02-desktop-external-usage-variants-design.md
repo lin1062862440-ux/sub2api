@@ -55,9 +55,9 @@ Both sit at the lower-right of the active monitor, support dragging, and expand 
 
 ## Menu-Bar Item
 
-Balance display omits the word `余额` and shows the LinAI template mark followed by a subdued currency value.
+Balance display omits the word `余额` and shows a fixed white, non-template LinAI mark followed by a subdued white currency value. This deliberately avoids macOS tinting the mark and amount black over the user's translucent blue menu bar.
 
-Subscription display omits the LinAI mark, subscription name, and `用量`. It uses an 18 by 18 logical-pixel, non-template progress ring followed by the percentage as native adaptive menu-bar text. The ring has a translucent light track and a colored clockwise progress arc beginning at twelve o'clock. Arc color moves from red at low remaining quota through amber to green at high quota. At zero, only the hollow track remains; at 100 percent, the arc closes into a complete ring. The percentage stays outside the ring because text inside an 18-pixel status item is not legible. Because the ring image is not marked as a macOS template image, the system must preserve its authored track and progress colors instead of flattening it to black or white. The native percentage text remains adaptive so it stays readable across light and dark menu bars.
+Subscription display omits the LinAI mark, subscription name, and `用量`. It uses an 18 by 18 logical-pixel, non-template progress ring followed by a fixed white percentage. The ring has a translucent white track and white outer edge with a colored clockwise progress arc beginning at twelve o'clock. Arc color moves from red at low remaining quota through amber to green at high quota. At zero, only the hollow track remains; at 100 percent, the arc closes into a complete ring. The percentage stays outside the ring because text inside an 18-pixel status item is not legible. Because neither source uses a macOS template image, the system preserves the authored white foreground and progress colors instead of tinting them black.
 
 macOS owns final status-item ordering, so the implementation assigns a stable native autosave identifier and creates the item consistently, preserving the user's Command-drag placement instead of promising forced arbitrary ordering.
 

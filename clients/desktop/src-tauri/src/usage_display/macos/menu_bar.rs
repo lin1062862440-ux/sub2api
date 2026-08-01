@@ -23,25 +23,19 @@ const TRAY_ID: &str = "usage-display";
 const TRAY_AUTOSAVE_NAME: &str = "com.linai.desktop.usage-display";
 const RING_ICON_PIXELS: usize = 36;
 const RING_SUPERSAMPLE: usize = 4;
-const RING_OUTLINE_RGBA: [u8; 4] = [31, 45, 58, 72];
+const RING_OUTLINE_RGBA: [u8; 4] = [255, 255, 255, 64];
 const RING_TRACK_RGBA: [u8; 4] = [255, 255, 255, 150];
 
 #[derive(Debug, PartialEq, Eq)]
 enum TrayMetricIcon {
-    TemplateMark,
+    WhiteMark,
     QuotaRing { percent: u8, color: (u8, u8, u8) },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum NativeTitleColor {
-    Secondary,
-    Adaptive,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct NativeIconUpdate {
     is_template: bool,
-    title_color: NativeTitleColor,
+    title_opacity: u8,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -72,20 +66,20 @@ fn tray_metric_presentation(title: &str) -> TrayMetricPresentation {
         },
         None => TrayMetricPresentation {
             text: trimmed.to_string(),
-            icon: TrayMetricIcon::TemplateMark,
+            icon: TrayMetricIcon::WhiteMark,
         },
     }
 }
 
 fn native_icon_update(icon: &TrayMetricIcon) -> NativeIconUpdate {
     match icon {
-        TrayMetricIcon::TemplateMark => NativeIconUpdate {
-            is_template: true,
-            title_color: NativeTitleColor::Secondary,
+        TrayMetricIcon::WhiteMark => NativeIconUpdate {
+            is_template: false,
+            title_opacity: 210,
         },
         TrayMetricIcon::QuotaRing { .. } => NativeIconUpdate {
             is_template: false,
-            title_color: NativeTitleColor::Adaptive,
+            title_opacity: 255,
         },
     }
 }
@@ -316,24 +310,24 @@ pub(in crate::usage_display) fn position_popover(
 }
 
 #[cfg(any(target_os = "macos", test))]
-fn tray_template_rgba(source: &[u8]) -> Vec<u8> {
+fn tray_white_rgba(source: &[u8]) -> Vec<u8> {
     debug_assert_eq!(source.len() % 4, 0);
-    let mut template = Vec::with_capacity(source.len());
+    let mut white = Vec::with_capacity(source.len());
     for pixel in source.chunks_exact(4) {
         let coverage = 255_u16 - pixel[0].min(pixel[1]).min(pixel[2]) as u16;
         let alpha = (pixel[3] as u16 * coverage / 255) as u8;
-        template.extend_from_slice(&[0, 0, 0, alpha]);
+        white.extend_from_slice(&[255, 255, 255, alpha]);
     }
-    template
+    white
 }
 
 #[cfg(target_os = "macos")]
-fn template_app_icon(app: &tauri::AppHandle) -> Result<tauri::image::Image<'static>, String> {
+fn white_app_icon(app: &tauri::AppHandle) -> Result<tauri::image::Image<'static>, String> {
     let app_icon = app
         .default_window_icon()
         .ok_or_else(|| "应用图标不可用".to_string())?;
     Ok(tauri::image::Image::new_owned(
-        tray_template_rgba(app_icon.rgba()),
+        tray_white_rgba(app_icon.rgba()),
         app_icon.width(),
         app_icon.height(),
     ))
@@ -359,7 +353,7 @@ fn apply_native_metric(
     let presentation = tray_metric_presentation(title);
     let update = native_icon_update(&presentation.icon);
     let icon = match presentation.icon {
-        TrayMetricIcon::TemplateMark => template_app_icon(app)?,
+        TrayMetricIcon::WhiteMark => white_app_icon(app)?,
         TrayMetricIcon::QuotaRing { percent, color } => tauri::image::Image::new_owned(
             quota_ring_rgba(percent, color),
             RING_ICON_PIXELS as u32,
@@ -381,10 +375,7 @@ fn apply_native_metric(
         let button = status_item
             .button(mtm)
             .ok_or_else(|| "macOS 状态栏按钮不可用".to_string())?;
-        let color = match update.title_color {
-            NativeTitleColor::Secondary => NSColor::secondaryLabelColor(),
-            NativeTitleColor::Adaptive => NSColor::labelColor(),
-        };
+        let color = NSColor::colorWithWhite_alpha(1.0, update.title_opacity as f64 / 255.0);
         button.setContentTintColor(Some(&color));
         Ok::<(), String>(())
     })
@@ -393,10 +384,10 @@ fn apply_native_metric(
 
 #[cfg(target_os = "macos")]
 fn build(app: &tauri::AppHandle, title: &str) -> Result<(), String> {
-    let icon = template_app_icon(app)?;
+    let icon = white_app_icon(app)?;
     let tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .icon_as_template(true)
+        .icon_as_template(false)
         .tooltip("LinAI 用量显示")
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {
@@ -463,19 +454,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn usage_display_converts_the_app_icon_to_a_macos_template_mask() {
+    fn usage_display_converts_the_app_icon_to_a_white_mark() {
         let source = [
             255, 255, 255, 255, // opaque white background
             39, 90, 220, 255, // LinAI blue mark
             39, 90, 220, 0, // transparent source pixel
         ];
 
-        let template = tray_template_rgba(&source);
+        let white = tray_white_rgba(&source);
 
-        assert_eq!(&template[0..4], &[0, 0, 0, 0]);
-        assert_eq!(&template[4..7], &[0, 0, 0]);
-        assert!(template[7] > 0);
-        assert_eq!(&template[8..12], &[0, 0, 0, 0]);
+        assert_eq!(&white[0..4], &[255, 255, 255, 0]);
+        assert_eq!(&white[4..7], &[255, 255, 255]);
+        assert!(white[7] > 0);
+        assert_eq!(&white[8..12], &[255, 255, 255, 0]);
     }
 
     #[test]
@@ -518,7 +509,7 @@ mod tests {
     fn usage_display_builds_balance_and_subscription_ring_presentations() {
         let balance = tray_metric_presentation("$128.60");
         assert_eq!(balance.text, "$128.60");
-        assert_eq!(balance.icon, TrayMetricIcon::TemplateMark);
+        assert_eq!(balance.icon, TrayMetricIcon::WhiteMark);
 
         let subscription = tray_metric_presentation("73%");
         assert_eq!(subscription.text, "73%");
@@ -542,20 +533,21 @@ mod tests {
         assert_eq!(pixel_rgb_at(&partial, 32, 18), quota_metric_color(45));
         assert_eq!(pixel_rgb_at(&partial, 3, 18), (255, 255, 255));
         assert_eq!(pixel_rgb_at(&full, 3, 18), quota_metric_color(100));
+        assert_eq!(&RING_OUTLINE_RGBA[0..3], &[255, 255, 255]);
         assert_eq!(pixel_at(&full, 18, 18)[3], 0);
     }
 
     #[test]
-    fn native_icon_update_switches_template_mode_by_usage_source() {
+    fn native_icon_update_keeps_both_sources_white_and_non_template() {
         let balance_presentation = tray_metric_presentation("$128.60");
         let balance = native_icon_update(&balance_presentation.icon);
-        assert!(balance.is_template);
-        assert_eq!(balance.title_color, NativeTitleColor::Secondary);
+        assert!(!balance.is_template);
+        assert_eq!(balance.title_opacity, 210);
 
         let subscription_presentation = tray_metric_presentation("45%");
         let subscription = native_icon_update(&subscription_presentation.icon);
         assert!(!subscription.is_template);
-        assert_eq!(subscription.title_color, NativeTitleColor::Adaptive);
+        assert_eq!(subscription.title_opacity, 255);
     }
 
     #[test]
