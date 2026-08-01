@@ -5,7 +5,6 @@ import * as api from '@/api'
 import { usageDisplayStore } from '@/features/usage-display/core/store'
 import MacOSFloatingWindow from './MacOSFloatingWindow.vue'
 import '@/style.css'
-import '@/features/usage-display/external/macos/shared/quota-float-themes.css'
 import './macos-floating-window.css'
 
 async function syncSession(userId?: number | null) {

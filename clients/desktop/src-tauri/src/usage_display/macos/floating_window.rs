@@ -15,8 +15,8 @@ use tauri_plugin_store::StoreExt;
 #[cfg(target_os = "macos")]
 use super::super::{FLOATING_LABEL, UsageDisplayHost};
 
-pub(in crate::usage_display) const COLLAPSED_LOGICAL_SIZE: f64 = 72.0;
-pub(in crate::usage_display) const EXPANDED_LOGICAL_SIZE: f64 = 336.0;
+pub(in crate::usage_display) const COLLAPSED_LOGICAL_SIZE: f64 = 88.0;
+pub(in crate::usage_display) const EXPANDED_LOGICAL_SIZE: f64 = 352.0;
 const EDGE_MARGIN_LOGICAL: f64 = 20.0;
 const POSITION_KEY: &str = "usage_display:floating_position";
 
@@ -241,7 +241,7 @@ pub(in crate::usage_display) fn configure(
     app: &tauri::AppHandle,
     state: &UsageDisplayHost,
     visible: bool,
-    appearance: &str,
+    _appearance: &str,
 ) -> Result<(), String> {
     let window = app
         .get_webview_window(FLOATING_LABEL)
@@ -251,7 +251,7 @@ pub(in crate::usage_display) fn configure(
         return window.hide().map_err(|error| error.to_string());
     }
 
-    apply_appearance(&window, appearance);
+    let _ = window_vibrancy::clear_vibrancy(&window);
     let monitor = default_monitor(app)?;
     let scale = monitor.scale_factor();
     let size = physical_size(COLLAPSED_LOGICAL_SIZE, scale);
@@ -391,14 +391,20 @@ mod tests {
     use super::*;
 
     #[test]
+    fn floating_usage_hosts_include_shadow_gutters() {
+        assert_eq!(COLLAPSED_LOGICAL_SIZE, 88.0);
+        assert_eq!(EXPANDED_LOGICAL_SIZE, 352.0);
+    }
+
+    #[test]
     fn floating_usage_starts_at_the_bottom_right() {
         assert_eq!(
             bottom_right(
                 WorkArea::new(0, 0, 1440, 900),
-                WindowSize::new(72, 72),
+                WindowSize::new(88, 88),
                 20,
             ),
-            WindowPoint::new(1348, 808),
+            WindowPoint::new(1332, 792),
         );
     }
 
@@ -406,11 +412,11 @@ mod tests {
     fn floating_usage_expands_up_and_left_from_the_bottom_right() {
         assert_eq!(
             expand_from_anchor(
-                WindowRect::new(1348, 808, 72, 72),
-                WindowSize::new(336, 336),
+                WindowRect::new(1332, 792, 88, 88),
+                WindowSize::new(352, 352),
                 WorkArea::new(0, 0, 1440, 900),
             ),
-            WindowPoint::new(1084, 544),
+            WindowPoint::new(1068, 528),
         );
     }
 
@@ -419,10 +425,10 @@ mod tests {
         assert_eq!(
             clamp_to_work_area(
                 WindowPoint::new(-1400, 720),
-                WindowSize::new(72, 72),
+                WindowSize::new(88, 88),
                 WorkArea::new(-1280, 0, 1280, 800),
             ),
-            WindowPoint::new(-1280, 720),
+            WindowPoint::new(-1280, 712),
         );
     }
 }

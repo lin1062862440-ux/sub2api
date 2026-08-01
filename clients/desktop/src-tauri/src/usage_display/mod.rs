@@ -301,6 +301,7 @@ fn setup_macos(app: &mut tauri::App) -> tauri::Result<()> {
     .minimizable(false)
     .decorations(false)
     .transparent(true)
+    .shadow(false)
     .always_on_top(true)
     .skip_taskbar(true)
     .focused(false)
