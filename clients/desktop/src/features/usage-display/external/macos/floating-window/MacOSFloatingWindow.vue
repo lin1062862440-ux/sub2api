@@ -9,12 +9,15 @@ import {
 import { usageDisplayStore } from '@/features/usage-display/core/store'
 import FloatingUsageCard from './FloatingUsageCard.vue'
 import FloatingUsageOrb from './FloatingUsageOrb.vue'
+import { resolveFloatingQuotaPresentation } from './quota-presentation'
 
 const { state } = usageDisplayStore
 const mode = ref<'collapsed' | 'expanding' | 'expanded' | 'collapsing'>('collapsed')
 const nativeError = ref('')
 let collapseTimer: number | null = null
 let interactionSequence = 0
+
+const primaryQuota = computed(() => resolveFloatingQuotaPresentation(state.quotaSummary).primary)
 
 const orbValue = computed(() => {
   if (state.config.source === 'balance') {
@@ -27,7 +30,7 @@ const orbValue = computed(() => {
   ) return formatUsageOrbValue({ kind: 'unavailable' })
   return formatUsageOrbValue({
     kind: 'subscription',
-    remainingPercent: state.quotaSummary.remainingPercent,
+    remainingPercent: primaryQuota.value?.remainingPercent ?? null,
     unlimited: state.quotaSummary.unlimited,
   })
 })

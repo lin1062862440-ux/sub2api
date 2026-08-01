@@ -70,6 +70,8 @@ describe('MacOSFloatingWindow', () => {
     const orb = wrapper.get('[data-testid="floating-usage-orb"]')
     expect(orb.attributes('data-appearance')).toBe(appearance)
     expect(orb.text()).toBe('$129')
+    expect(orb.get('[data-testid="floating-metric-number"]').text()).toBe('$129')
+    expect(orb.find('[data-testid="floating-metric-suffix"]').exists()).toBe(false)
     expect(orb.find('.orb-brand').exists()).toBe(false)
     expect(orb.find('i').exists()).toBe(false)
 
@@ -164,6 +166,28 @@ describe('MacOSFloatingWindow', () => {
     await nextTick()
 
     expect(wrapper.get('[data-testid="floating-usage-orb"]').text()).toBe('--')
+  })
+
+  it('uses the longest configured quota in the subscription orb', async () => {
+    const wrapper = mount(MacOSFloatingWindow)
+
+    mocks.state.config.source = 'subscription'
+    mocks.state.config.subscriptionId = 9
+    mocks.state.subscription = { id: 9, expires_at: null, group: { name: 'Claude Pro' } }
+    mocks.state.quotaSummary = {
+      remainingPercent: 42,
+      constrainedKey: 'weekly',
+      unlimited: false,
+      quotas: [
+        { key: 'weekly', remainingPercent: 42 },
+        { key: 'monthly', remainingPercent: 76 },
+      ],
+    }
+    await nextTick()
+
+    const orb = wrapper.get('[data-testid="floating-usage-orb"]')
+    expect(orb.get('[data-testid="floating-metric-number"]').text()).toBe('76')
+    expect(orb.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
   })
 
   it('collapses before an appearance change reconfigures the native host', async () => {

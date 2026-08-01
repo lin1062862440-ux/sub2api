@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UsageDisplayAppearance } from '@/features/usage-display/core/storage'
+import FloatingMetricValue from './FloatingMetricValue.vue'
 
 defineProps<{
   value: string
@@ -22,6 +23,6 @@ defineEmits<{ enter: []; drag: [] }>()
     @mousedown="$emit('drag')"
     @click="$emit('enter')"
   >
-    <strong>{{ value }}</strong>
+    <FloatingMetricValue :value="value" />
   </button>
 </template>
