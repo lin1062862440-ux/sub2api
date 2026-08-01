@@ -123,12 +123,12 @@ button { -webkit-app-region: no-drag; }
 
 .floating-card-head {
   display: grid;
-  min-height: 82px;
+  min-height: 70px;
   box-sizing: border-box;
   flex: 0 0 auto;
   align-content: center;
   gap: 4px;
-  padding: 14px 22px 12px;
+  padding: 10px 22px 9px;
   border-bottom: 1px solid var(--floating-line);
   cursor: grab;
 }
@@ -170,7 +170,13 @@ button { -webkit-app-region: no-drag; }
   font-size: 9px;
 }
 
-.floating-usage-card .usage-overview { min-height: 0; flex: 1; overflow: auto; }
+.floating-usage-card .usage-overview {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  scrollbar-width: none;
+}
+.floating-usage-card .usage-overview::-webkit-scrollbar { display: none; }
 .floating-usage-card .balance-overview { display: flex; flex-direction: column; }
 .floating-usage-card .external-primary { display: grid; min-width: 0; gap: 5px; }
 .floating-usage-card .external-primary span { color: var(--floating-muted); font-size: 10px; font-weight: 620; }
@@ -219,12 +225,12 @@ button { -webkit-app-region: no-drag; }
 .floating-usage-card .subscription-content { display: flex; min-height: 100%; flex-direction: column; }
 .floating-usage-card .subscription-primary {
   display: grid;
-  min-height: 102px;
+  min-height: 88px;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
   align-items: end;
   gap: 14px;
-  padding: 12px 20px 10px;
+  padding: 8px 20px;
   border-bottom: 1px solid var(--floating-line);
 }
 .floating-usage-card .subscription-copy { display: grid; min-width: 0; gap: 4px; padding-bottom: 3px; }
