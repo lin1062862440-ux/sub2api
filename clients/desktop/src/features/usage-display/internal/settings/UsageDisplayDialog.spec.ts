@@ -9,7 +9,8 @@ const mocks = vi.hoisted(() => ({
       source: 'balance' as 'balance' | 'subscription',
       subscriptionId: null as number | null,
       surface: 'menu-bar' as 'menu-bar' | 'floating-window',
-      appearance: 'default' as 'default' | 'dark' | 'blur',
+      appearance: 'sky' as 'sky' | 'meadow' | 'sunset',
+      floatingStyle: 'orb' as 'orb' | 'bar',
     },
     subscriptions: [
       { id: 9, status: 'active', group: { id: 3, name: 'Claude Pro' } },
@@ -56,7 +57,8 @@ describe('UsageDisplayDialog', () => {
       source: 'balance',
       subscriptionId: null,
       surface: 'menu-bar',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     }
     mocks.state.trayTitle = '余额 $128.60'
     mocks.state.error = ''
@@ -80,9 +82,9 @@ describe('UsageDisplayDialog', () => {
     expect(wrapper.text()).toContain('账户余额')
     expect(wrapper.text()).toContain('订阅组')
     expect(wrapper.text()).toContain('展示样式')
-    expect(wrapper.text()).toContain('默认浅色')
-    expect(wrapper.text()).toContain('深色')
-    expect(wrapper.text()).toContain('Blur')
+    expect(wrapper.text()).toContain('清透蓝')
+    expect(wrapper.text()).toContain('青柠黄')
+    expect(wrapper.text()).toContain('珊瑚红')
     expect(wrapper.text()).toContain('完成')
     expect(wrapper.text()).not.toContain('刷新')
     expect(wrapper.text()).not.toContain('打开主窗口')
@@ -106,7 +108,8 @@ describe('UsageDisplayDialog', () => {
       source: 'subscription',
       subscriptionId: 9,
       surface: 'menu-bar',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
     expect(mocks.notifyConfigChanged).toHaveBeenCalledWith(42)
   })
@@ -121,20 +124,44 @@ describe('UsageDisplayDialog', () => {
       source: 'balance',
       subscriptionId: null,
       surface: 'floating-window',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
 
     mocks.updateConfig.mockClear()
     const appearanceWrapper = mountDialog()
     await flushPromises()
-    await appearanceWrapper.get('[data-testid="usage-appearance-blur"]').trigger('click')
+    await appearanceWrapper.get('[data-testid="usage-appearance-sunset"]').trigger('click')
 
     expect(mocks.updateConfig).toHaveBeenLastCalledWith({
       enabled: true,
       source: 'balance',
       subscriptionId: null,
       surface: 'menu-bar',
-      appearance: 'blur',
+      appearance: 'sunset',
+      floatingStyle: 'orb',
+    })
+  })
+
+  it('selects a floating form and updates the matching preview', async () => {
+    mocks.state.config.surface = 'floating-window'
+    mocks.state.config.floatingStyle = 'bar'
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('悬浮形态')
+    expect(wrapper.get('[data-testid="usage-floating-style-bar"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.find('[data-testid="usage-floating-bar-preview"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="usage-floating-style-orb"]').trigger('click')
+
+    expect(mocks.updateConfig).toHaveBeenLastCalledWith({
+      enabled: true,
+      source: 'balance',
+      subscriptionId: null,
+      surface: 'floating-window',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
   })
 

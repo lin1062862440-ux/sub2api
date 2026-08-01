@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { CircleDot, Layers3, Menu, MonitorUp, WalletCards } from '@lucide/vue'
+import { Circle, CircleDot, Layers3, Menu, MonitorUp, RectangleHorizontal, WalletCards } from '@lucide/vue'
 
 import type { UserSubscription } from '@/api'
 import type { Platform } from '@/lib/platform'
@@ -29,11 +29,9 @@ function setSource(source: UsageDisplayConfig['source']) {
   selectedSource.value = source
   if (props.config.enabled && source === 'subscription' && props.config.subscriptionId === null) return
   emit('update', {
-    enabled: props.config.enabled,
+    ...props.config,
     source,
     subscriptionId: source === 'subscription' ? props.config.subscriptionId : null,
-    surface: props.config.surface,
-    appearance: props.config.appearance,
   })
 }
 
@@ -43,6 +41,10 @@ function setSurface(surface: UsageDisplayConfig['surface']) {
 
 function setAppearance(appearance: UsageDisplayConfig['appearance']) {
   emit('update', { ...props.config, appearance })
+}
+
+function setFloatingStyle(floatingStyle: UsageDisplayConfig['floatingStyle']) {
+  emit('update', { ...props.config, floatingStyle })
 }
 
 function setSubscription(event: Event) {
@@ -141,10 +143,39 @@ function toggle() {
       <UsageAppearanceChooser :model-value="config.appearance" @update:model-value="setAppearance" />
     </fieldset>
 
+    <fieldset v-if="config.surface === 'floating-window'" :disabled="!supported">
+      <legend>悬浮形态</legend>
+      <div class="settings-segmented">
+        <button
+          type="button"
+          data-testid="usage-floating-style-orb"
+          :aria-pressed="config.floatingStyle === 'orb'"
+          @click="setFloatingStyle('orb')"
+        ><Circle :size="16" /><span>圆形</span></button>
+        <button
+          type="button"
+          data-testid="usage-floating-style-bar"
+          :aria-pressed="config.floatingStyle === 'bar'"
+          @click="setFloatingStyle('bar')"
+        ><RectangleHorizontal :size="16" /><span>横条</span></button>
+      </div>
+    </fieldset>
+
     <div class="display-preview">
       <span>{{ config.surface === 'menu-bar' ? '菜单栏预览' : '悬浮窗预览' }}</span>
       <strong v-if="config.surface === 'menu-bar'" class="menu-preview"><i aria-hidden="true">L</i>{{ trayTitle }}</strong>
-      <strong v-else class="orb-preview" :data-appearance="config.appearance"><i aria-hidden="true">L</i><b>{{ orbValue }}</b></strong>
+      <strong
+        v-else-if="config.floatingStyle === 'orb'"
+        class="floating-preview orb-preview"
+        :data-appearance="config.appearance"
+        data-testid="usage-floating-orb-preview"
+      ><b>{{ orbValue }}</b></strong>
+      <strong
+        v-else
+        class="floating-preview bar-preview"
+        :data-appearance="config.appearance"
+        data-testid="usage-floating-bar-preview"
+      ><span>{{ config.source === 'balance' ? '可用余额' : '剩余额度' }}</span><b>{{ orbValue }}</b></strong>
     </div>
   </div>
 </template>
@@ -295,22 +326,41 @@ legend { margin-bottom: 8px; }
   place-items: center;
 }
 
+.floating-preview {
+  --preview-bg: #dcecf5;
+  --preview-border: rgba(80, 127, 156, 0.2);
+  --preview-text: #24374a;
+  background: var(--preview-bg);
+  border: 1px solid var(--preview-border);
+  color: var(--preview-text);
+  box-shadow: inset -16px -14px 24px rgba(83, 148, 186, 0.16), 0 5px 12px rgba(43, 67, 84, 0.1);
+}
+.floating-preview[data-appearance='meadow'] { --preview-bg: #edf1c9; --preview-border: rgba(116, 129, 54, 0.2); --preview-text: #364126; box-shadow: inset -16px -14px 24px rgba(172, 183, 79, 0.18), 0 5px 12px rgba(63, 70, 35, 0.1); }
+.floating-preview[data-appearance='sunset'] { --preview-bg: #f4d6cd; --preview-border: rgba(162, 81, 67, 0.2); --preview-text: #52302c; box-shadow: inset -16px -14px 24px rgba(206, 106, 87, 0.17), 0 5px 12px rgba(88, 48, 40, 0.1); }
 .orb-preview {
   display: grid;
   width: 62px;
   height: 62px;
   justify-self: start;
   place-content: center;
-  background: #e8f0f4;
-  border: 1px solid #d3e0e7;
   border-radius: 50%;
-  color: #172431;
   text-align: center;
 }
-.orb-preview[data-appearance='dark'] { background: #262947; border-color: #3d4164; color: #f7f8ff; }
-.orb-preview[data-appearance='blur'] { background: rgba(218, 248, 242, 0.86); border-color: rgba(39, 174, 177, 0.24); color: #123b3a; box-shadow: inset -16px -14px 24px rgba(39, 174, 177, 0.2); }
-.orb-preview i { font-size: 10px; font-style: normal; opacity: 0.7; }
 .orb-preview b { margin-top: 2px; font-size: 14px; font-weight: 720; }
+.bar-preview {
+  display: flex;
+  width: 142px;
+  min-height: 42px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  justify-self: start;
+  padding: 0 14px;
+  border-radius: 14px;
+}
+.bar-preview span { color: inherit; font-size: 10px; font-weight: 560; opacity: 0.68; }
+.bar-preview b { font-size: 15px; font-weight: 680; }
 
 @media (prefers-reduced-motion: reduce) {
   .settings-row button[role='switch'] span { transition: none; }

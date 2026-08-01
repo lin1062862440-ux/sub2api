@@ -99,10 +99,9 @@ export function truncateTraySource(value: string, maxWidth = 11): string {
 }
 
 export function formatUsageTrayTitle(input: UsageTrayTitleInput): string {
-  if (input.kind === 'unavailable') return '用量 --'
-  if (input.kind === 'balance') return `余额 $${input.balance.toFixed(2)}`
-  const value = input.remainingPercent === null ? '∞' : `${Math.min(100, Math.max(0, input.remainingPercent))}%`
-  return `${truncateTraySource(input.name)} ${value}`
+  if (input.kind === 'unavailable') return '--'
+  if (input.kind === 'balance') return `$${input.balance.toFixed(2)}`
+  return input.remainingPercent === null ? '∞' : `${Math.min(100, Math.max(0, input.remainingPercent))}%`
 }
 
 export function formatUsageOrbValue(input: UsageOrbValueInput): string {

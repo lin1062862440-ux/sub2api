@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core'
 import { emit } from '@tauri-apps/api/event'
 
-import type { UsageDisplayAppearance, UsageDisplaySurface } from './storage'
+import type { FloatingUsageStyle, UsageDisplayAppearance, UsageDisplaySurface } from './storage'
 
 async function safeInvoke(command: string, args?: Record<string, unknown>): Promise<void> {
   try {
@@ -25,6 +25,7 @@ export interface UsageDisplayHostConfig {
   surface: UsageDisplaySurface
   title: string
   appearance: UsageDisplayAppearance
+  floatingStyle: FloatingUsageStyle
 }
 
 export function configureUsageDisplay(config: UsageDisplayHostConfig): Promise<void> {

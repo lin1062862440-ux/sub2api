@@ -2,15 +2,12 @@
 import { Check } from '@lucide/vue'
 
 import type { UsageDisplayAppearance } from '@/features/usage-display/core/storage'
+import { usageAppearances } from '@/features/usage-display/external/macos/shared/appearance'
 
 defineProps<{ modelValue: UsageDisplayAppearance }>()
 defineEmits<{ 'update:modelValue': [value: UsageDisplayAppearance] }>()
 
-const choices: readonly { id: UsageDisplayAppearance; label: string }[] = [
-  { id: 'default', label: '默认浅色' },
-  { id: 'dark', label: '深色' },
-  { id: 'blur', label: 'Blur' },
-]
+const choices = usageAppearances
 </script>
 
 <template>
@@ -68,9 +65,13 @@ const choices: readonly { id: UsageDisplayAppearance; label: string }[] = [
 .appearance-sample strong { font-size: 17px; font-weight: 620; line-height: 1; }
 .appearance-sample i { display: block; width: 62%; height: 4px; overflow: hidden; background: rgba(52, 77, 99, 0.15); border-radius: 2px; }
 .appearance-sample i b { display: block; width: 74%; height: 100%; background: #4d84e2; }
-.appearance-dark .appearance-sample { background: #262947; color: #f7f8ff; }
-.appearance-dark .appearance-sample i { background: rgba(224, 229, 255, 0.16); }
-.appearance-dark .appearance-sample i b { background: #8ca7ff; }
-.appearance-blur .appearance-sample { background: rgba(218, 248, 242, 0.86); color: #123b3a; box-shadow: inset -20px -14px 25px rgba(39, 174, 177, 0.2); }
-.appearance-blur .appearance-sample i b { background: repeating-linear-gradient(90deg, #27aeb1 0 3px, transparent 3px 5px); }
+.appearance-sky .appearance-sample { background: #dcecf5; color: #24374a; box-shadow: inset -18px -14px 28px rgba(83, 148, 186, 0.18); }
+.appearance-sky .appearance-sample i { background: rgba(39, 72, 98, 0.13); }
+.appearance-sky .appearance-sample i b { background: #5d9fc6; }
+.appearance-meadow .appearance-sample { background: #edf1c9; color: #364126; box-shadow: inset -18px -14px 28px rgba(172, 183, 79, 0.2); }
+.appearance-meadow .appearance-sample i { background: rgba(69, 80, 36, 0.13); }
+.appearance-meadow .appearance-sample i b { background: #96a941; }
+.appearance-sunset .appearance-sample { background: #f4d6cd; color: #52302c; box-shadow: inset -18px -14px 28px rgba(206, 106, 87, 0.19); }
+.appearance-sunset .appearance-sample i { background: rgba(94, 47, 40, 0.13); }
+.appearance-sunset .appearance-sample i b { background: #cf7666; }
 </style>

@@ -6,10 +6,12 @@ export interface UsageDisplayConfig {
   subscriptionId: number | null
   surface: UsageDisplaySurface
   appearance: UsageDisplayAppearance
+  floatingStyle: FloatingUsageStyle
 }
 
 export type UsageDisplaySurface = 'menu-bar' | 'floating-window'
-export type UsageDisplayAppearance = 'default' | 'dark' | 'blur'
+export type UsageDisplayAppearance = 'sky' | 'meadow' | 'sunset'
+export type FloatingUsageStyle = 'orb' | 'bar'
 
 const store = new LazyStore('linai.json', { autoSave: 100 })
 
@@ -19,7 +21,8 @@ export function defaultUsageDisplayConfig(): UsageDisplayConfig {
     source: 'balance',
     subscriptionId: null,
     surface: 'menu-bar',
-    appearance: 'default',
+    appearance: 'sky',
+    floatingStyle: 'orb',
   }
 }
 
@@ -43,16 +46,25 @@ function normalizeConfig(value: unknown): UsageDisplayConfig {
     surface: value.surface === 'menu-bar' || value.surface === 'floating-window'
       ? value.surface
       : fallback.surface,
-    appearance: value.appearance === 'default' || value.appearance === 'dark' || value.appearance === 'blur'
-      ? value.appearance
-      : fallback.appearance,
+    appearance: normalizeAppearance(value.appearance),
+    floatingStyle: value.floatingStyle === 'orb' || value.floatingStyle === 'bar'
+      ? value.floatingStyle
+      : fallback.floatingStyle,
   }
+}
+
+function normalizeAppearance(value: unknown): UsageDisplayAppearance {
+  if (value === 'sky' || value === 'default') return 'sky'
+  if (value === 'meadow' || value === 'dark') return 'meadow'
+  if (value === 'sunset' || value === 'blur') return 'sunset'
+  return 'sky'
 }
 
 function isValidConfig(value: unknown): value is UsageDisplayConfig {
   if (!hasValidBaseFields(value)) return false
   return (value.surface === 'menu-bar' || value.surface === 'floating-window')
-    && (value.appearance === 'default' || value.appearance === 'dark' || value.appearance === 'blur')
+    && (value.appearance === 'sky' || value.appearance === 'meadow' || value.appearance === 'sunset')
+    && (value.floatingStyle === 'orb' || value.floatingStyle === 'bar')
 }
 
 export async function loadUsageDisplayConfig(userId: number): Promise<UsageDisplayConfig> {

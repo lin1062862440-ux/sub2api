@@ -10,7 +10,8 @@ function config(overrides: Record<string, unknown> = {}) {
     source: 'balance' as const,
     subscriptionId: null,
     surface: 'menu-bar' as const,
-    appearance: 'default' as const,
+    appearance: 'sky' as const,
+    floatingStyle: 'orb' as const,
     ...overrides,
   }
 }
@@ -84,7 +85,8 @@ describe('usage display store', () => {
       enabled: false,
       surface: 'menu-bar',
       title: '',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
     expect(deps.getUsageStats).not.toHaveBeenCalled()
   })
@@ -94,7 +96,8 @@ describe('usage display store', () => {
       loadConfig: vi.fn().mockResolvedValue(config({
         enabled: true,
         surface: 'floating-window',
-        appearance: 'dark',
+        appearance: 'meadow',
+        floatingStyle: 'bar',
       })),
     })
     const store = createUsageDisplayStore(deps)
@@ -107,12 +110,13 @@ describe('usage display store', () => {
       last7Days: 12.42,
       thisMonth: 35.6,
     })
-    expect(store.state.trayTitle).toBe('余额 $128.60')
+    expect(store.state.trayTitle).toBe('$128.60')
     expect(deps.configureDisplay).toHaveBeenCalledWith({
       enabled: true,
       surface: 'floating-window',
-      title: '余额 $128.60',
-      appearance: 'dark',
+      title: '$128.60',
+      appearance: 'meadow',
+      floatingStyle: 'bar',
     })
     expect(deps.getUsageStats).toHaveBeenCalledTimes(3)
   })
@@ -127,14 +131,15 @@ describe('usage display store', () => {
 
     expect(store.state.subscription?.id).toBe(9)
     expect(store.state.quotaSummary).toMatchObject({ remainingPercent: 20, constrainedKey: 'weekly' })
-    expect(store.state.trayTitle).toBe('Claude Pro 20%')
+    expect(store.state.trayTitle).toBe('20%')
     expect(deps.configureDisplay).toHaveBeenCalledWith({
       enabled: true,
       surface: 'menu-bar',
-      title: '用量 --',
-      appearance: 'default',
+      title: '--',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
-    expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('Claude Pro 20%')
+    expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('20%')
   })
 
   it('does not switch when the fixed subscription becomes unavailable', async () => {
@@ -147,9 +152,9 @@ describe('usage display store', () => {
     await store.attachUser(user())
 
     expect(store.state.subscription).toBeNull()
-    expect(store.state.trayTitle).toBe('用量 --')
+    expect(store.state.trayTitle).toBe('--')
     expect(store.state.error).toContain('所选订阅已失效')
-    expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('用量 --')
+    expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('--')
   })
 
   it('keeps successful balance fields when one period fails', async () => {
@@ -171,7 +176,7 @@ describe('usage display store', () => {
       thisMonth: 35.6,
     })
     expect(store.state.error).toContain('部分用量更新失败')
-    expect(store.state.trayTitle).toBe('余额 $128.60')
+    expect(store.state.trayTitle).toBe('$128.60')
   })
 
   it('keeps the last runtime snapshot after a later network failure', async () => {
@@ -192,7 +197,7 @@ describe('usage display store', () => {
     await store.refresh()
 
     expect(store.state.balance?.available).toBe(128.6)
-    expect(store.state.trayTitle).toBe('余额 $128.60')
+    expect(store.state.trayTitle).toBe('$128.60')
     expect(store.state.error).toContain('更新失败')
   })
 
@@ -212,7 +217,7 @@ describe('usage display store', () => {
     await store.updateConfig(config({ enabled: false, source: 'subscription', subscriptionId: 9 }))
 
     expect(store.state.subscription?.id).toBe(9)
-    expect(store.state.trayTitle).toBe('Claude Pro 20%')
+    expect(store.state.trayTitle).toBe('20%')
   })
 
   it('loads a settings preview without owning tray setup or background refresh', async () => {
@@ -230,7 +235,7 @@ describe('usage display store', () => {
     expect(deps.configureDisplay).not.toHaveBeenCalled()
     expect(deps.setInterval).not.toHaveBeenCalled()
     expect(store.state.subscription?.id).toBe(9)
-    expect(store.state.trayTitle).toBe('Claude Pro 20%')
+    expect(store.state.trayTitle).toBe('20%')
   })
 
   it('removes the tray and clears private runtime data on detach', async () => {
@@ -249,7 +254,8 @@ describe('usage display store', () => {
       enabled: false,
       surface: 'menu-bar',
       title: '',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
   })
 })

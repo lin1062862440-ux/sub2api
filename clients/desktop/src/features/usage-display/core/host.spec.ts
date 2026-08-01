@@ -31,8 +31,9 @@ describe('usage display host bridge', () => {
     await configureUsageDisplay({
       enabled: true,
       surface: 'floating-window',
-      title: '余额 $12.50',
-      appearance: 'blur',
+      title: '$12.50',
+      appearance: 'sunset',
+      floatingStyle: 'bar',
     })
     await setUsageDisplayTitle('Claude Pro 73%')
     await setFloatingUsageExpanded(true)
@@ -45,8 +46,9 @@ describe('usage display host bridge', () => {
       ['configure_usage_display', {
         enabled: true,
         surface: 'floating-window',
-        title: '余额 $12.50',
-        appearance: 'blur',
+        title: '$12.50',
+        appearance: 'sunset',
+        floatingStyle: 'bar',
       }],
       ['set_usage_display_title', { title: 'Claude Pro 73%' }],
       ['set_floating_usage_expanded', { expanded: true }],

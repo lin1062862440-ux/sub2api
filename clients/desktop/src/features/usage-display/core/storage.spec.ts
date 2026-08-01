@@ -38,13 +38,14 @@ describe('usage display storage', () => {
       source: 'balance',
       subscriptionId: null,
       surface: 'menu-bar',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
     expect(first).not.toBe(second)
     expect(mocks.get).toHaveBeenCalledWith('usage_display:42')
   })
 
-  it('migrates a valid legacy subscription config to menu bar and default appearance', async () => {
+  it('migrates a valid legacy subscription config to menu bar, sky, and orb', async () => {
     mocks.get.mockResolvedValue({ enabled: true, source: 'subscription', subscriptionId: 9 })
 
     await expect(loadUsageDisplayConfig(42)).resolves.toEqual({
@@ -52,7 +53,8 @@ describe('usage display storage', () => {
       source: 'subscription',
       subscriptionId: 9,
       surface: 'menu-bar',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
   })
 
@@ -64,7 +66,8 @@ describe('usage display storage', () => {
       source: 'subscription',
       subscriptionId: null,
       surface: 'menu-bar',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
     })
   })
 
@@ -82,7 +85,51 @@ describe('usage display storage', () => {
       source: 'balance',
       subscriptionId: null,
       surface: 'menu-bar',
-      appearance: 'default',
+      appearance: 'sky',
+      floatingStyle: 'orb',
+    })
+  })
+
+  it.each([
+    ['default', 'sky'],
+    ['dark', 'meadow'],
+    ['blur', 'sunset'],
+  ])('migrates legacy %s appearance to %s', async (legacy, appearance) => {
+    mocks.get.mockResolvedValue({
+      enabled: true,
+      source: 'balance',
+      subscriptionId: null,
+      surface: 'floating-window',
+      appearance: legacy,
+    })
+
+    await expect(loadUsageDisplayConfig(42)).resolves.toEqual({
+      enabled: true,
+      source: 'balance',
+      subscriptionId: null,
+      surface: 'floating-window',
+      appearance,
+      floatingStyle: 'orb',
+    })
+  })
+
+  it('normalizes an invalid floating style without discarding a valid appearance', async () => {
+    mocks.get.mockResolvedValue({
+      enabled: true,
+      source: 'balance',
+      subscriptionId: null,
+      surface: 'floating-window',
+      appearance: 'sunset',
+      floatingStyle: 'pill',
+    })
+
+    await expect(loadUsageDisplayConfig(42)).resolves.toEqual({
+      enabled: true,
+      source: 'balance',
+      subscriptionId: null,
+      surface: 'floating-window',
+      appearance: 'sunset',
+      floatingStyle: 'orb',
     })
   })
 
@@ -102,7 +149,8 @@ describe('usage display storage', () => {
       source: 'subscription',
       subscriptionId: 9,
       surface: 'floating-window',
-      appearance: 'blur',
+      appearance: 'sunset',
+      floatingStyle: 'bar',
     })
 
     expect(mocks.set).toHaveBeenCalledWith('usage_display:42', {
@@ -110,7 +158,8 @@ describe('usage display storage', () => {
       source: 'subscription',
       subscriptionId: 9,
       surface: 'floating-window',
-      appearance: 'blur',
+      appearance: 'sunset',
+      floatingStyle: 'bar',
     })
     expect(mocks.save).toHaveBeenCalledOnce()
   })

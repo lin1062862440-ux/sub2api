@@ -112,7 +112,7 @@ export function createUsageDisplayStore(
     refreshing: false,
     error: '',
     lastUpdatedAt: null as Date | null,
-    trayTitle: '用量 --',
+    trayTitle: '--',
   })
 
   let sequence = 0
@@ -130,7 +130,7 @@ export function createUsageDisplayStore(
     state.quotaSummary = null
     state.lastUpdatedAt = null
     state.error = ''
-    state.trayTitle = '用量 --'
+    state.trayTitle = '--'
   }
 
   function selectedSubscription(items = state.subscriptions): UserSubscription | null {
@@ -169,6 +169,7 @@ export function createUsageDisplayStore(
         surface: state.config.surface,
         title: enabled ? state.trayTitle : '',
         appearance: state.config.appearance,
+        floatingStyle: state.config.floatingStyle,
       })
       return
     }

@@ -68,11 +68,11 @@ describe('usage display formatting', () => {
   })
 
   it('formats compact balance, subscription, unlimited, and unavailable titles', () => {
-    expect(formatUsageTrayTitle({ kind: 'balance', balance: 128.6 })).toBe('余额 $128.60')
-    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude Pro', remainingPercent: 73 })).toBe('Claude Pro 73%')
-    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude 专业旗舰订阅', remainingPercent: 73 })).toBe('Claude 专业… 73%')
-    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude Pro', remainingPercent: null })).toBe('Claude Pro ∞')
-    expect(formatUsageTrayTitle({ kind: 'unavailable' })).toBe('用量 --')
+    expect(formatUsageTrayTitle({ kind: 'balance', balance: 128.6 })).toBe('$128.60')
+    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude Pro', remainingPercent: 73 })).toBe('73%')
+    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude 专业旗舰订阅', remainingPercent: 73 })).toBe('73%')
+    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude Pro', remainingPercent: null })).toBe('∞')
+    expect(formatUsageTrayTitle({ kind: 'unavailable' })).toBe('--')
   })
 
   it('formats stable compact values for the floating orb', () => {
