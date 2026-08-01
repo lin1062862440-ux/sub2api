@@ -5,6 +5,7 @@ import fallbackLogo from '@/assets/linai-logo.png'
 import {
   createFallbackTargets,
   createParticles,
+  frameDelta,
   projectParticles,
   sampleLogoTargets,
   type AlphaMask,
@@ -220,7 +221,7 @@ function animate(timestamp: number) {
   }
 
   if (previousFrameTime === 0) previousFrameTime = timestamp
-  const delta = Math.min(34, Math.max(0, timestamp - previousFrameTime))
+  const delta = frameDelta(previousFrameTime, timestamp)
   previousFrameTime = timestamp
   elapsedMs += delta
   pointerPosition = {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import {
   createFallbackTargets,
   createParticles,
+  frameDelta,
   motionPhaseAt,
   projectParticles,
   sampleLogoTargets,
@@ -16,6 +17,12 @@ describe('brand motion model', () => {
     expect(motionPhaseAt(7800).name).toBe('release')
     expect(motionPhaseAt(9600).name).toBe('drift')
     expect(motionPhaseAt(10_000)).toEqual(motionPhaseAt(0))
+  })
+
+  it('keeps wall-clock progress when rendering is temporarily throttled', () => {
+    expect(frameDelta(1000, 1034)).toBe(34)
+    expect(frameDelta(1000, 2000)).toBe(1000)
+    expect(frameDelta(1000, 5000)).toBe(1000)
   })
 
   it('samples only opaque logo pixels into centered targets', () => {

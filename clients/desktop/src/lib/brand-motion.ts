@@ -46,6 +46,10 @@ export function motionPhaseAt(elapsedMs: number): MotionPhase {
   return { name: 'drift', progress: (time - 9000) / 1000 }
 }
 
+export function frameDelta(previousTimestamp: number, timestamp: number): number {
+  return clamp(timestamp - previousTimestamp, 0, 1000)
+}
+
 export function sampleLogoTargets(
   mask: AlphaMask,
   count: number,
