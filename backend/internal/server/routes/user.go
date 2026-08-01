@@ -141,5 +141,24 @@ func RegisterUserRoutes(
 			monitors.GET("", h.ChannelMonitor.List)
 			monitors.GET("/:id/status", h.ChannelMonitor.GetStatus)
 		}
+
+		registerUserGroupRoutes(authenticated, h.UserGroup, panelRateLimiter.Heavy())
+	}
+}
+
+func registerUserGroupRoutes(authenticated *gin.RouterGroup, h *handler.UserGroupHandler, heavy gin.HandlerFunc) {
+	groups := authenticated.Group("/user-groups")
+	{
+		groups.GET("/capabilities", h.Capabilities)
+		groups.GET("", h.List)
+		groups.POST("", h.Create)
+		groups.PUT("/:id", h.Update)
+		groups.DELETE("/:id", h.Archive)
+		groups.GET("/:id/members", h.ListMembers)
+		groups.PUT("/:id/members", h.ReplaceMembers)
+		groups.GET("/:id/viewers", h.ListViewers)
+		groups.PUT("/:id/viewers", h.ReplaceViewers)
+		groups.GET("/:id/subscriptions", heavy, h.ListSubscriptions)
+		groups.GET("/:id/usage", heavy, h.GetUsage)
 	}
 }

@@ -61,13 +61,13 @@ Every group-specific read performs authorization in the backend service. Fronten
 - `created_at TIMESTAMPTZ NOT NULL`
 - Composite primary key `(user_group_id, viewer_user_id)`.
 
-The migration also adds `usage_logs(user_id, created_at DESC)` if it does not already exist, because every group usage query joins membership to this dimension.
+Group usage queries reuse the existing `usage_logs(user_id, created_at)` index. The user-group migration does not create another descending variant because PostgreSQL can scan the existing B-tree in either direction and a transactional index build would unnecessarily lock the large usage table.
 
 ## Backend Architecture
 
 `UserGroupRepository` owns SQL persistence and reporting queries. `UserGroupService` owns validation and the complete admin-or-grant policy. `UserGroupHandler` translates authenticated HTTP requests into service calls. The authenticated H5 router exposes `/api/v1/user-groups`; no delegated route is mounted beneath `/api/v1/admin`.
 
-The repository uses parameterized SQL and transactions. Replacing members or viewers locks the group row, deletes the old set, validates active users, and inserts the new set atomically. Empty arrays intentionally clear the set. Duplicate user IDs are normalized.
+The repository uses parameterized SQL and transactions. Replacing members or viewers locks the group row, deletes the old set, validates that users still exist and are not soft-deleted, and inserts the new set atomically. Disabled users remain selectable so administrators can remove or retain existing relationships without making the group impossible to save. Empty arrays intentionally clear the set. Duplicate user IDs are normalized.
 
 ## API Contract
 
@@ -90,7 +90,7 @@ All endpoints require JWT authentication.
 ### Members and viewers
 
 - `GET /user-groups/:id/members`
-  - Returns active members with ID, username, email, avatar, status, balance, and membership time.
+- Returns non-deleted members, including disabled accounts, with ID, username, email, avatar, status, balance, and membership time.
 - `PUT /user-groups/:id/members` (administrator)
   - Body `{ user_ids: number[] }`; replaces the complete member set.
 - `GET /user-groups/:id/viewers` (administrator)

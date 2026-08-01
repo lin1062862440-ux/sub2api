@@ -715,6 +715,14 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   return items
 }
 
+function buildUserGroupNavItems(): NavItem[] {
+  return [
+    { path: '/user-groups', label: t('userGroups.nav.groups'), icon: FolderIcon },
+    { path: '/user-group-subscriptions', label: t('userGroups.nav.subscriptions'), icon: CreditCardIcon },
+    { path: '/user-group-usage', label: t('userGroups.nav.usage'), icon: ChartIcon },
+  ]
+}
+
 // finalizeNav 合并三重过滤：featureFlag 过滤 + simple 模式过滤。
 function finalizeNav(items: NavItem[]): NavItem[] {
   const visible = applyFeatureFlags(items)
@@ -722,7 +730,13 @@ function finalizeNav(items: NavItem[]): NavItem[] {
 }
 
 // User navigation items (for regular users)
-const userNavItems = computed((): NavItem[] => finalizeNav(buildSelfNavItems(true)))
+const userNavItems = computed((): NavItem[] => {
+  const items = buildSelfNavItems(true)
+  if (authStore.hasUserGroupAccess) {
+    items.splice(1, 0, ...buildUserGroupNavItems())
+  }
+  return finalizeNav(items)
+})
 
 // Personal navigation items (for admin's "My Account" section, without Dashboard).
 // Admins access 可用渠道 from this section just like regular users — there is no
@@ -749,6 +763,7 @@ const adminNavItems = computed((): NavItem[] => {
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
     { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon, featureFlag: flagOpsMonitoring },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
+    ...buildUserGroupNavItems(),
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
     {
       path: '/admin/channels',
@@ -929,6 +944,9 @@ watch(
 
 onMounted(() => {
   void refreshBatchImageAccess()
+  if (authStore.isAuthenticated) {
+    void authStore.loadUserGroupCapabilities()
+  }
   if (isAdmin.value) {
     adminSettingsStore.fetch()
   }

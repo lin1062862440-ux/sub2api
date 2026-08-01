@@ -47,6 +47,7 @@ type AdminHandlers struct {
 type Handlers struct {
 	Auth             *AuthHandler
 	User             *UserHandler
+	UserGroup        *UserGroupHandler
 	APIKey           *APIKeyHandler
 	Usage            *UsageHandler
 	Redeem           *RedeemHandler

@@ -20,6 +20,12 @@ declare module 'vue-router' {
     requiresAdmin?: boolean
 
     /**
+     * Whether this route requires access to at least one business user group
+     * @default false
+     */
+    requiresUserGroupAccess?: boolean
+
+    /**
      * Page title for this route
      */
     title?: string

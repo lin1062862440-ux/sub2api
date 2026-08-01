@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { resolveUserGroupRouteAccess } from './userGroupAccess'
 
 /**
  * Route definitions with lazy loading
@@ -298,6 +299,45 @@ const routes: RouteRecordRaw[] = [
       title: 'My Subscriptions',
       titleKey: 'userSubscriptions.title',
       descriptionKey: 'userSubscriptions.description'
+    }
+  },
+  {
+    path: '/user-groups',
+    name: 'UserGroups',
+    component: () => import('@/views/user-groups/UserGroupsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresUserGroupAccess: true,
+      title: 'User Groups',
+      titleKey: 'userGroups.groups.title',
+      descriptionKey: 'userGroups.groups.description'
+    }
+  },
+  {
+    path: '/user-group-subscriptions',
+    name: 'UserGroupSubscriptions',
+    component: () => import('@/views/user-groups/UserGroupSubscriptionsView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresUserGroupAccess: true,
+      title: 'Group Subscriptions',
+      titleKey: 'userGroups.subscriptions.title',
+      descriptionKey: 'userGroups.subscriptions.description'
+    }
+  },
+  {
+    path: '/user-group-usage',
+    name: 'UserGroupUsage',
+    component: () => import('@/views/user-groups/UserGroupUsageView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresUserGroupAccess: true,
+      title: 'Group Usage',
+      titleKey: 'userGroups.usage.title',
+      descriptionKey: 'userGroups.usage.description'
     }
   },
   {
@@ -888,6 +928,15 @@ router.beforeEach(async (to, _from, next) => {
           adminComplianceStore.requireAcknowledgement(err.metadata)
         }
       }
+    }
+  }
+
+  if (to.meta.requiresUserGroupAccess === true) {
+    await authStore.loadUserGroupCapabilities()
+    const redirect = resolveUserGroupRouteAccess(true, authStore.isAdmin, authStore.hasUserGroupAccess)
+    if (redirect) {
+      next(redirect)
+      return
     }
   }
 

@@ -4,6 +4,7 @@ import dashboard from './dashboard'
 import batchImage from './batchImage'
 import admin from './admin'
 import misc from './misc'
+import userGroups from './userGroups'
 
 export default {
   ...landing,
@@ -11,5 +12,6 @@ export default {
   ...dashboard,
   ...batchImage,
   admin,
+  ...userGroups,
   ...misc,
 }

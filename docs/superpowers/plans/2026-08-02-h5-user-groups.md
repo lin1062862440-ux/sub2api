@@ -20,7 +20,7 @@
 
 - [ ] Write SQL-mock tests for list scoping, member replacement transactions, subscription left joins, and usage aggregation split by `billing_type`.
 - [ ] Run `cd backend && go test ./internal/repository -run UserGroup -count=1`; expect compilation failure because `NewUserGroupRepository` and service contracts do not exist.
-- [ ] Add the migration with `user_groups`, `user_group_members`, and `user_group_viewer_grants`, constraints, indexes, and the usage-log user/time index.
+- [ ] Add the migration with `user_groups`, `user_group_members`, and `user_group_viewer_grants`, constraints, and relationship indexes; reuse the existing usage-log user/time index.
 - [ ] Define `UserGroup`, `UserGroupMember`, `UserGroupViewer`, `UserGroupSubscriptionRow`, `UserGroupUsageQuery`, `UserGroupUsageSummary`, `UserGroupUsageByUser`, `UserGroupUsageItem`, paginated result types, and the `UserGroupRepository` interface.
 - [ ] Implement parameterized SQL repository methods and transactional replace operations in `backend/internal/repository/user_group_repo.go`.
 - [ ] Run the focused repository tests; expect PASS.

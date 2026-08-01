@@ -5,8 +5,9 @@
 
 import { defineStore } from 'pinia'
 import { ref, computed, readonly } from 'vue'
-import { authAPI, isTotp2FARequired, passkeyAPI, type LoginResponse } from '@/api'
+import { authAPI, isTotp2FARequired, passkeyAPI, userGroupAPI, type LoginResponse } from '@/api'
 import type { User, LoginRequest, RegisterRequest, AuthResponse } from '@/types'
+import type { UserGroupCapabilities } from '@/types/userGroups'
 
 const AUTH_TOKEN_KEY = 'auth_token'
 const AUTH_USER_KEY = 'auth_user'
@@ -77,6 +78,8 @@ export const useAuthStore = defineStore('auth', () => {
   const tokenExpiresAt = ref<number | null>(null) // 过期时间戳（毫秒）
   const runMode = ref<'standard' | 'simple'>('standard')
   const pendingAuthSession = ref<PendingAuthSessionSummary | null>(null)
+  const userGroupCapabilities = ref<UserGroupCapabilities | null>(null)
+  const userGroupCapabilitiesLoaded = ref(false)
   let refreshIntervalId: ReturnType<typeof setInterval> | null = null
   let tokenRefreshTimeoutId: ReturnType<typeof setTimeout> | null = null
 
@@ -92,6 +95,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isSimpleMode = computed(() => runMode.value === 'simple')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
+  const hasUserGroupAccess = computed(() => isAdmin.value || userGroupCapabilities.value?.can_access === true)
+  const canManageUserGroups = computed(() => isAdmin.value || userGroupCapabilities.value?.can_manage === true)
 
   // ==================== Actions ====================
 
@@ -149,6 +154,35 @@ export const useAuthStore = defineStore('auth', () => {
         })
       }
     }, AUTO_REFRESH_INTERVAL)
+  }
+
+  async function loadUserGroupCapabilities(force = false): Promise<UserGroupCapabilities> {
+    if (isAdmin.value) {
+      const adminCapabilities: UserGroupCapabilities = { can_access: true, can_manage: true, group_count: 0 }
+      userGroupCapabilities.value = adminCapabilities
+      userGroupCapabilitiesLoaded.value = true
+      return adminCapabilities
+    }
+    if (!token.value || !user.value) {
+      const unavailable: UserGroupCapabilities = { can_access: false, can_manage: false, group_count: 0 }
+      userGroupCapabilities.value = null
+      userGroupCapabilitiesLoaded.value = false
+      return unavailable
+    }
+    if (!force && userGroupCapabilitiesLoaded.value && userGroupCapabilities.value) {
+      return userGroupCapabilities.value
+    }
+    try {
+      const capabilities = await userGroupAPI.getCapabilities()
+      userGroupCapabilities.value = capabilities
+      userGroupCapabilitiesLoaded.value = true
+      return capabilities
+    } catch {
+      const unavailable: UserGroupCapabilities = { can_access: false, can_manage: false, group_count: 0 }
+      userGroupCapabilities.value = unavailable
+      userGroupCapabilitiesLoaded.value = true
+      return unavailable
+    }
   }
 
   /**
@@ -314,6 +348,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     // Start auto-refresh interval for user data
     startAutoRefresh()
+    void loadUserGroupCapabilities(true)
 
     // Start proactive token refresh if we have refresh token and expiry info
     // scheduleTokenRefresh will also store the expiry timestamp
@@ -438,6 +473,7 @@ export const useAuthStore = defineStore('auth', () => {
       }
       const { run_mode: _run_mode, ...userData } = response.data
       user.value = userData
+      void loadUserGroupCapabilities(true)
 
       // Update localStorage
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(userData))
@@ -466,6 +502,8 @@ export const useAuthStore = defineStore('auth', () => {
     refreshTokenValue.value = null
     tokenExpiresAt.value = null
     user.value = null
+    userGroupCapabilities.value = null
+    userGroupCapabilitiesLoaded.value = false
     localStorage.removeItem(AUTH_TOKEN_KEY)
     localStorage.removeItem(AUTH_USER_KEY)
     localStorage.removeItem(REFRESH_TOKEN_KEY)
@@ -488,12 +526,15 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     runMode: readonly(runMode),
     pendingAuthSession: readonly(pendingAuthSession),
+    userGroupCapabilities: readonly(userGroupCapabilities),
 
     // Computed
     isAuthenticated,
     isAdmin,
     isSimpleMode,
     hasPendingAuthSession,
+    hasUserGroupAccess,
+    canManageUserGroups,
 
     // Actions
     login,
@@ -504,6 +545,7 @@ export const useAuthStore = defineStore('auth', () => {
     logout,
     checkAuth,
     refreshUser,
+    loadUserGroupCapabilities,
     setPendingAuthSession,
     clearPendingAuthSession
   }

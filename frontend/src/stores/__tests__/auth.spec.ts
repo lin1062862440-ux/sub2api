@@ -9,6 +9,7 @@ const mockLogout = vi.fn()
 const mockGetCurrentUser = vi.fn()
 const mockRegister = vi.fn()
 const mockRefreshToken = vi.fn()
+const mockGetUserGroupCapabilities = vi.fn()
 
 vi.mock('@/api', () => ({
   authAPI: {
@@ -20,6 +21,9 @@ vi.mock('@/api', () => ({
     refreshToken: (...args: any[]) => mockRefreshToken(...args),
   },
   isTotp2FARequired: (response: any) => response?.requires_2fa === true,
+  userGroupAPI: {
+    getCapabilities: (...args: any[]) => mockGetUserGroupCapabilities(...args),
+  },
 }))
 
 const fakeUser = {
@@ -155,6 +159,48 @@ describe('useAuthStore', () => {
       expect(localStorage.getItem('auth_user')).toBeNull()
       expect(localStorage.getItem('refresh_token')).toBeNull()
       expect(localStorage.getItem('token_expires_at')).toBeNull()
+    })
+  })
+
+  describe('user group capabilities', () => {
+    it('grants administrators immediate management access without an API call', async () => {
+      mockLogin.mockResolvedValue({ ...fakeAuthResponse, user: fakeAdminUser })
+      const store = useAuthStore()
+      await store.login({ email: 'admin@example.com', password: '123456' })
+
+      await store.loadUserGroupCapabilities()
+
+      expect(store.hasUserGroupAccess).toBe(true)
+      expect(store.canManageUserGroups).toBe(true)
+      expect(mockGetUserGroupCapabilities).not.toHaveBeenCalled()
+    })
+
+    it('loads delegated read-only access for ordinary users', async () => {
+      mockLogin.mockResolvedValue(fakeAuthResponse)
+      mockGetUserGroupCapabilities.mockResolvedValue({ can_access: true, can_manage: false, group_count: 2 })
+      const store = useAuthStore()
+      await store.login({ email: 'test@example.com', password: '123456' })
+
+      await store.loadUserGroupCapabilities(true)
+
+      expect(store.hasUserGroupAccess).toBe(true)
+      expect(store.canManageUserGroups).toBe(false)
+      expect(store.userGroupCapabilities?.group_count).toBe(2)
+    })
+
+    it('fails closed and clears capability state on logout', async () => {
+      mockLogin.mockResolvedValue(fakeAuthResponse)
+      mockGetUserGroupCapabilities.mockRejectedValue(new Error('network'))
+      mockLogout.mockResolvedValue(undefined)
+      const store = useAuthStore()
+      await store.login({ email: 'test@example.com', password: '123456' })
+
+      await store.loadUserGroupCapabilities(true)
+      expect(store.hasUserGroupAccess).toBe(false)
+
+      await store.logout()
+      expect(store.userGroupCapabilities).toBeNull()
+      expect(store.hasUserGroupAccess).toBe(false)
     })
   })
 
