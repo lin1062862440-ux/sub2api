@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-  linai_desktop_lib::run();
+    linai_desktop_lib::run();
 }

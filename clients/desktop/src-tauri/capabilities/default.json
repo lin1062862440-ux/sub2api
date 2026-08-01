@@ -3,7 +3,9 @@
   "identifier": "default",
   "description": "Permissions for the LinAI desktop client",
   "windows": [
-    "main"
+    "main",
+    "usage-popover",
+    "usage-floating-window"
   ],
   "permissions": [
     "core:default",

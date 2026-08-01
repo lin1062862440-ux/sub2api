@@ -102,6 +102,11 @@ export async function refreshUser(): Promise<void> {
   state.runMode = user.run_mode ?? 'standard'
 }
 
+/** Keeps shared chrome in sync after a profile mutation. */
+export function setCurrentUser(user: User): void {
+  state.user = user
+}
+
 export async function signOut(): Promise<void> {
   const stored = await getSession()
   try {

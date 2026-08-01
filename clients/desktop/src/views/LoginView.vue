@@ -172,7 +172,7 @@ function openAccountPage(path: string) {
         <span data-testid="brand-name">{{ brand.name }}</span>
       </div>
 
-      <BrandMotion :logo="brand.logo" />
+      <BrandMotion wordmark="L AI" />
     </section>
 
     <main class="form-pane">
@@ -418,7 +418,7 @@ function openAccountPage(path: string) {
 .control > span:first-child,
 .control-line {
   color: #344054;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 620;
 }
 
@@ -498,13 +498,13 @@ function openAccountPage(path: string) {
   gap: 7px;
   margin-bottom: 22px;
   color: #526070;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .text-action {
   gap: 5px;
   color: #245ccc;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 620;
 }
 
@@ -515,7 +515,7 @@ function openAccountPage(path: string) {
 
 .form-error {
   color: #b4233c;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.45;
 }
 
@@ -559,7 +559,7 @@ function openAccountPage(path: string) {
   gap: 14px;
   margin: 30px 0 16px;
   color: #667085;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .divider::before,
@@ -581,7 +581,7 @@ function openAccountPage(path: string) {
   background: #ffffff;
   border: 1px solid #d7dde8;
   color: #344054;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .secondary-action:hover {
@@ -596,7 +596,7 @@ function openAccountPage(path: string) {
   gap: 8px;
   margin-top: 30px;
   color: #667085;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .spinning {

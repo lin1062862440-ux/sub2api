@@ -42,6 +42,40 @@ const routes: RouteRecordRaw[] = [
         name: 'dashboard',
         component: () => import('@/views/DashboardView.vue'),
       },
+      {
+        path: 'keys',
+        name: 'api-keys',
+        component: () => import('@/views/ApiKeysView.vue'),
+      },
+      {
+        path: 'usage',
+        name: 'usage',
+        component: () => import('@/views/UsageView.vue'),
+        meta: { standardOnly: true },
+      },
+      {
+        path: 'channels',
+        name: 'channels',
+        component: () => import('@/views/ChannelStatusView.vue'),
+        meta: { standardOnly: true },
+      },
+      {
+        path: 'subscriptions',
+        name: 'subscriptions',
+        component: () => import('@/views/SubscriptionsView.vue'),
+        meta: { standardOnly: true },
+      },
+      {
+        path: 'redeem',
+        name: 'redeem',
+        component: () => import('@/views/RedeemView.vue'),
+        meta: { standardOnly: true },
+      },
+      {
+        path: 'profile',
+        name: 'profile',
+        component: () => import('@/views/ProfileView.vue'),
+      },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: { name: 'dashboard' } },
@@ -62,6 +96,10 @@ router.beforeEach((to) => {
   }
 
   if (to.name === 'login') {
+    return { name: 'dashboard' }
+  }
+
+  if (to.meta.standardOnly && session.runMode === 'simple') {
     return { name: 'dashboard' }
   }
 

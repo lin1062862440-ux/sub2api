@@ -32,7 +32,7 @@ The page uses the selected hybrid of layout A and layout C:
    - `用量明细`
    - `错误请求`, shown only when `allow_user_view_error_requests` is enabled.
 
-The page itself does not scroll. The detail table owns its vertical overflow so headers, filters, and analysis remain stable.
+The page uses one normal vertical scroll surface when the content is taller than the window. Tables expand to the current page of results instead of introducing a second nested scrollbar.
 
 ## Time Range
 

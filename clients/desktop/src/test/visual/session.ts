@@ -1,8 +1,9 @@
 import { reactive, readonly } from 'vue'
+import type { User } from '@/api/types'
 
 const showLogin = new URLSearchParams(window.location.search).get('screen') === 'login'
 
-const visualUser = {
+const visualUser: User = {
   id: 1,
   username: 'Lin',
   email: 'lin@example.com',
@@ -23,6 +24,7 @@ const state = reactive({
     site_name: 'LinAI',
     site_logo: '',
     site_subtitle: '让每一位上帝感受 AI 的爱',
+    allow_user_view_error_requests: true,
   },
   runMode: 'standard' as const,
   offline: false,
@@ -32,6 +34,9 @@ export const session = readonly(state)
 export const isAuthenticated = () => state.user !== null
 export async function bootstrap() {}
 export async function refreshUser() {}
+export function setCurrentUser(user: User) {
+  Object.assign(visualUser, user)
+}
 export async function reloadSettings() {}
 export async function completeLogin() {
   state.user = visualUser

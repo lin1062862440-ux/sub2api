@@ -62,8 +62,8 @@ function mountLogin(options = {}) {
     global: {
       stubs: {
         BrandMotion: {
-          props: ['logo'],
-          template: '<div data-testid="brand-motion" :data-logo="logo" />',
+          props: ['wordmark'],
+          template: '<div data-testid="brand-motion" :data-wordmark="wordmark" />',
         },
       },
     },
@@ -82,9 +82,7 @@ describe('LoginView', () => {
     const wrapper = mountLogin()
 
     expect(wrapper.get('[data-testid="brand-name"]').text()).toBe('LinAI')
-    expect(wrapper.get('[data-testid="brand-motion"]').attributes('data-logo')).toBe(
-      settings.site_logo,
-    )
+    expect(wrapper.get('[data-testid="brand-motion"]').attributes('data-wordmark')).toBe('L AI')
     expect(wrapper.text()).not.toContain(settings.site_subtitle)
     expect(wrapper.text()).not.toContain('安全连接已就绪')
     expect(wrapper.text()).not.toContain('lynn.lat')
@@ -138,8 +136,8 @@ describe('LoginView', () => {
       global: {
         stubs: {
           BrandMotion: {
-            props: ['logo'],
-            template: '<div data-testid="brand-motion" :data-logo="logo" />',
+            props: ['wordmark'],
+            template: '<div data-testid="brand-motion" :data-wordmark="wordmark" />',
           },
           TurnstileWidget: {
             emits: ['verify'],

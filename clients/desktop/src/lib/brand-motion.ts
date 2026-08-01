@@ -55,6 +55,7 @@ export function sampleLogoTargets(
   count: number,
   width: number,
   height: number,
+  coverage = 0.58,
 ): MotionPoint[] {
   if (mask.width <= 0 || mask.height <= 0 || count <= 0 || width <= 0 || height <= 0) return []
 
@@ -68,10 +69,16 @@ export function sampleLogoTargets(
 
   if (visible.length === 0) return []
 
-  const fieldSize = Math.min(width, height) * 0.58
-  const imageScale = fieldSize / Math.max(mask.width, mask.height)
-  const imageWidth = mask.width * imageScale
-  const imageHeight = mask.height * imageScale
+  const minimumX = Math.min(...visible.map(({ x }) => x))
+  const maximumX = Math.max(...visible.map(({ x }) => x))
+  const minimumY = Math.min(...visible.map(({ y }) => y))
+  const maximumY = Math.max(...visible.map(({ y }) => y))
+  const contentWidth = maximumX - minimumX + 1
+  const contentHeight = maximumY - minimumY + 1
+  const fieldSize = Math.min(width, height) * clamp(coverage, 0.4, 0.86)
+  const imageScale = fieldSize / Math.max(contentWidth, contentHeight)
+  const imageWidth = contentWidth * imageScale
+  const imageHeight = contentHeight * imageScale
   const startX = (width - imageWidth) / 2
   const startY = (height - imageHeight) / 2
   const random = seededRandom(41)
@@ -82,8 +89,8 @@ export function sampleLogoTargets(
     const jitter = visible.length < count ? imageScale * 0.28 : 0
 
     return {
-      x: startX + (source.x + 0.5) * imageScale + (random() - 0.5) * jitter,
-      y: startY + (source.y + 0.5) * imageScale + (random() - 0.5) * jitter,
+      x: startX + (source.x - minimumX + 0.5) * imageScale + (random() - 0.5) * jitter,
+      y: startY + (source.y - minimumY + 0.5) * imageScale + (random() - 0.5) * jitter,
     }
   })
 }

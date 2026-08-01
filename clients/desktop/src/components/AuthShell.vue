@@ -28,7 +28,7 @@ const brand = computed(() => normalizeBrand(session.settings))
         <span data-testid="brand-name">{{ brand.name }}</span>
       </div>
 
-      <BrandMotion :logo="brand.logo" />
+      <BrandMotion wordmark="L AI" />
     </section>
 
     <main class="auth-shell__form-pane">

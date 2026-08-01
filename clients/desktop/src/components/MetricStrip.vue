@@ -71,7 +71,7 @@ defineProps<{ items: MetricItem[] }>()
 
 dt {
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 560;
 }
 
@@ -79,7 +79,7 @@ dd {
   margin: 5px 0 3px;
   overflow: hidden;
   color: var(--text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-data);
   font-size: 24px;
   font-variant-numeric: tabular-nums;
   font-weight: 680;
@@ -99,7 +99,7 @@ dd {
 .metric span {
   overflow: hidden;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

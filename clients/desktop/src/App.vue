@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { notifyUsageSessionChanged } from '@/features/usage-display/core/host'
 import { session } from '@/stores/session'
 
 const router = useRouter()
@@ -14,6 +15,12 @@ watch(
       router.replace({ name: 'login' })
     }
   }
+)
+
+watch(
+  () => session.user?.id ?? null,
+  (userId) => void notifyUsageSessionChanged(userId),
+  { immediate: true },
 )
 </script>
 

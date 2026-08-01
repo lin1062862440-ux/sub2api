@@ -17,8 +17,8 @@ vi.mock('@/stores/session', () => ({ session: mocks.session }))
 import AuthShell from './AuthShell.vue'
 
 const brandMotionStub = {
-  props: ['logo'],
-  template: '<div data-testid="brand-motion" :data-logo="logo" />',
+  props: ['wordmark'],
+  template: '<div data-testid="brand-motion" :data-wordmark="wordmark" />',
 }
 
 function mountAuthShell() {
@@ -47,9 +47,7 @@ describe('AuthShell', () => {
     const wrapper = mountAuthShell()
 
     expect(wrapper.get('[data-testid="brand-name"]').text()).toBe('LinAI')
-    expect(wrapper.get('[data-testid="brand-motion"]').attributes('data-logo')).toBe(
-      mocks.session.settings.site_logo,
-    )
+    expect(wrapper.get('[data-testid="brand-motion"]').attributes('data-wordmark')).toBe('L AI')
     expect(wrapper.text()).not.toContain(mocks.session.settings.site_subtitle)
     expect(wrapper.text()).not.toContain('安全连接已就绪')
     expect(wrapper.text()).not.toContain('lynn.lat')

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
-import fallbackLogo from '@/assets/linai-logo.png'
 import {
   createFallbackTargets,
   createParticles,
@@ -14,9 +13,11 @@ import {
   type ProjectedParticle,
 } from '@/lib/brand-motion'
 
-const props = defineProps<{
-  logo?: string | null
-}>()
+const props = withDefaults(defineProps<{
+  wordmark?: string
+}>(), {
+  wordmark: 'L AI',
+})
 
 const root = ref<HTMLElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
@@ -35,7 +36,6 @@ let previousFrameTime = 0
 let focused = true
 let reducedMotion = false
 let mounted = false
-let loadGeneration = 0
 let pointerTarget: MotionPoint = { x: 0, y: 0 }
 let pointerPosition: MotionPoint = { x: 0, y: 0 }
 
@@ -44,6 +44,7 @@ onMounted(() => {
   context = canvas.value?.getContext('2d') ?? null
   motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)')
   reducedMotion = motionPreference.matches
+  mask = createWordmarkMask(props.wordmark)
 
   resizeObserver = new ResizeObserver((entries) => {
     const entry = entries[0]
@@ -61,19 +62,20 @@ onMounted(() => {
   window.addEventListener('blur', handleBlur)
   motionPreference.addEventListener('change', handleMotionPreference)
 
-  void loadTargets()
 })
 
 watch(
-  () => props.logo,
+  () => props.wordmark,
   () => {
-    if (mounted) void loadTargets()
+    if (!mounted) return
+    mask = createWordmarkMask(props.wordmark)
+    rebuildParticles()
+    syncMotion()
   },
 )
 
 onBeforeUnmount(() => {
   mounted = false
-  loadGeneration += 1
   stopLoop()
   resizeObserver?.disconnect()
   resizeObserver = null
@@ -86,71 +88,23 @@ onBeforeUnmount(() => {
   motionPreference = null
 })
 
-async function loadTargets() {
-  const generation = ++loadGeneration
-  motionState.value = 'loading'
-
-  let nextMask: AlphaMask | null = null
-  const sources = [...new Set([props.logo?.trim(), fallbackLogo].filter(Boolean))] as string[]
-  for (const source of sources) {
-    try {
-      nextMask = await decodeLogoMask(source)
-      if (nextMask) break
-    } catch {
-      // A configured logo is optional decoration; the bundled mark is the next source.
-    }
-  }
-
-  if (!mounted || generation !== loadGeneration) return
-  mask = nextMask
-  rebuildParticles()
-  syncMotion()
-}
-
-async function decodeLogoMask(source: string): Promise<AlphaMask> {
-  const image = await loadImage(source)
-  const size = 96
+function createWordmarkMask(wordmark: string): AlphaMask | null {
+  const width = 256
+  const height = 96
   const offscreen = document.createElement('canvas')
-  offscreen.width = size
-  offscreen.height = size
+  offscreen.width = width
+  offscreen.height = height
   const offscreenContext = offscreen.getContext('2d')
-  if (!offscreenContext) throw new Error('Canvas 2D is unavailable')
+  if (!offscreenContext) return null
 
-  const sourceWidth = image.naturalWidth || image.width
-  const sourceHeight = image.naturalHeight || image.height
-  if (sourceWidth <= 0 || sourceHeight <= 0) throw new Error('Logo has no dimensions')
-
-  const scale = Math.min(size / sourceWidth, size / sourceHeight)
-  const drawWidth = sourceWidth * scale
-  const drawHeight = sourceHeight * scale
-  offscreenContext.clearRect(0, 0, size, size)
-  offscreenContext.drawImage(
-    image,
-    (size - drawWidth) / 2,
-    (size - drawHeight) / 2,
-    drawWidth,
-    drawHeight,
-  )
-  const imageData = offscreenContext.getImageData(0, 0, size, size)
+  offscreenContext.clearRect(0, 0, width, height)
+  offscreenContext.fillStyle = '#000000'
+  offscreenContext.font = "800 64px -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif"
+  offscreenContext.textAlign = 'center'
+  offscreenContext.textBaseline = 'middle'
+  offscreenContext.fillText(wordmark.trim() || 'L AI', width / 2, height / 2)
+  const imageData = offscreenContext.getImageData(0, 0, width, height)
   return { width: imageData.width, height: imageData.height, data: imageData.data }
-}
-
-function loadImage(source: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    const timeoutId = window.setTimeout(() => reject(new Error('Logo decode timed out')), 4000)
-    const settle = (callback: () => void) => {
-      window.clearTimeout(timeoutId)
-      image.onload = null
-      image.onerror = null
-      callback()
-    }
-
-    image.onload = () => settle(() => resolve(image))
-    image.onerror = () => settle(() => reject(new Error('Logo decode failed')))
-    if (/^https?:\/\//i.test(source)) image.crossOrigin = 'anonymous'
-    image.src = source
-  })
 }
 
 function resizeField(width: number, height: number) {
@@ -173,8 +127,8 @@ function resizeField(width: number, height: number) {
 
 function rebuildParticles() {
   if (fieldWidth <= 0 || fieldHeight <= 0) return
-  const count = Math.round(clamp(Math.min(fieldWidth, fieldHeight) * 0.38, 90, 140))
-  const sampled = mask ? sampleLogoTargets(mask, count, fieldWidth, fieldHeight) : []
+  const count = Math.round(clamp(Math.min(fieldWidth, fieldHeight) * 0.68, 220, 250))
+  const sampled = mask ? sampleLogoTargets(mask, count, fieldWidth, fieldHeight, 0.78) : []
   const targets = sampled.length > 0
     ? sampled
     : createFallbackTargets(count, fieldWidth, fieldHeight)
@@ -315,6 +269,7 @@ function mix(from: number, to: number, amount: number) {
     ref="root"
     class="brand-motion"
     :data-motion-state="motionState"
+    :data-motion-wordmark="wordmark"
     data-testid="brand-motion"
   >
     <canvas ref="canvas" aria-hidden="true" />

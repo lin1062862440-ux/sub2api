@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
+  <defs>
+    <linearGradient id="attention-fill" x1="5.2" y1="3.8" x2="19.1" y2="20.1" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#C96B08"/>
+    </linearGradient>
+    <filter id="attention-shadow" x="1.5" y="1.5" width="21" height="21" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="1" stdDeviation=".8" flood-color="#92400E" flood-opacity=".22"/>
+    </filter>
+  </defs>
+  <g filter="url(#attention-shadow)">
+    <path d="M12 2.75a9.25 9.25 0 1 1 0 18.5 9.25 9.25 0 0 1 0-18.5Z" fill="url(#attention-fill)"/>
+    <path d="M6.35 7.65a7.2 7.2 0 0 1 5.72-2.84" stroke="#FFF7D6" stroke-width="1.15" stroke-linecap="round" opacity=".72"/>
+    <path d="M12 7.15v6.45" stroke="white" stroke-width="2.35" stroke-linecap="round"/>
+    <circle cx="12" cy="16.75" r="1.25" fill="white"/>
+  </g>
+</svg>

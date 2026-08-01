@@ -36,6 +36,36 @@ describe('brand motion model', () => {
     expect(targets.every(({ x, y }) => x > 60 && x < 260 && y > 60 && y < 260)).toBe(true)
   })
 
+  it('can widen a sampled mask for a horizontal wordmark', () => {
+    const data = new Uint8ClampedArray(4 * 2 * 4)
+    data[3] = 255
+    data[(1 * 4 + 3) * 4 + 3] = 255
+
+    const compact = sampleLogoTargets({ width: 4, height: 2, data }, 12, 320, 320)
+    const wide = sampleLogoTargets({ width: 4, height: 2, data }, 12, 320, 320, 0.78)
+    const span = (points: Array<{ x: number }>) =>
+      Math.max(...points.map(({ x }) => x)) - Math.min(...points.map(({ x }) => x))
+
+    expect(span(wide)).toBeGreaterThan(span(compact))
+  })
+
+  it('ignores transparent margins when scaling a mask', () => {
+    const paddedData = new Uint8ClampedArray(8 * 4 * 4)
+    paddedData[(1 * 8 + 3) * 4 + 3] = 255
+    paddedData[(2 * 8 + 4) * 4 + 3] = 255
+    const croppedData = new Uint8ClampedArray(2 * 2 * 4)
+    croppedData[3] = 255
+    croppedData[(1 * 2 + 1) * 4 + 3] = 255
+
+    const padded = sampleLogoTargets({ width: 8, height: 4, data: paddedData }, 12, 320, 320, 0.78)
+    const cropped = sampleLogoTargets({ width: 2, height: 2, data: croppedData }, 12, 320, 320, 0.78)
+
+    padded.forEach((point, index) => {
+      expect(point.x).toBeCloseTo(cropped[index].x, 5)
+      expect(point.y).toBeCloseTo(cropped[index].y, 5)
+    })
+  })
+
   it('returns no sampled targets when a mask has no visible pixels', () => {
     const data = new Uint8ClampedArray(4 * 4 * 4)
 

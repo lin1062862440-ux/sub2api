@@ -14,6 +14,8 @@ const motionMocks = vi.hoisted(() => ({
   drawImage: vi.fn(),
   fill: vi.fn(),
   stroke: vi.fn(),
+  fillText: vi.fn(),
+  arc: vi.fn(),
 }))
 
 function installMotionBrowserMocks() {
@@ -28,6 +30,8 @@ function installMotionBrowserMocks() {
   motionMocks.drawImage = vi.fn()
   motionMocks.fill = vi.fn()
   motionMocks.stroke = vi.fn()
+  motionMocks.fillText = vi.fn()
+  motionMocks.arc = vi.fn()
 
   const context = {
     globalAlpha: 1,
@@ -45,11 +49,12 @@ function installMotionBrowserMocks() {
       return { width: 16, height: 16, data }
     }),
     beginPath: vi.fn(),
-    arc: vi.fn(),
+    arc: motionMocks.arc,
     fill: motionMocks.fill,
     moveTo: vi.fn(),
     lineTo: vi.fn(),
     stroke: motionMocks.stroke,
+    fillText: motionMocks.fillText,
   }
 
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
@@ -135,13 +140,15 @@ describe('BrandMotion', () => {
     installMotionBrowserMocks()
   })
 
-  it('renders a decorative canvas from the supplied platform logo', async () => {
-    const wrapper = mount(BrandMotion, { props: { logo: 'data:image/png;base64,brand' } })
+  it('renders a decorative canvas from the L AI wordmark', async () => {
+    const wrapper = mount(BrandMotion, { props: { wordmark: 'L AI' } })
     await flushPromises()
 
     expect(wrapper.get('canvas').attributes('aria-hidden')).toBe('true')
+    expect(wrapper.attributes('data-motion-wordmark')).toBe('L AI')
     expect(wrapper.attributes('data-motion-state')).toBe('running')
-    expect(motionMocks.imageSources).toContain('data:image/png;base64,brand')
+    expect(motionMocks.fillText).toHaveBeenCalledWith('L AI', 128, 48)
+    expect(motionMocks.arc.mock.calls.length).toBeGreaterThanOrEqual(220)
     expect(motionMocks.fill).toHaveBeenCalled()
   })
 
@@ -150,7 +157,7 @@ describe('BrandMotion', () => {
     const { requestFrame } = installMotionBrowserMocks()
     motionMocks.reducedMotion = true
 
-    const wrapper = mount(BrandMotion, { props: { logo: 'data:image/png;base64,brand' } })
+    const wrapper = mount(BrandMotion, { props: { wordmark: 'L AI' } })
     await flushPromises()
 
     expect(wrapper.attributes('data-motion-state')).toBe('static')
@@ -158,18 +165,17 @@ describe('BrandMotion', () => {
     expect(motionMocks.fill).toHaveBeenCalled()
   })
 
-  it('falls back to the bundled logo after a configured-logo failure', async () => {
-    motionMocks.failFirstImage = true
-    mount(BrandMotion, { props: { logo: 'broken-logo' } })
+  it('uses L AI as the default wordmark', async () => {
+    const wrapper = mount(BrandMotion)
     await flushPromises()
 
-    expect(motionMocks.imageSources[0]).toBe('broken-logo')
-    expect(motionMocks.imageSources[1]).toContain('linai-logo')
+    expect(wrapper.attributes('data-motion-wordmark')).toBe('L AI')
+    expect(motionMocks.fillText).toHaveBeenCalledWith('L AI', 128, 48)
   })
 
   it('pauses while the window is unfocused and resumes on focus', async () => {
     const { requestFrame } = installMotionBrowserMocks()
-    const wrapper = mount(BrandMotion, { props: { logo: 'data:image/png;base64,brand' } })
+    const wrapper = mount(BrandMotion, { props: { wordmark: 'L AI' } })
     await flushPromises()
     const scheduledBeforeBlur = requestFrame.mock.calls.length
 
@@ -185,7 +191,7 @@ describe('BrandMotion', () => {
   })
 
   it('cancels animation and disconnects observers on unmount', async () => {
-    const wrapper = mount(BrandMotion, { props: { logo: 'data:image/png;base64,brand' } })
+    const wrapper = mount(BrandMotion, { props: { wordmark: 'L AI' } })
     await flushPromises()
 
     wrapper.unmount()
