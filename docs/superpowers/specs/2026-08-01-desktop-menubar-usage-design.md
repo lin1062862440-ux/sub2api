@@ -2,9 +2,9 @@
 
 ## Goal
 
-Add an opt-in macOS menu bar usage display to the LinAI Desktop client. The menu bar should show one selected source at a glance and open a compact native-feeling glass popover with more detail. The account menu in the main window provides the entry point for enabling and configuring the feature.
+Add an opt-in macOS menu bar usage display to the LinAI Desktop client. The menu bar should show one selected source at a glance and open a compact native-feeling glass popover with more detail. The account menu in the main window provides a separate, application-themed entry point for enabling and configuring the feature.
 
-The first release implements the menu bar integration on macOS. Windows and Linux expose a disabled placeholder in the configuration popover and do not create a system tray item.
+The first release implements the menu bar integration on macOS. Windows and Linux expose a disabled placeholder in the internal configuration dialog and do not create a system tray item.
 
 ## Product Decisions
 
@@ -17,16 +17,16 @@ The first release implements the menu bar integration on macOS. Windows and Linu
 
 ## Entry Point And Configuration
 
-The avatar menu in `AppLayout.vue` gains a `用量显示` command between `个人资料` and `修改密码`. It opens the reusable usage popover in its settings view.
+The avatar menu in `AppLayout.vue` gains a `用量显示` command between `个人资料` and `修改密码`. It opens a standard in-application settings dialog. This dialog follows the main client's existing modal vocabulary and is not the macOS menu bar popover.
 
-The settings view contains:
+The internal settings dialog contains:
 
 1. An `在菜单栏显示` toggle, off by default.
 2. A source segmented control with `账户余额` and `订阅组`.
 3. An active-subscription selector when `订阅组` is selected.
 4. A live menu bar preview such as `余额 $128.60` or `Claude Pro 73%`.
 
-Enabling subscription display requires a selected active subscription. Disabled, expired, revoked, and suspended subscriptions are not selectable. On Windows and Linux the same entry opens a platform placeholder; the controls are disabled and no tray integration is initialized.
+Settings save as the user changes them, and a `完成` button closes the dialog. The dialog does not contain `刷新`, `打开主窗口`, or `退出`, because those commands do not belong to an already-open main application window. Enabling subscription display requires a selected active subscription. Disabled, expired, revoked, and suspended subscriptions are not selectable. On Windows and Linux the same entry opens a platform placeholder; the controls are disabled and no tray integration is initialized.
 
 ## Menu Bar Presentation
 
@@ -47,7 +47,7 @@ Clicking the status item toggles a single reusable `usage-popover` Webview posit
 
 The visual treatment uses macOS native vibrancy for real background blur, with a restrained translucent surface, subtle border and shadow, and an approximately 8-pixel radius. It follows the existing Desktop typography and semantic colors and does not use a large blue-purple gradient.
 
-The common header contains the selected source, last successful update time, a refresh icon, and a settings icon.
+The header contains the selected source, last successful update time, and a refresh icon. Configuration remains exclusively inside the main client, so the external popover does not contain a settings icon or settings mode.
 
 ### Balance Overview
 
@@ -69,38 +69,15 @@ The subscription view emphasizes the most constrained quota window and shows eac
 
 Quota windows without a finite positive limit are omitted. If all three windows are unlimited, the primary value is `∞`. The subscription expiration date remains visible separately from quota reset times.
 
-The footer provides `打开主窗口`, `设置`, and `退出`. Familiar Lucide icons accompany these commands, with tooltips for icon-only controls.
+The footer provides `打开主窗口` and `退出`. Familiar Lucide icons accompany these commands, with tooltips for icon-only controls.
 
 ## Architecture
 
-The feature has three bounded layers.
+The feature separates shared usage behavior, internal configuration, external platform surfaces, and native hosting. Internal and external surfaces may share typed state and domain calculations, but they must not share layout shells, footer actions, window dimensions, or CSS.
 
-### Tauri Host
+### Shared Core
 
-Rust owns platform behavior:
-
-- Create, update, and remove the macOS tray icon.
-- Set the native tray title.
-- Receive tray click events and retain the click rectangle.
-- Create and position the reusable popover within the active monitor bounds.
-- Show, hide, focus, and close application windows.
-- Apply macOS native vibrancy to the popover.
-- Hide the main window on close while the menu bar feature is active, while preserving Cmd+Q and explicit `退出` as real application termination.
-
-The tray integration is compiled and initialized only for macOS. The existing single-instance, deep-link, HTTP, store, opener, and OS plugins remain intact.
-
-### Usage Popover Webview
-
-A dedicated `usage-popover.html` Vite entry and `src/usage-popover.ts` bootstrap render only the lightweight popover. This avoids loading the main router, window drag region, and deep-link listeners in the secondary Webview. The Webview supports two explicit modes:
-
-- `overview`, used by a menu bar click.
-- `settings`, used by the avatar menu and the popover settings command.
-
-Opening settings from the main window centers the popover over the main window. Opening the overview from the status item anchors it below the status item and clamps it to the visible monitor work area. Both paths reuse the same hidden window. The popover Webview owns the usage-display state; the main window sends only session-change and open-settings events through Tauri.
-
-### Usage Display State
-
-A focused Vue module owns configuration, requests, calculations, refresh scheduling, and the short tray title. It communicates platform actions to Rust through narrow Tauri commands and does not place request or quota calculations in the view components.
+The shared core owns configuration types, persistence, requests, quota calculations, refresh scheduling, and short display-title formatting. It communicates platform actions to Rust through narrow Tauri commands and does not place request or quota calculations in view components.
 
 Local configuration is stored through Tauri Store and scoped by authenticated user ID:
 
@@ -111,6 +88,51 @@ subscriptionId: number | null
 ```
 
 Only preferences are persisted. Usage snapshots are kept in memory, not written to disk.
+
+### Internal Configuration
+
+The main Vue application owns the only configuration UI. The avatar-menu command opens a teleported dialog inside the main Webview, using the same backdrop, spacing, typography, controls, 8-pixel radius, and close behavior as the existing password dialog. Its height follows its content instead of inheriting the external popover's fixed dimensions.
+
+The internal dialog contains only configuration controls and a menu bar title preview. It has its own components and scoped styles under `features/usage-display/internal/settings/`. Opening, closing, or restyling it must not modify the external macOS surface.
+
+The dialog loads the current user's persisted configuration and active subscriptions when opened. After a successful change it saves the configuration and emits a narrow `usage-display://config-changed` event containing the user ID. It does not start the external surface's periodic usage refresh loop.
+
+### External Platform Surfaces
+
+External presentation is organized first by operating system and then by display surface:
+
+```text
+features/usage-display/external/
+  macos/
+    menu-bar/          # current status item and glass popover
+    floating-window/   # reserved path for a future floating display
+  windows/
+    system-tray/       # future implementation
+    floating-window/   # future implementation
+  linux/
+    status-item/       # future implementation
+    floating-window/   # future implementation
+```
+
+Only `macos/menu-bar/` is created in this release. Empty future directories are not committed. Each future surface owns its window geometry, interaction model, entry module, components, and styles, allowing a floating window to add dragging, pinning, opacity, layout, and position persistence without changing the menu bar implementation.
+
+The current macOS menu bar surface uses the dedicated `usage-popover.html` Vite entry and a surface-specific bootstrap under `external/macos/menu-bar/`. It renders only the balance or subscription overview. Its native-vibrancy CSS is imported only by this entry and cannot style the main application.
+
+The macOS entry remains the owner of the 60-second usage refresh timer and tray-title synchronization. It listens for authenticated-session and configuration-change events, reloads the persisted selection, and refreshes the chosen source without importing the internal dialog.
+
+### Tauri Host
+
+Rust owns platform behavior:
+
+- Create, update, and remove the macOS status item.
+- Set the native menu bar title.
+- Receive status-item click events and retain the click rectangle.
+- Create and position the reusable macOS menu bar popover within the active monitor bounds.
+- Show, hide, focus, and close application windows.
+- Apply macOS native vibrancy to the external popover only.
+- Hide the main window on close while the menu bar feature is active, while preserving Cmd+Q and explicit `退出` as real application termination.
+
+The native source follows the same platform and surface boundary: `src-tauri/src/usage_display/macos/menu_bar.rs` owns the current status-item host, while `usage_display/mod.rs` retains shared commands and state. A future floating window receives a separate module instead of extending the menu bar module. The existing single-instance, deep-link, HTTP, store, opener, and OS plugins remain intact.
 
 ## Data Sources And Refresh
 
@@ -142,7 +164,7 @@ After each successful update, Vue generates the short display title and sends it
 
 ## Failure And Edge States
 
-- If a selected subscription expires, is revoked, is suspended, or disappears, the application keeps the stored selection, displays `用量 --`, and opens settings with a clear request to select another subscription.
+- If a selected subscription expires, is revoked, is suspended, or disappears, the application keeps the stored selection, displays `用量 --`, and shows a clear request to select another subscription when the internal settings dialog is opened.
 - A network failure retains the last successful snapshot from the current application run and labels it with its update time and an update-failed notice.
 - A cold start without a successful request displays `用量 --`; it never presents a persisted historical number as current.
 - Partial failures retain useful data. For example, current balance can remain visible while failed period totals display `--`.
@@ -154,22 +176,29 @@ After each successful update, Vue generates the short display title and sends it
 
 Expected focused units include:
 
-- `usage-popover.html` and `src/usage-popover.ts`: dedicated secondary-window entry.
-- `UsageDisplayPopover.vue`: popover shell and mode switching.
-- `UsageDisplayOverview.vue`: balance and subscription overview composition.
-- `UsageDisplaySettings.vue`: toggle, source control, subscription selection, and preview.
-- `UsageQuotaRow.vue`: one finite quota window.
-- `stores/usage-display.ts`: reactive state, persistence, requests, refresh, and session transitions.
-- `usage-display-format.ts`: remaining percentage, constrained-window selection, reset time, truncation, and title formatting.
-- `src-tauri/src/usage_display.rs`: tray and popover lifecycle.
+- `features/usage-display/core/`: configuration, persistence, reactive state, requests, refresh, and display calculations.
+- `features/usage-display/internal/settings/UsageDisplayDialog.vue`: main-application modal shell and completion action.
+- `features/usage-display/internal/settings/UsageDisplaySettingsForm.vue`: toggle, source control, subscription selection, and preview using application-theme controls.
+- `features/usage-display/external/macos/menu-bar/entry.ts`: dedicated secondary-window bootstrap.
+- `features/usage-display/external/macos/menu-bar/MacOSMenuBarPopover.vue`: external popover shell, refresh, open-main, and quit actions.
+- `features/usage-display/external/macos/menu-bar/BalanceOverview.vue`: compact balance display.
+- `features/usage-display/external/macos/menu-bar/SubscriptionOverview.vue`: compact subscription and quota display.
+- `features/usage-display/external/macos/menu-bar/QuotaRow.vue`: one finite quota window.
+- `features/usage-display/external/macos/menu-bar/macos-menu-bar.css`: CSS imported only by the secondary macOS entry.
+- `usage-popover.html`: Vite HTML entry that delegates to the macOS menu bar bootstrap.
+- `src-tauri/src/usage_display/mod.rs`: shared commands and host state.
+- `src-tauri/src/usage_display/macos/menu_bar.rs`: macOS status-item and popover lifecycle.
 
-The state calculations, platform host behavior, and presentation components remain separate responsibilities. A planning change may rename a file only when required by the existing build structure; it must preserve these ownership boundaries.
+The state calculations, internal configuration, platform host behavior, and external presentation components remain separate responsibilities. A planning change may adjust exact filenames when required by the existing build structure, but it must preserve the platform-to-surface hierarchy and CSS isolation.
 
 ## Verification
 
 Vue tests cover:
 
-- The new avatar-menu command and settings entry.
+- The avatar-menu command opening an internal dialog rather than a secondary Webview.
+- The internal dialog containing configuration controls and no `刷新`, `打开主窗口`, or `退出` actions.
+- The external macOS popover containing overview actions and no settings control or settings mode.
+- CSS and entry imports remaining isolated between the internal and external surfaces.
 - Default-off configuration and per-user persistence.
 - Balance and subscription source switching.
 - Required fixed subscription selection.
@@ -180,7 +209,7 @@ Vue tests cover:
 - Partial request failure, runtime stale data, and cold-start offline behavior.
 - Logout and account-switch cleanup.
 
-Rust tests cover title updates, tray enable/disable lifecycle, popover mode events, and monitor-bound positioning calculations where they can be isolated from AppKit.
+Rust tests cover title updates, tray enable/disable lifecycle, overview events, and monitor-bound positioning calculations where they can be isolated from AppKit.
 
 Required automated checks are:
 
@@ -188,7 +217,7 @@ Required automated checks are:
 - `pnpm build` in `clients/desktop`
 - `cargo check` in `clients/desktop/src-tauri`
 
-macOS visual verification covers the collapsed menu bar item, balance overview, subscription overview, settings view, long subscription names, screen-edge positioning, click-outside dismissal, main-window reopening, logout, and explicit quit. Windows and Linux checks confirm the placeholder is visible and the tray path is not initialized.
+macOS visual verification separately covers the application-themed internal settings dialog and the native-vibrancy external surface. External checks include the collapsed menu bar item, balance overview, subscription overview, long subscription names, screen-edge positioning, click-outside dismissal, main-window reopening, logout, and explicit quit. Internal checks confirm content-driven height, theme consistency, configuration interactions, and the absence of external lifecycle actions. Windows and Linux checks confirm the internal placeholder is visible and the external path is not initialized.
 
 ## Out Of Scope
 
