@@ -57,14 +57,20 @@ button { -webkit-app-region: no-drag; }
 }
 .floating-usage-orb:focus-visible { outline: 2px solid #4d84e2; outline-offset: -4px; }
 .floating-usage-orb strong {
+  display: inline-flex;
   max-width: 54px;
+  align-items: baseline;
+  justify-content: center;
   overflow: hidden;
-  font-size: 16px;
-  font-weight: 680;
+  font-size: 18px;
+  font-weight: 580;
   line-height: 1;
   text-overflow: clip;
   white-space: nowrap;
 }
+.floating-usage-orb .floating-metric-value > span,
+.floating-usage-orb .floating-metric-value > small { opacity: 0.88; }
+.floating-usage-orb .floating-metric-value small { font-size: 0.48em; }
 
 .floating-usage-card {
   --floating-bg: linear-gradient(145deg, #dceaf7 0%, #eaf1e9 58%, #f6edd4 100%);
@@ -179,16 +185,28 @@ button { -webkit-app-region: no-drag; }
 }
 .floating-usage-card .usage-overview::-webkit-scrollbar { display: none; }
 .floating-usage-card .balance-overview { display: flex; flex-direction: column; }
-.floating-usage-card .external-primary { display: grid; min-width: 0; gap: 5px; }
-.floating-usage-card .external-primary span { color: var(--floating-muted); font-size: 11px; font-weight: 620; }
+.floating-usage-card .external-primary { display: grid; min-width: 0; gap: 6px; }
+.floating-usage-card .external-primary > span { color: var(--floating-muted); font-size: 11px; font-weight: 620; }
 .floating-usage-card .external-primary strong {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: baseline;
   overflow: hidden;
   color: var(--floating-text);
-  font-size: 44px;
-  font-weight: 560;
+  font-size: 46px;
+  font-weight: 520;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.floating-metric-value > span { color: inherit; font: inherit; line-height: inherit; }
+.floating-metric-value small {
+  margin-left: 3px;
+  color: inherit;
+  font-size: 0.45em;
+  font-weight: 560;
+  line-height: 1;
 }
 .floating-usage-card .balance-overview > .external-primary {
   min-height: 144px;
@@ -226,14 +244,48 @@ button { -webkit-app-region: no-drag; }
 .floating-usage-card .subscription-content { display: flex; min-height: 100%; flex-direction: column; }
 .floating-usage-card .subscription-primary {
   display: grid;
-  min-height: 72px;
+  min-height: 116px;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
-  align-items: end;
-  padding: 4px 20px;
+  align-items: center;
+  padding: 8px 20px 10px;
 }
-.floating-usage-card .quota-list { padding: 3px 20px 6px; }
-.floating-usage-card .quota-row { padding: 3px 0; }
+.floating-primary-track,
+.floating-usage-card .quota-track {
+  height: 4px;
+  overflow: hidden;
+  background: var(--floating-line);
+  border-radius: 2px;
+}
+.floating-primary-track { margin-top: 1px; }
+.floating-primary-track span,
+.floating-usage-card .quota-track span {
+  display: block;
+  height: 100%;
+  background: var(--floating-accent);
+  border-radius: inherit;
+  transition: width 200ms ease-out;
+}
+.subscription-primary.constrained .floating-primary-track span { background: var(--floating-alert); }
+.floating-primary-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--floating-muted);
+  font-size: 10px;
+  line-height: 1.2;
+}
+.floating-primary-meta span,
+.floating-primary-meta small {
+  overflow: hidden;
+  font: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.floating-usage-card .quota-list { padding: 0 20px 4px; }
+.floating-usage-card .quota-row { padding: 5px 0; }
 .floating-usage-card .quota-head {
   display: grid;
   min-width: 0;
@@ -252,22 +304,12 @@ button { -webkit-app-region: no-drag; }
 .floating-usage-card .quota-head b { color: var(--floating-good); font-size: 11px; }
 .floating-usage-card .quota-row.constrained .quota-head b { color: var(--floating-alert); }
 .floating-usage-card .quota-track {
-  height: 5px;
-  margin-top: 5px;
-  overflow: hidden;
-  background: var(--floating-line);
-  border-radius: 3px;
-}
-.floating-usage-card .quota-track span {
-  display: block;
-  height: 100%;
-  background: var(--floating-accent);
-  border-radius: inherit;
+  margin-top: 7px;
 }
 .floating-usage-card .quota-row.constrained .quota-track span { background: var(--floating-alert); }
 .floating-usage-card .quota-row small {
   display: block;
-  margin-top: 4px;
+  margin-top: 5px;
   color: var(--floating-muted);
   font-size: 10px;
 }
@@ -293,3 +335,16 @@ button { -webkit-app-region: no-drag; }
 }
 .floating-usage-card .missing-subscription { flex-direction: column; }
 .floating-usage-card .missing-subscription span { max-width: 240px; font-size: 10px; }
+
+.floating-metric-value { animation: floating-metric-enter 180ms ease-out both; }
+
+@keyframes floating-metric-enter {
+  from { opacity: 0.55; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-metric-value { animation: none; }
+  .floating-primary-track span,
+  .floating-usage-card .quota-track span { transition: none; }
+}
