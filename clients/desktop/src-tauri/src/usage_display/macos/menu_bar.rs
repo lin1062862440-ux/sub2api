@@ -21,12 +21,33 @@ use super::super::{show_popover, PopoverAnchor, UsageDisplayHost, POPOVER_LABEL}
 const TRAY_ID: &str = "usage-display";
 #[cfg(target_os = "macos")]
 const TRAY_AUTOSAVE_NAME: &str = "com.linai.desktop.usage-display";
+const RING_ICON_PIXELS: usize = 36;
+const RING_SUPERSAMPLE: usize = 4;
+const RING_OUTLINE_RGBA: [u8; 4] = [31, 45, 58, 72];
+const RING_TRACK_RGBA: [u8; 4] = [255, 255, 255, 150];
+
+#[derive(Debug, PartialEq, Eq)]
+enum TrayMetricIcon {
+    TemplateMark,
+    QuotaRing { percent: u8, color: (u8, u8, u8) },
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NativeTitleColor {
+    Secondary,
+    Adaptive,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct NativeIconUpdate {
+    is_template: bool,
+    title_color: NativeTitleColor,
+}
 
 #[derive(Debug, PartialEq, Eq)]
 struct TrayMetricPresentation {
     text: String,
-    color: Option<(u8, u8, u8)>,
-    hollow: bool,
+    icon: TrayMetricIcon,
 }
 
 fn quota_metric_color(percent: u8) -> (u8, u8, u8) {
@@ -42,22 +63,105 @@ fn tray_metric_presentation(title: &str) -> TrayMetricPresentation {
         .and_then(|value| value.parse::<u8>().ok())
         .map(|value| value.min(100));
     match percentage {
-        Some(0) => TrayMetricPresentation {
-            text: "○ 0%".to_string(),
-            color: Some(quota_metric_color(0)),
-            hollow: true,
-        },
-        Some(value) => TrayMetricPresentation {
-            text: format!("● {value}%"),
-            color: Some(quota_metric_color(value)),
-            hollow: false,
+        Some(percent) => TrayMetricPresentation {
+            text: format!("{percent}%"),
+            icon: TrayMetricIcon::QuotaRing {
+                percent,
+                color: quota_metric_color(percent),
+            },
         },
         None => TrayMetricPresentation {
             text: trimmed.to_string(),
-            color: None,
-            hollow: false,
+            icon: TrayMetricIcon::TemplateMark,
         },
     }
+}
+
+fn native_icon_update(icon: &TrayMetricIcon) -> NativeIconUpdate {
+    match icon {
+        TrayMetricIcon::TemplateMark => NativeIconUpdate {
+            is_template: true,
+            title_color: NativeTitleColor::Secondary,
+        },
+        TrayMetricIcon::QuotaRing { .. } => NativeIconUpdate {
+            is_template: false,
+            title_color: NativeTitleColor::Adaptive,
+        },
+    }
+}
+
+fn quota_ring_rgba(percent: u8, color: (u8, u8, u8)) -> Vec<u8> {
+    let percent = percent.min(100);
+    let mut rgba = vec![0; RING_ICON_PIXELS * RING_ICON_PIXELS * 4];
+    let center = RING_ICON_PIXELS as f64 / 2.0;
+    let progress_angle = std::f64::consts::TAU * percent as f64 / 100.0;
+    let sample_count = (RING_SUPERSAMPLE * RING_SUPERSAMPLE) as f64;
+
+    // Supersampling keeps the 18-point native ring crisp on Retina and non-Retina displays.
+    for y in 0..RING_ICON_PIXELS {
+        for x in 0..RING_ICON_PIXELS {
+            let mut outline_samples = 0_u8;
+            let mut track_samples = 0_u8;
+            let mut arc_samples = 0_u8;
+            for sample_y in 0..RING_SUPERSAMPLE {
+                for sample_x in 0..RING_SUPERSAMPLE {
+                    let px = x as f64 + (sample_x as f64 + 0.5) / RING_SUPERSAMPLE as f64;
+                    let py = y as f64 + (sample_y as f64 + 0.5) / RING_SUPERSAMPLE as f64;
+                    let dx = px - center;
+                    let dy = py - center;
+                    let radius = dx.hypot(dy);
+                    if (10.75..=16.25).contains(&radius) {
+                        outline_samples += 1;
+                    }
+                    if !(11.5..=15.5).contains(&radius) {
+                        continue;
+                    }
+                    track_samples += 1;
+                    let mut angle = dy.atan2(dx) + std::f64::consts::FRAC_PI_2;
+                    if angle < 0.0 {
+                        angle += std::f64::consts::TAU;
+                    }
+                    if percent == 100 || (percent > 0 && angle <= progress_angle) {
+                        arc_samples += 1;
+                    }
+                }
+            }
+
+            let offset = (y * RING_ICON_PIXELS + x) * 4;
+            let write_pixel = |rgba: &mut [u8], source: [u8; 4], coverage: u8| {
+                rgba[offset..offset + 4].copy_from_slice(&[
+                    source[0],
+                    source[1],
+                    source[2],
+                    (source[3] as f64 * coverage as f64 / sample_count).round() as u8,
+                ]);
+            };
+            if outline_samples > 0 {
+                write_pixel(&mut rgba, RING_OUTLINE_RGBA, outline_samples);
+            }
+            if track_samples > 0 {
+                write_pixel(&mut rgba, RING_TRACK_RGBA, track_samples);
+            }
+            if arc_samples > 0 {
+                write_pixel(&mut rgba, [color.0, color.1, color.2, 255], arc_samples);
+            }
+        }
+    }
+    rgba
+}
+
+#[cfg(test)]
+fn pixel_at(rgba: &[u8], x: usize, y: usize) -> [u8; 4] {
+    let offset = (y * RING_ICON_PIXELS + x) * 4;
+    rgba[offset..offset + 4]
+        .try_into()
+        .expect("valid ring pixel")
+}
+
+#[cfg(test)]
+fn pixel_rgb_at(rgba: &[u8], x: usize, y: usize) -> (u8, u8, u8) {
+    let pixel = pixel_at(rgba, x, y);
+    (pixel[0], pixel[1], pixel[2])
 }
 
 #[cfg(target_os = "macos")]
@@ -224,6 +328,18 @@ fn tray_template_rgba(source: &[u8]) -> Vec<u8> {
 }
 
 #[cfg(target_os = "macos")]
+fn template_app_icon(app: &tauri::AppHandle) -> Result<tauri::image::Image<'static>, String> {
+    let app_icon = app
+        .default_window_icon()
+        .ok_or_else(|| "应用图标不可用".to_string())?;
+    Ok(tauri::image::Image::new_owned(
+        tray_template_rgba(app_icon.rgba()),
+        app_icon.width(),
+        app_icon.height(),
+    ))
+}
+
+#[cfg(target_os = "macos")]
 fn toggle_popover(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window(POPOVER_LABEL)
@@ -235,9 +351,24 @@ fn toggle_popover(app: &tauri::AppHandle) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
-fn apply_native_metric(tray: &tauri::tray::TrayIcon, title: &str) -> Result<(), String> {
+fn apply_native_metric(
+    app: &tauri::AppHandle,
+    tray: &tauri::tray::TrayIcon,
+    title: &str,
+) -> Result<(), String> {
     let presentation = tray_metric_presentation(title);
-    tray.set_title(None::<&str>)
+    let update = native_icon_update(&presentation.icon);
+    let icon = match presentation.icon {
+        TrayMetricIcon::TemplateMark => template_app_icon(app)?,
+        TrayMetricIcon::QuotaRing { percent, color } => tauri::image::Image::new_owned(
+            quota_ring_rgba(percent, color),
+            RING_ICON_PIXELS as u32,
+            RING_ICON_PIXELS as u32,
+        ),
+    };
+    tray.set_icon_with_as_template(Some(icon), update.is_template)
+        .map_err(|error| error.to_string())?;
+    tray.set_title(Some(&presentation.text))
         .map_err(|error| error.to_string())?;
     tray.with_inner_tray_icon(move |inner| {
         let mtm =
@@ -250,16 +381,9 @@ fn apply_native_metric(tray: &tauri::tray::TrayIcon, title: &str) -> Result<(), 
         let button = status_item
             .button(mtm)
             .ok_or_else(|| "macOS 状态栏按钮不可用".to_string())?;
-        let native_title = NSString::from_str(&presentation.text);
-        button.setTitle(&native_title);
-        let color = match presentation.color {
-            Some((red, green, blue)) => NSColor::colorWithSRGBRed_green_blue_alpha(
-                red as f64 / 255.0,
-                green as f64 / 255.0,
-                blue as f64 / 255.0,
-                1.0,
-            ),
-            None => NSColor::secondaryLabelColor(),
+        let color = match update.title_color {
+            NativeTitleColor::Secondary => NSColor::secondaryLabelColor(),
+            NativeTitleColor::Adaptive => NSColor::labelColor(),
         };
         button.setContentTintColor(Some(&color));
         Ok::<(), String>(())
@@ -269,14 +393,7 @@ fn apply_native_metric(tray: &tauri::tray::TrayIcon, title: &str) -> Result<(), 
 
 #[cfg(target_os = "macos")]
 fn build(app: &tauri::AppHandle, title: &str) -> Result<(), String> {
-    let app_icon = app
-        .default_window_icon()
-        .ok_or_else(|| "应用图标不可用".to_string())?;
-    let icon = tauri::image::Image::new_owned(
-        tray_template_rgba(app_icon.rgba()),
-        app_icon.width(),
-        app_icon.height(),
-    );
+    let icon = template_app_icon(app)?;
     let tray = TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
         .icon_as_template(true)
@@ -301,7 +418,7 @@ fn build(app: &tauri::AppHandle, title: &str) -> Result<(), String> {
         })
         .build(app)
         .map_err(|error| error.to_string())?;
-    apply_native_metric(&tray, title)
+    apply_native_metric(app, &tray, title)
 }
 
 #[cfg(target_os = "macos")]
@@ -323,7 +440,7 @@ pub(in crate::usage_display) fn configure(
         super::floating_window::apply_appearance(&window, appearance);
     }
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        apply_native_metric(&tray, title)?;
+        apply_native_metric(app, &tray, title)?;
         tray.set_visible(true).map_err(|error| error.to_string())?;
         return Ok(());
     }
@@ -336,7 +453,7 @@ pub(in crate::usage_display) fn set_title(
     title: &str,
 ) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
-        apply_native_metric(&tray, title)?;
+        apply_native_metric(app, &tray, title)?;
     }
     Ok(())
 }
@@ -398,16 +515,47 @@ mod tests {
     }
 
     #[test]
-    fn usage_display_builds_compact_balance_and_subscription_metrics() {
-        assert_eq!(tray_metric_presentation("$128.60").text, "$128.60");
+    fn usage_display_builds_balance_and_subscription_ring_presentations() {
+        let balance = tray_metric_presentation("$128.60");
+        assert_eq!(balance.text, "$128.60");
+        assert_eq!(balance.icon, TrayMetricIcon::TemplateMark);
 
         let subscription = tray_metric_presentation("73%");
-        assert_eq!(subscription.text, "● 73%");
-        assert!(!subscription.hollow);
+        assert_eq!(subscription.text, "73%");
+        assert_eq!(
+            subscription.icon,
+            TrayMetricIcon::QuotaRing {
+                percent: 73,
+                color: quota_metric_color(73),
+            }
+        );
+    }
 
-        let empty = tray_metric_presentation("0%");
-        assert_eq!(empty.text, "○ 0%");
-        assert!(empty.hollow);
+    #[test]
+    fn quota_ring_raster_distinguishes_empty_partial_and_full_progress() {
+        let empty = quota_ring_rgba(0, quota_metric_color(0));
+        let partial = quota_ring_rgba(45, quota_metric_color(45));
+        let full = quota_ring_rgba(100, quota_metric_color(100));
+
+        assert_eq!(empty.len(), RING_ICON_PIXELS * RING_ICON_PIXELS * 4);
+        assert_eq!(pixel_rgb_at(&empty, 18, 3), (255, 255, 255));
+        assert_eq!(pixel_rgb_at(&partial, 32, 18), quota_metric_color(45));
+        assert_eq!(pixel_rgb_at(&partial, 3, 18), (255, 255, 255));
+        assert_eq!(pixel_rgb_at(&full, 3, 18), quota_metric_color(100));
+        assert_eq!(pixel_at(&full, 18, 18)[3], 0);
+    }
+
+    #[test]
+    fn native_icon_update_switches_template_mode_by_usage_source() {
+        let balance_presentation = tray_metric_presentation("$128.60");
+        let balance = native_icon_update(&balance_presentation.icon);
+        assert!(balance.is_template);
+        assert_eq!(balance.title_color, NativeTitleColor::Secondary);
+
+        let subscription_presentation = tray_metric_presentation("45%");
+        let subscription = native_icon_update(&subscription_presentation.icon);
+        assert!(!subscription.is_template);
+        assert_eq!(subscription.title_color, NativeTitleColor::Adaptive);
     }
 
     #[test]
