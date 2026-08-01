@@ -306,6 +306,7 @@ fn setup_macos(app: &mut tauri::App) -> tauri::Result<()> {
     .minimizable(false)
     .decorations(false)
     .transparent(true)
+    .shadow(false)
     .always_on_top(true)
     .skip_taskbar(true)
     .focused(false)
@@ -409,5 +410,23 @@ mod surface_tests {
     #[test]
     fn menu_bar_popover_matches_the_expanded_usage_card_host_size() {
         assert_eq!((POPOVER_WIDTH, POPOVER_HEIGHT), (352.0, 352.0));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn menu_bar_popover_disables_the_native_window_shadow() {
+        let implementation = include_str!("mod.rs");
+        let popover_builder = implementation
+            .split("let popover =")
+            .nth(1)
+            .expect("popover builder")
+            .split("let floating =")
+            .next()
+            .expect("popover builder section");
+
+        assert!(
+            popover_builder.contains(".shadow(false)"),
+            "the card already renders its own shadow, so the native shadow must be disabled"
+        );
     }
 }
