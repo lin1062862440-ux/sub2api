@@ -153,64 +153,6 @@ button:disabled {
   font-weight: 720;
 }
 
-.auth-shell__message {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  gap: 28px;
-  padding: 24px 0;
-}
-
-.auth-shell__message p {
-  max-width: 18ch;
-  font-size: 24px;
-  font-weight: 640;
-  line-height: 1.45;
-  color: #24344f;
-  text-wrap: balance;
-}
-
-.auth-shell__mark {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: min(300px, 100%);
-  aspect-ratio: 1;
-  border: 1px solid #c8d8f1;
-  border-radius: var(--radius-md);
-  background: rgb(255 255 255 / 42%);
-}
-
-.auth-shell__mark::before,
-.auth-shell__mark::after {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  content: '';
-  background: var(--accent);
-}
-
-.auth-shell__mark::before { top: -4px; left: -4px; }
-.auth-shell__mark::after { right: -4px; bottom: -4px; }
-
-.auth-shell__axis { position: absolute; background: #d3dff1; }
-.auth-shell__axis--x { right: 0; left: 0; height: 1px; }
-.auth-shell__axis--y { top: 0; bottom: 0; width: 1px; }
-
-.auth-shell__status {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-height: 46px;
-  color: var(--success);
-}
-
-.auth-shell__status--offline { color: var(--coral); }
-.auth-shell__status div { display: flex; flex: 1; flex-direction: column; }
-.auth-shell__status strong { font-size: 12px; font-weight: 650; }
-.auth-shell__status span { color: var(--text-tertiary); font-family: var(--font-mono); font-size: 11px; }
-
 .auth-shell__form-pane {
   display: grid;
   min-height: 620px;

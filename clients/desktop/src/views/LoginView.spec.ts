@@ -58,7 +58,17 @@ const settings = {
 }
 
 function mountLogin(options = {}) {
-  return mount(LoginView, options)
+  return mount(LoginView, {
+    global: {
+      stubs: {
+        BrandMotion: {
+          props: ['logo'],
+          template: '<div data-testid="brand-motion" :data-logo="logo" />',
+        },
+      },
+    },
+    ...options,
+  })
 }
 
 describe('LoginView', () => {
@@ -72,6 +82,12 @@ describe('LoginView', () => {
     const wrapper = mountLogin()
 
     expect(wrapper.get('[data-testid="brand-name"]').text()).toBe('LinAI')
+    expect(wrapper.get('[data-testid="brand-motion"]').attributes('data-logo')).toBe(
+      settings.site_logo,
+    )
+    expect(wrapper.text()).not.toContain(settings.site_subtitle)
+    expect(wrapper.text()).not.toContain('安全连接已就绪')
+    expect(wrapper.text()).not.toContain('lynn.lat')
     expect(wrapper.get('[data-testid="registration-link"]').text()).toContain('创建账号')
     expect(wrapper.get('[data-testid="password-reset-link"]').text()).toContain('找回密码')
   })
@@ -121,6 +137,10 @@ describe('LoginView', () => {
     const wrapper = mountLogin({
       global: {
         stubs: {
+          BrandMotion: {
+            props: ['logo'],
+            template: '<div data-testid="brand-motion" :data-logo="logo" />',
+          },
           TurnstileWidget: {
             emits: ['verify'],
             template:
@@ -162,13 +182,11 @@ describe('LoginView', () => {
     expect(wrapper.text()).toContain('l***@example.com')
   })
 
-  it('shows a retryable offline status', async () => {
+  it('does not restore the removed connection status when offline', () => {
     mocks.session.offline = true
     const wrapper = mountLogin()
 
-    await wrapper.get('[data-testid="offline-retry"]').trigger('click')
-
-    expect(wrapper.get('[data-testid="offline-status"]').text()).toContain('暂时无法连接')
-    expect(mocks.reloadSettings).toHaveBeenCalledOnce()
+    expect(wrapper.find('.connection-status').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('暂时无法连接')
   })
 })

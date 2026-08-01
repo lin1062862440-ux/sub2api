@@ -12,12 +12,12 @@ import {
   Mail,
   RefreshCw,
   ShieldCheck,
-  WifiOff,
 } from '@lucide/vue'
 
 import * as api from '@/api'
 import { isTotpRequired } from '@/api'
 import BrandLogo from '@/components/BrandLogo.vue'
+import BrandMotion from '@/components/BrandMotion.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { webUrl } from '@/config'
 import { normalizeBrand } from '@/lib/brand'
@@ -36,7 +36,6 @@ const tempToken = ref('')
 const maskedEmail = ref('')
 const stage = ref<'credentials' | 'totp'>('credentials')
 const submitting = ref(false)
-const retrying = ref(false)
 const error = ref('')
 
 const settings = computed(() => session.settings)
@@ -160,17 +159,6 @@ function messageFor(reason: unknown, fallback: string): string {
   return fallback
 }
 
-async function retryConnection() {
-  retrying.value = true
-  error.value = ''
-  try {
-    await reloadSettings()
-    if (session.offline) error.value = '仍然无法连接到 LinAI'
-  } finally {
-    retrying.value = false
-  }
-}
-
 function openAccountPage(path: string) {
   void openUrl(webUrl(path))
 }
@@ -184,38 +172,7 @@ function openAccountPage(path: string) {
         <span data-testid="brand-name">{{ brand.name }}</span>
       </div>
 
-      <div class="brand-message">
-        <div class="signal-field" aria-hidden="true">
-          <span class="signal-axis signal-axis-x" />
-          <span class="signal-axis signal-axis-y" />
-          <BrandLogo :src="brand.logo" alt="" :size="112" />
-        </div>
-        <p>{{ brand.subtitle }}</p>
-      </div>
-
-      <div
-        class="connection-status"
-        :class="{ 'connection-status-offline': session.offline }"
-        data-testid="offline-status"
-      >
-        <component :is="session.offline ? WifiOff : ShieldCheck" :size="17" aria-hidden="true" />
-        <div>
-          <strong>{{ session.offline ? '暂时无法连接' : '安全连接已就绪' }}</strong>
-          <span>lynn.lat</span>
-        </div>
-        <button
-          v-if="session.offline"
-          class="icon-action no-drag"
-          type="button"
-          title="重新连接"
-          aria-label="重新连接"
-          data-testid="offline-retry"
-          :disabled="retrying"
-          @click="retryConnection"
-        >
-          <RefreshCw :size="16" :class="{ spinning: retrying }" />
-        </button>
-      </div>
+      <BrandMotion :logo="brand.logo" />
     </section>
 
     <main class="form-pane">
@@ -409,100 +366,6 @@ function openAccountPage(path: string) {
   gap: 12px;
   font-size: 18px;
   font-weight: 720;
-}
-
-.brand-message {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  justify-content: center;
-  gap: 28px;
-  padding: 24px 0;
-}
-
-.brand-message p {
-  max-width: 18ch;
-  font-size: 24px;
-  font-weight: 640;
-  line-height: 1.45;
-  color: #24344f;
-  text-wrap: balance;
-}
-
-.signal-field {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: min(300px, 100%);
-  aspect-ratio: 1;
-  border: 1px solid #c8d8f1;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.42);
-}
-
-.signal-field::before,
-.signal-field::after {
-  position: absolute;
-  width: 8px;
-  height: 8px;
-  content: '';
-  background: #2563eb;
-}
-
-.signal-field::before {
-  top: -4px;
-  left: -4px;
-}
-
-.signal-field::after {
-  right: -4px;
-  bottom: -4px;
-}
-
-.signal-axis {
-  position: absolute;
-  background: #d3dff1;
-}
-
-.signal-axis-x {
-  right: 0;
-  left: 0;
-  height: 1px;
-}
-
-.signal-axis-y {
-  top: 0;
-  bottom: 0;
-  width: 1px;
-}
-
-.connection-status {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-height: 46px;
-  color: #087f5b;
-}
-
-.connection-status-offline {
-  color: #b5455b;
-}
-
-.connection-status div {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-}
-
-.connection-status strong {
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.connection-status span {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: #667085;
 }
 
 .form-pane {
@@ -747,12 +610,16 @@ function openAccountPage(path: string) {
 }
 
 @media (max-width: 900px) {
+  .auth-window {
+    grid-template-columns: 1fr;
+  }
+
   .brand-pane {
-    padding-right: 38px;
-    padding-left: 38px;
+    display: none;
   }
 
   .form-pane {
+    min-height: 100%;
     padding-right: 44px;
     padding-left: 44px;
   }
