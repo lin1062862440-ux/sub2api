@@ -123,19 +123,8 @@ pub fn configure_usage_display(
                 let _ = window.hide();
             }
         }
-        macos::configure_menu_bar(
-            &app,
-            &state,
-            transition.show_menu_bar,
-            &title,
-            &appearance,
-        )?;
-        macos::configure_floating(
-            &app,
-            &state,
-            transition.show_floating,
-            &appearance,
-        )?;
+        macos::configure_menu_bar(&app, &state, transition.show_menu_bar, &title, &appearance)?;
+        macos::configure_floating(&app, &state, transition.show_floating, &appearance)?;
         if let Ok(mut active) = state.active_surface.lock() {
             *active = enabled.then_some(surface);
         }
@@ -159,7 +148,11 @@ pub fn set_usage_display_title(
     state: tauri::State<'_, UsageDisplayHost>,
     title: String,
 ) -> Result<(), String> {
-    let active = state.active_surface.lock().map(|value| *value).unwrap_or(None);
+    let active = state
+        .active_surface
+        .lock()
+        .map(|value| *value)
+        .unwrap_or(None);
     if active != Some(UsageSurface::MenuBar) {
         return Ok(());
     }
@@ -184,7 +177,11 @@ pub fn set_floating_usage_expanded(
     if window.label() != FLOATING_LABEL {
         return Err("悬浮窗命令来源无效".to_string());
     }
-    let active = state.active_surface.lock().map(|value| *value).unwrap_or(None);
+    let active = state
+        .active_surface
+        .lock()
+        .map(|value| *value)
+        .unwrap_or(None);
     if active != Some(UsageSurface::FloatingWindow) {
         return Err("悬浮窗当前未启用".to_string());
     }
@@ -208,7 +205,11 @@ pub fn start_floating_usage_drag(
     if window.label() != FLOATING_LABEL {
         return Err("悬浮窗命令来源无效".to_string());
     }
-    let active = state.active_surface.lock().map(|value| *value).unwrap_or(None);
+    let active = state
+        .active_surface
+        .lock()
+        .map(|value| *value)
+        .unwrap_or(None);
     if active != Some(UsageSurface::FloatingWindow) {
         return Err("悬浮窗当前未启用".to_string());
     }

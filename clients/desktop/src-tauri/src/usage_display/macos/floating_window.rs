@@ -6,14 +6,12 @@ use std::sync::{
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "macos")]
-use tauri::{
-    Manager, Monitor, PhysicalPosition, PhysicalSize, Position, Size, WebviewWindow,
-};
+use tauri::{Manager, Monitor, PhysicalPosition, PhysicalSize, Position, Size, WebviewWindow};
 #[cfg(target_os = "macos")]
 use tauri_plugin_store::StoreExt;
 
 #[cfg(target_os = "macos")]
-use super::super::{FLOATING_LABEL, UsageDisplayHost};
+use super::super::{UsageDisplayHost, FLOATING_LABEL};
 
 pub(in crate::usage_display) const COLLAPSED_LOGICAL_SIZE: f64 = 88.0;
 pub(in crate::usage_display) const EXPANDED_LOGICAL_SIZE: f64 = 352.0;
@@ -102,8 +100,16 @@ fn expand_from_anchor(collapsed: WindowRect, expanded: WindowSize, area: WorkAre
     let grow_left = collapsed.point.x + expanded.width as i32 > area_right;
     let grow_up = collapsed.point.y + expanded.height as i32 > area_bottom;
     let point = WindowPoint::new(
-        if grow_left { collapsed_right - expanded.width as i32 } else { collapsed.point.x },
-        if grow_up { collapsed_bottom - expanded.height as i32 } else { collapsed.point.y },
+        if grow_left {
+            collapsed_right - expanded.width as i32
+        } else {
+            collapsed.point.x
+        },
+        if grow_up {
+            collapsed_bottom - expanded.height as i32
+        } else {
+            collapsed.point.y
+        },
     );
     clamp_to_work_area(point, expanded, area)
 }
@@ -218,7 +224,11 @@ fn restored_anchor(
     };
     let x = area.point.x + (((record.x - record.work_x) as f64 / old_scale) * scale).round() as i32;
     let y = area.point.y + (((record.y - record.work_y) as f64 / old_scale) * scale).round() as i32;
-    Ok(clamp_to_work_area(WindowPoint::new(x, y), collapsed_size, area))
+    Ok(clamp_to_work_area(
+        WindowPoint::new(x, y),
+        collapsed_size,
+        area,
+    ))
 }
 
 #[cfg(target_os = "macos")]
@@ -306,7 +316,12 @@ pub(in crate::usage_display) fn set_expanded(
             .unwrap_or_else(|| WindowPoint::new(current.x, current.y));
         let monitor = monitor_for_point(app, anchor)?;
         let next = expand_from_anchor(
-            WindowRect::new(anchor.x, anchor.y, collapsed_size.width, collapsed_size.height),
+            WindowRect::new(
+                anchor.x,
+                anchor.y,
+                collapsed_size.width,
+                collapsed_size.height,
+            ),
             expanded_size,
             work_area(&monitor),
         );
@@ -318,7 +333,10 @@ pub(in crate::usage_display) fn set_expanded(
             .set_position(Position::Physical(as_physical(next)))
             .map_err(|error| error.to_string())?;
         window
-            .set_size(Size::Physical(PhysicalSize::new(expanded_size.width, expanded_size.height)))
+            .set_size(Size::Physical(PhysicalSize::new(
+                expanded_size.width,
+                expanded_size.height,
+            )))
             .map_err(|error| error.to_string())?;
         return Ok(());
     }
@@ -336,7 +354,10 @@ pub(in crate::usage_display) fn set_expanded(
         *value = Some(anchor);
     }
     window
-        .set_size(Size::Physical(PhysicalSize::new(collapsed_size.width, collapsed_size.height)))
+        .set_size(Size::Physical(PhysicalSize::new(
+            collapsed_size.width,
+            collapsed_size.height,
+        )))
         .map_err(|error| error.to_string())?;
     state.floating.expanded.store(false, Ordering::SeqCst);
     window
@@ -399,11 +420,7 @@ mod tests {
     #[test]
     fn floating_usage_starts_at_the_bottom_right() {
         assert_eq!(
-            bottom_right(
-                WorkArea::new(0, 0, 1440, 900),
-                WindowSize::new(88, 88),
-                20,
-            ),
+            bottom_right(WorkArea::new(0, 0, 1440, 900), WindowSize::new(88, 88), 20,),
             WindowPoint::new(1332, 792),
         );
     }
