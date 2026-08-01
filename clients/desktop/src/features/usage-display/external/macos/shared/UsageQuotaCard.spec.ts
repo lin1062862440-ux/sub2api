@@ -111,5 +111,6 @@ describe('UsageQuotaCard', () => {
     })
 
     expect(wrapper.findAll('.quota-track')).toHaveLength(1)
+    expect(wrapper.get('.quota-track span').attributes('style')).toContain('width: 0%')
   })
 })

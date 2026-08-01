@@ -62,7 +62,7 @@ describe('FloatingUsageCard', () => {
     expect(wrapper.find('svg').exists()).toBe(false)
   })
 
-  it('shows the subscription identity once and moves expiry to the footer', () => {
+  it('promotes monthly quota and lists only shorter periods with remaining progress', () => {
     const wrapper = mount(FloatingUsageCard, {
       props: props({
         source: 'subscription',
@@ -72,24 +72,32 @@ describe('FloatingUsageCard', () => {
           group: { name: '45 订阅' },
         },
         quotaSummary: {
-          remainingPercent: 100,
+          remainingPercent: 42,
           constrainedKey: 'weekly',
           unlimited: false,
           quotas: [
             {
+              key: 'daily',
+              label: '日额度',
+              used: 2,
+              limit: 10,
+              remainingPercent: 80,
+              resetAt: new Date('2026-08-02T12:00:00Z'),
+            },
+            {
               key: 'weekly',
               label: '周额度',
-              used: 0,
+              used: 29,
               limit: 50,
-              remainingPercent: 100,
+              remainingPercent: 42,
               resetAt: new Date('2026-08-08T12:00:00Z'),
             },
             {
               key: 'monthly',
               label: '月额度',
-              used: 0,
+              used: 52.8,
               limit: 220,
-              remainingPercent: 100,
+              remainingPercent: 76,
               resetAt: new Date('2026-08-31T12:00:00Z'),
             },
           ],
@@ -98,28 +106,45 @@ describe('FloatingUsageCard', () => {
     })
 
     expect(wrapper.text().match(/45 订阅/g) ?? []).toHaveLength(1)
-    expect(wrapper.text()).toContain('剩余额度')
+    expect(wrapper.get('[data-testid="floating-primary-label"]').text()).toBe('月额度剩余')
     expect(wrapper.text()).not.toContain('最紧额度剩余')
+    expect(wrapper.get('[data-testid="floating-metric-number"]').text()).toBe('76')
+    expect(wrapper.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
+    expect(wrapper.get('[data-testid="floating-primary-progress"] span').attributes('style')).toContain('width: 76%')
+    const rows = wrapper.findAll('[data-testid="usage-quota-row"]')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('周额度')
+    expect(rows[0].get('.quota-track span').attributes('style')).toContain('width: 42%')
+    expect(rows[1].text()).toContain('日额度')
+    expect(rows[1].get('.quota-track span').attributes('style')).toContain('width: 80%')
+    expect(wrapper.text().match(/月额度/g) ?? []).toHaveLength(1)
     expect(wrapper.get('[data-testid="floating-subscription-expiry"]').text()).toBe('有效期至 8月31日')
-    expect(wrapper.findAll('.quota-track')).toHaveLength(0)
   })
 
-  it('keeps progress for quota windows that have usage', () => {
+  it('keeps a full remaining track for an unused secondary quota', () => {
     const wrapper = mount(FloatingUsageCard, {
       props: props({
         source: 'subscription',
         subscription: { id: 45, expires_at: null, group: { name: '45 订阅' } },
         quotaSummary: {
-          remainingPercent: 60,
+          remainingPercent: 76,
           constrainedKey: 'weekly',
           unlimited: false,
           quotas: [
             {
               key: 'weekly',
               label: '周额度',
-              used: 20,
+              used: 0,
               limit: 50,
-              remainingPercent: 60,
+              remainingPercent: 100,
+              resetAt: null,
+            },
+            {
+              key: 'monthly',
+              label: '月额度',
+              used: 52.8,
+              limit: 220,
+              remainingPercent: 76,
               resetAt: null,
             },
           ],
@@ -128,6 +153,7 @@ describe('FloatingUsageCard', () => {
     })
 
     expect(wrapper.findAll('.quota-track')).toHaveLength(1)
+    expect(wrapper.get('.quota-track span').attributes('style')).toContain('width: 100%')
     expect(wrapper.get('[data-testid="floating-subscription-expiry"]').text()).toBe('长期有效')
   })
 })
