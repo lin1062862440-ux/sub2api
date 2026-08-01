@@ -1,15 +1,13 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 import { formatUsageOrbValue } from '@/features/usage-display/core/format'
 import {
-  openMainWindow,
-  quitDesktopApp,
   setFloatingUsageExpanded,
   startFloatingUsageDrag,
 } from '@/features/usage-display/core/host'
 import { usageDisplayStore } from '@/features/usage-display/core/store'
-import UsageQuotaCard from '@/features/usage-display/external/macos/shared/UsageQuotaCard.vue'
+import FloatingUsageCard from './FloatingUsageCard.vue'
 import FloatingUsageOrb from './FloatingUsageOrb.vue'
 
 const { state } = usageDisplayStore
@@ -22,13 +20,23 @@ const orbValue = computed(() => {
   if (state.config.source === 'balance') {
     return formatUsageOrbValue({ kind: 'balance', balance: state.balance?.available ?? null })
   }
-  if (!state.quotaSummary) return formatUsageOrbValue({ kind: 'unavailable' })
+  if (
+    !state.subscription
+    || state.subscription.id !== state.config.subscriptionId
+    || !state.quotaSummary
+  ) return formatUsageOrbValue({ kind: 'unavailable' })
   return formatUsageOrbValue({
     kind: 'subscription',
     remainingPercent: state.quotaSummary.remainingPercent,
     unlimited: state.quotaSummary.unlimited,
   })
 })
+
+const configIdentity = computed(() => [
+  state.config.source,
+  state.config.subscriptionId ?? '',
+  state.config.appearance,
+].join(':'))
 
 function cancelCollapse() {
   if (collapseTimer !== null) window.clearTimeout(collapseTimer)
@@ -70,12 +78,22 @@ function drag() {
   void startFloatingUsageDrag()
 }
 
+watch(configIdentity, () => {
+  cancelCollapse()
+  interactionSequence += 1
+  mode.value = 'collapsed'
+  nativeError.value = ''
+  void setFloatingUsageExpanded(false).catch(() => {
+    nativeError.value = '收起失败'
+  })
+}, { flush: 'sync' })
+
 onBeforeUnmount(() => cancelCollapse())
 </script>
 
 <template>
   <main class="macos-floating-window" data-testid="macos-floating-window">
-    <UsageQuotaCard
+    <FloatingUsageCard
       v-if="mode === 'expanded'"
       :source="state.config.source"
       :appearance="state.config.appearance"
@@ -83,16 +101,11 @@ onBeforeUnmount(() => cancelCollapse())
       :subscription="state.subscription"
       :quota-summary="state.quotaSummary"
       :loading="state.loading"
-      :refreshing="state.refreshing"
       :error="state.error"
       :last-updated-at="state.lastUpdatedAt"
-      draggable
       @mouseenter="cancelCollapse"
       @mouseleave="scheduleCollapse"
       @drag="drag"
-      @refresh="usageDisplayStore.refresh"
-      @open-main="openMainWindow"
-      @quit="quitDesktopApp"
     />
     <FloatingUsageOrb
       v-else
