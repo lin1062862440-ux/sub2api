@@ -323,3 +323,118 @@ git rev-list --left-right --count origin/main...HEAD
 ```
 
 Expected: push succeeds and final divergence is `0 0`; `.superpowers/` remains untracked and is not pushed.
+
+### Task 5: Refine Subscription Hierarchy And Typography
+
+**Files:**
+
+- Create: `clients/desktop/src/features/usage-display/external/macos/floating-window/FloatingSubscriptionOverview.vue`
+- Modify: `clients/desktop/src/features/usage-display/external/macos/floating-window/FloatingUsageCard.vue`
+- Modify: `clients/desktop/src/features/usage-display/external/macos/floating-window/FloatingUsageCard.spec.ts`
+- Modify: `clients/desktop/src/features/usage-display/external/macos/shared/QuotaRow.vue`
+- Modify: `clients/desktop/src/features/usage-display/external/macos/shared/UsageQuotaCard.spec.ts`
+- Modify: `clients/desktop/src/features/usage-display/external/macos/floating-window/macos-floating-window.css`
+
+- [ ] **Step 1: Write failing hierarchy tests**
+
+Mount a floating subscription with two 100%-remaining quota windows and assert:
+
+```ts
+expect(wrapper.text().match(/45 订阅/g) ?? []).toHaveLength(1)
+expect(wrapper.text()).toContain('剩余额度')
+expect(wrapper.text()).not.toContain('最紧额度剩余')
+expect(wrapper.get('[data-testid="floating-subscription-expiry"]').text()).toBe('有效期至 8月31日')
+expect(wrapper.findAll('.quota-track')).toHaveLength(0)
+```
+
+Add a used-quota case proving a remaining percentage below 100 still renders one progress track. Preserve the shared menu-bar default by asserting `UsageQuotaCard` still renders progress tracks for 100%-remaining rows.
+
+- [ ] **Step 2: Run focused tests and verify they fail**
+
+```bash
+pnpm --dir clients/desktop exec vitest run \
+  src/features/usage-display/external/macos/floating-window/FloatingUsageCard.spec.ts \
+  src/features/usage-display/external/macos/shared/UsageQuotaCard.spec.ts
+```
+
+Expected: floating subscription name appears twice, the old label remains, the expiry footer is absent, and empty tracks still render.
+
+- [ ] **Step 3: Implement the floating-only subscription body**
+
+Create `FloatingSubscriptionOverview.vue` with this hierarchy:
+
+```vue
+<section class="usage-overview subscription-overview" data-testid="floating-subscription-overview">
+  <div v-if="subscription && quotaSummary" class="subscription-content">
+    <div class="subscription-primary">
+      <div class="external-primary">
+        <span>剩余额度</span>
+        <strong>{{ quotaSummary.unlimited ? '∞' : `${quotaSummary.remainingPercent}%` }}</strong>
+      </div>
+    </div>
+    <div v-if="quotaSummary.quotas.length" class="quota-list">
+      <QuotaRow
+        v-for="quota in quotaSummary.quotas"
+        :key="quota.key"
+        :quota="quota"
+        :show-icon="false"
+        :hide-unused-track="true"
+      />
+    </div>
+    <footer data-testid="floating-subscription-expiry">{{ expiryLabel }}</footer>
+  </div>
+</section>
+```
+
+Give `QuotaRow.vue` an optional `hideUnusedTrack` prop defaulting to `false`, and render the track only when `!hideUnusedTrack || quota.remainingPercent < 100`. Replace the shared `SubscriptionOverview` import in `FloatingUsageCard.vue` with the floating component. Menu-bar callers keep the old default behavior.
+
+- [ ] **Step 4: Run focused tests and verify they pass**
+
+Run the Step 2 command. Expected: both test files pass.
+
+- [ ] **Step 5: Remove separators and raise minimum typography sizes**
+
+Update only `macos-floating-window.css`:
+
+```css
+.floating-card-head { border-bottom: 0; }
+.floating-usage-card .subscription-primary { grid-template-columns: minmax(0, 1fr); border-bottom: 0; }
+.floating-usage-card .quota-row { border-bottom: 0; }
+.floating-card-head strong { font-size: 15px; }
+.floating-card-head span { font-size: 10px; }
+.floating-usage-card .external-primary span { font-size: 11px; }
+.floating-usage-card .external-primary strong { font-size: 44px; }
+.floating-usage-card .quota-head strong,
+.floating-usage-card .quota-head b { font-size: 11px; }
+.floating-usage-card .quota-head span,
+.floating-usage-card .quota-row small,
+.floating-subscription-expiry { font-size: 10px; }
+```
+
+Use logical CSS pixels without `transform: scale(...)`, `zoom`, or resolution-specific font overrides; Rust monitor scale-factor conversion remains authoritative.
+
+- [ ] **Step 6: Verify tests, build, and visual geometry**
+
+Run:
+
+```bash
+pnpm --dir clients/desktop test:run
+pnpm --dir clients/desktop run build
+cargo test --manifest-path clients/desktop/src-tauri/Cargo.toml
+cargo check --manifest-path clients/desktop/src-tauri/Cargo.toml
+```
+
+In the 352-pixel browser visual harness, confirm one subscription name, `剩余额度`, no ornamental separators, no empty tracks at 100%, the expiry footer at bottom right, no overflow, and zero console errors.
+
+- [ ] **Step 7: Commit and push**
+
+```bash
+git add clients/desktop/src/features/usage-display/external/macos/floating-window \
+  clients/desktop/src/features/usage-display/external/macos/shared/QuotaRow.vue \
+  clients/desktop/src/features/usage-display/external/macos/shared/UsageQuotaCard.spec.ts
+git commit -m "style(desktop): refine floating subscription hierarchy"
+git push origin main
+git rev-list --left-right --count origin/main...HEAD
+```
+
+Expected: the push succeeds and final divergence is `0 0`; `.superpowers/` remains untracked.
