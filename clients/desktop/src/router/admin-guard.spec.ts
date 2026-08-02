@@ -1,9 +1,85 @@
-import { describe, expect, it } from 'vitest'
+import type { Router } from 'vue-router'
+import { describe, expect, it, vi } from 'vitest'
 
 import { capabilitiesFor } from '@/lib/platform-capabilities'
 import { resolveRouteAccess, router, shouldExitUserGroupWorkspace } from './index'
 
+const mobileRouteModules = {
+  dashboard: () => import('@/mobile/views/MobileDashboardView.vue'),
+  usage: () => import('@/mobile/views/MobileUsageView.vue'),
+  subscriptions: () => import('@/mobile/views/MobileSubscriptionsView.vue'),
+  'admin-dashboard': () => import('@/mobile/views/admin/MobileAdminDashboardView.vue'),
+  'admin-accounts': () => import('@/mobile/views/admin/MobileAdminAccountsView.vue'),
+  'admin-groups': () => import('@/mobile/views/admin/MobileAdminGroupsView.vue'),
+  'admin-users': () => import('@/mobile/views/admin/MobileAdminUsersView.vue'),
+  'user-groups': () => import('@/mobile/views/admin/MobileUserGroupsView.vue'),
+  'admin-subscriptions': () => import('@/mobile/views/admin/MobileAdminSubscriptionsView.vue'),
+}
+
+const desktopRouteModules = {
+  dashboard: () => import('@/views/DashboardView.vue'),
+  usage: () => import('@/views/UsageView.vue'),
+  subscriptions: () => import('@/views/SubscriptionsView.vue'),
+  'admin-dashboard': () => import('@/views/admin/AdminDashboardView.vue'),
+  'admin-accounts': () => import('@/views/admin/AdminAccountsView.vue'),
+  'admin-groups': () => import('@/views/admin/AdminGroupsView.vue'),
+  'admin-users': () => import('@/views/admin/AdminUsersView.vue'),
+  'user-groups': () => import('@/views/UserGroupsView.vue'),
+  'admin-subscriptions': () => import('@/views/admin/AdminSubscriptionsView.vue'),
+}
+
+async function evaluatedRouter(mobile: boolean) {
+  vi.resetModules()
+  vi.doMock('@/lib/platform-capabilities', () => ({
+    appCapabilities: {
+      mobile,
+      apiKeys: !mobile,
+      localConfig: !mobile,
+      externalUsageDisplay: !mobile,
+      textExport: !mobile,
+      desktopSecondInstance: !mobile,
+    },
+    capabilitiesFor: (target: string) => ({
+      mobile: target === 'android' || target === 'ios',
+      apiKeys: target !== 'android' && target !== 'ios',
+      localConfig: target !== 'android' && target !== 'ios',
+      externalUsageDisplay: target !== 'android' && target !== 'ios',
+      textExport: target !== 'android' && target !== 'ios',
+      desktopSecondInstance: target !== 'android' && target !== 'ios',
+    }),
+  }))
+  const module = await import('./index')
+  vi.doUnmock('@/lib/platform-capabilities')
+  return module.router
+}
+
+async function lazyRouteComponent(platformRouter: Router, name: string) {
+  const record = platformRouter.getRoutes().find((route) => route.name === name)
+  const component = record?.components?.default
+  expect(typeof component).toBe('function')
+  const loaded = await (component as () => Promise<{ default: unknown }>)()
+  return loaded.default
+}
+
 describe('desktop administrator route guard', () => {
+  it('evaluates all nine approved routes to mobile lazy views on Android', async () => {
+    const androidRouter = await evaluatedRouter(true)
+
+    for (const [name, loadExpected] of Object.entries(mobileRouteModules)) {
+      const expected = await loadExpected()
+      expect(await lazyRouteComponent(androidRouter, name), name).toBe(expected.default)
+    }
+  })
+
+  it('retains all nine original desktop lazy views outside mobile mode', async () => {
+    const desktopRouter = await evaluatedRouter(false)
+
+    for (const [name, loadExpected] of Object.entries(desktopRouteModules)) {
+      const expected = await loadExpected()
+      expect(await lazyRouteComponent(desktopRouter, name), name).toBe(expected.default)
+    }
+  })
+
   it('registers the administrator group management route', () => {
     expect(router.hasRoute('admin-groups')).toBe(true)
   })

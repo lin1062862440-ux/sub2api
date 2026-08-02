@@ -5,11 +5,13 @@
  * `tauri://localhost` where path-based routes would 404 on reload.
  */
 import { watch } from 'vue'
-import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import { createRouter, createWebHashHistory, type RouteComponent, type RouteRecordRaw } from 'vue-router'
 import { readWorkspaceMode, workspaceDestination, type WorkspaceMode } from '@/lib/admin-workspace'
 import { isMobileRouteAllowed } from '@/mobile/navigation'
 import { appCapabilities, type PlatformCapabilities } from '@/lib/platform-capabilities'
 import { isAuthenticated, session } from '@/stores/session'
+
+const routeView = (desktop: RouteComponent, mobile: RouteComponent): RouteComponent => appCapabilities.mobile ? mobile : desktop
 
 interface RouteAccessInput {
   authenticated: boolean
@@ -83,7 +85,10 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'dashboard',
         name: 'dashboard',
-        component: () => import('@/views/DashboardView.vue'),
+        component: routeView(
+          () => import('@/views/DashboardView.vue'),
+          () => import('@/mobile/views/MobileDashboardView.vue'),
+        ),
       },
       {
         path: 'keys',
@@ -94,7 +99,10 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'usage',
         name: 'usage',
-        component: () => import('@/views/UsageView.vue'),
+        component: routeView(
+          () => import('@/views/UsageView.vue'),
+          () => import('@/mobile/views/MobileUsageView.vue'),
+        ),
         meta: { standardOnly: true },
       },
       {
@@ -106,7 +114,10 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'subscriptions',
         name: 'subscriptions',
-        component: () => import('@/views/SubscriptionsView.vue'),
+        component: routeView(
+          () => import('@/views/SubscriptionsView.vue'),
+          () => import('@/mobile/views/MobileSubscriptionsView.vue'),
+        ),
         meta: { standardOnly: true },
       },
       {
@@ -118,7 +129,10 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'user-groups',
         name: 'user-groups',
-        component: () => import('@/views/UserGroupsView.vue'),
+        component: routeView(
+          () => import('@/views/UserGroupsView.vue'),
+          () => import('@/mobile/views/admin/MobileUserGroupsView.vue'),
+        ),
         meta: { requiresUserGroupAccess: true, userGroupWorkspace: true, title: '用户组' },
       },
       {
@@ -141,25 +155,37 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'admin/dashboard',
         name: 'admin-dashboard',
-        component: () => import('@/views/admin/AdminDashboardView.vue'),
+        component: routeView(
+          () => import('@/views/admin/AdminDashboardView.vue'),
+          () => import('@/mobile/views/admin/MobileAdminDashboardView.vue'),
+        ),
         meta: { requiresAdmin: true, title: '管理概览' },
       },
       {
         path: 'admin/accounts',
         name: 'admin-accounts',
-        component: () => import('@/views/admin/AdminAccountsView.vue'),
+        component: routeView(
+          () => import('@/views/admin/AdminAccountsView.vue'),
+          () => import('@/mobile/views/admin/MobileAdminAccountsView.vue'),
+        ),
         meta: { requiresAdmin: true, title: '账号管理' },
       },
       {
         path: 'admin/users',
         name: 'admin-users',
-        component: () => import('@/views/admin/AdminUsersView.vue'),
+        component: routeView(
+          () => import('@/views/admin/AdminUsersView.vue'),
+          () => import('@/mobile/views/admin/MobileAdminUsersView.vue'),
+        ),
         meta: { requiresAdmin: true, standardOnly: true, title: '用户管理' },
       },
       {
         path: 'admin/groups',
         name: 'admin-groups',
-        component: () => import('@/views/admin/AdminGroupsView.vue'),
+        component: routeView(
+          () => import('@/views/admin/AdminGroupsView.vue'),
+          () => import('@/mobile/views/admin/MobileAdminGroupsView.vue'),
+        ),
         meta: { requiresAdmin: true, standardOnly: true, title: '分组管理' },
       },
       {
@@ -183,7 +209,10 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'admin/subscriptions',
         name: 'admin-subscriptions',
-        component: () => import('@/views/admin/AdminSubscriptionsView.vue'),
+        component: routeView(
+          () => import('@/views/admin/AdminSubscriptionsView.vue'),
+          () => import('@/mobile/views/admin/MobileAdminSubscriptionsView.vue'),
+        ),
         meta: { requiresAdmin: true, standardOnly: true, title: '订阅管理' },
       },
       {
