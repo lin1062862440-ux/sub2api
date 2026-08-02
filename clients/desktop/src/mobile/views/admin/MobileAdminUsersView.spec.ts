@@ -176,6 +176,42 @@ describe('MobileAdminUsersView', () => {
     expect(mocks.groups).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps only unique positive safe numeric user ids and preserves mutation ownership', async () => {
+    const stringId = { ...adminUser({ email: 'string-id@example.com' }), id: '7' } as unknown as AdminUser
+    const duplicate = adminUser({ email: 'duplicate-id@example.com' })
+    const invalid = [
+      adminUser({ id: 0, email: 'zero-id@example.com' }),
+      adminUser({ id: Number.NaN, email: 'nan-id@example.com' }),
+      adminUser({ id: Number.MAX_SAFE_INTEGER + 1, email: 'unsafe-id@example.com' }),
+    ]
+    mocks.list.mockResolvedValueOnce(response([
+      stringId,
+      activeUser,
+      duplicate,
+      ...invalid,
+      disabledUser,
+    ]))
+    const wrapper = mount(MobileAdminUsersView)
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid="mobile-user-card"]')).toHaveLength(2)
+    expect(wrapper.findAll('[data-testid="user-menu-trigger-7"]')).toHaveLength(1)
+    expect(wrapper.text()).toContain(activeUser.email)
+    expect(wrapper.text()).toContain(disabledUser.email)
+    expect(wrapper.text()).not.toContain('string-id@example.com')
+    expect(wrapper.text()).not.toContain('duplicate-id@example.com')
+    expect(wrapper.text()).not.toContain('zero-id@example.com')
+    expect(wrapper.text()).not.toContain('nan-id@example.com')
+    expect(wrapper.text()).not.toContain('unsafe-id@example.com')
+
+    await openMenu(wrapper, 7)
+    await wrapper.get('[data-testid="toggle-user-7"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-user-status"]').trigger('click')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenCalledWith(7, { status: 'disabled' })
+    expect(typeof mocks.update.mock.calls[0]![0]).toBe('number')
+  })
+
   it('submits trimmed search and status-role filters from the bottom sheet', async () => {
     const wrapper = mount(MobileAdminUsersView, { attachTo: document.body })
     await flushPromises()
@@ -561,7 +597,9 @@ describe('MobileAdminUsersView', () => {
     expect(wrapper.get('#user-detail-title').text()).toBe('Fresh Detail')
   })
 
-  it('blocks status changes and deletion for admin users in the mobile UI', async () => {
+  it('blocks disabling and deletion for an active admin user', async () => {
+    const activeAdmin = adminUser({ id: 8, role: 'admin', status: 'active' })
+    mocks.list.mockResolvedValueOnce(response([activeAdmin]))
     const wrapper = mount(MobileAdminUsersView)
     await flushPromises()
     await openMenu(wrapper, 8)
@@ -570,13 +608,33 @@ describe('MobileAdminUsersView', () => {
     const remove = wrapper.get('[data-testid="delete-user-8"]')
     expect(toggle.attributes('disabled')).toBeDefined()
     expect(remove.attributes('disabled')).toBeDefined()
-    expect(toggle.attributes('title')).toContain('管理员')
+    expect(toggle.attributes('title')).toContain('不能停用')
     expect(remove.attributes('title')).toContain('管理员')
     await toggle.trigger('click')
     await remove.trigger('click')
     expect(wrapper.find('[data-testid="user-status-dialog"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="confirm-delete-user"]').exists()).toBe(false)
     expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.remove).not.toHaveBeenCalled()
+  })
+
+  it('allows enabling but never deleting a disabled admin user', async () => {
+    const wrapper = mount(MobileAdminUsersView)
+    await flushPromises()
+    await openMenu(wrapper, 8)
+
+    const toggle = wrapper.get('[data-testid="toggle-user-8"]')
+    const remove = wrapper.get('[data-testid="delete-user-8"]')
+    expect(toggle.text()).toContain('启用用户')
+    expect(toggle.attributes('disabled')).toBeUndefined()
+    expect(toggle.attributes('title')).toBeUndefined()
+    expect(remove.attributes('disabled')).toBeDefined()
+    await toggle.trigger('click')
+    expect(wrapper.get('[data-testid="user-status-dialog"]').text()).toContain('启用用户')
+    await wrapper.get('[data-testid="confirm-user-status"]').trigger('click')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenCalledWith(8, { status: 'active' })
+    expect(typeof mocks.update.mock.calls[0]![0]).toBe('number')
     expect(mocks.remove).not.toHaveBeenCalled()
 
     const direct = mount(UserDeleteDialog, { props: { user: disabledUser, mobile: true } })
@@ -670,6 +728,30 @@ describe('MobileAdminUsersView', () => {
     expect(mocks.update).not.toHaveBeenCalled()
 
     mocks.groups.mockResolvedValueOnce([{ id: 1, name: 'Exclusive', is_exclusive: true }])
+    await wrapper.get('[data-testid="user-groups-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="user-group-1"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="user-groups-submit"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it.each([
+    ['object response', { items: [] }],
+    ['null response', null],
+    ['malformed item', [{ id: 1, name: 'Valid', is_exclusive: true }, { id: '2', name: 'String ID', is_exclusive: true }]],
+  ])('rejects a fulfilled malformed group %s and recovers through retry', async (_label, malformed) => {
+    mocks.groups.mockReset()
+      .mockResolvedValueOnce(malformed)
+      .mockResolvedValueOnce([{ id: 1, name: 'Exclusive', platform: 'anthropic', is_exclusive: true }])
+    const wrapper = mount(MobileAdminUsersView)
+    await flushPromises()
+    await openMenu(wrapper, 7)
+    await wrapper.get('[data-testid="groups-user-7"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="user-groups-load-error"]').text()).toContain('分组列表加载失败')
+    expect(wrapper.get('[data-testid="user-groups-submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="user-groups-submit"]').trigger('click')
+    expect(mocks.update).not.toHaveBeenCalled()
+
     await wrapper.get('[data-testid="user-groups-retry"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="user-group-1"]').exists()).toBe(true)

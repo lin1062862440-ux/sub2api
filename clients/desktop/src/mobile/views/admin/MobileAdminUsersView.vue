@@ -81,7 +81,36 @@ function safeInteger(value: unknown, minimum = 0) {
 }
 
 function safeId(value: unknown) {
-  return safeInteger(value, 1)
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
+function safeGroupOptions(value: unknown): AdminGroupOption[] | null {
+  if (!Array.isArray(value)) return null
+  const seen = new Set<number>()
+  const options: AdminGroupOption[] = []
+  for (const item of value) {
+    if (
+      !item
+      || typeof item !== 'object'
+      || Array.isArray(item)
+      || safeId(item.id) === null
+      || typeof item.name !== 'string'
+      || !item.name.trim()
+      || typeof item.is_exclusive !== 'boolean'
+      || (item.platform !== undefined && typeof item.platform !== 'string')
+      || (item.status !== undefined && typeof item.status !== 'string')
+    ) return null
+    if (seen.has(item.id)) continue
+    seen.add(item.id)
+    options.push({
+      id: item.id,
+      name: item.name,
+      is_exclusive: item.is_exclusive,
+      ...(item.platform !== undefined ? { platform: item.platform } : {}),
+      ...(item.status !== undefined ? { status: item.status } : {}),
+    })
+  }
+  return options
 }
 
 function safeText(value: unknown, fallback: string) {
@@ -174,8 +203,13 @@ async function loadUsers(
     if (requestedPage > availablePages) {
       return await loadUsers(availablePages, true, feedbackToken, reportFailure)
     }
+    const seen = new Set<number>()
     const items = Array.isArray(response?.items)
-      ? response.items.filter((item): item is AdminUser => Boolean(item && safeId(item.id) !== null))
+      ? response.items.filter((item): item is AdminUser => {
+        if (!item || safeId(item.id) === null || seen.has(item.id)) return false
+        seen.add(item.id)
+        return true
+      })
       : []
     result.value = { items, total, page: requestedPage, page_size: PAGE_SIZE }
     loaded.value = true
@@ -202,7 +236,10 @@ async function loadGroups() {
   groupsError.value = ''
   try {
     const response = await getAdminGroups()
-    if (mounted && generation === groupGeneration) groups.value = Array.isArray(response) ? response : []
+    if (!mounted || generation !== groupGeneration) return
+    const options = safeGroupOptions(response)
+    if (!options) throw new Error('invalid groups response')
+    groups.value = options
   } catch {
     if (mounted && generation === groupGeneration) {
       groups.value = []
@@ -422,7 +459,7 @@ function restoreStatusFocus() {
 }
 
 function requestStatusChange(user: AdminUser) {
-  if (user.role === 'admin' || pendingByUser[user.id]) return
+  if ((user.role === 'admin' && user.status === 'active') || pendingByUser[user.id]) return
   focusMenuTrigger(user.id)
   statusPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   closeMenu()
@@ -439,7 +476,7 @@ function closeStatusDialog() {
 
 async function confirmStatusChange() {
   const user = statusTarget.value
-  if (!user || user.role === 'admin' || pendingByUser[user.id]) return
+  if (!user || (user.role === 'admin' && user.status === 'active') || pendingByUser[user.id]) return
   const nextStatus: AdminUser['status'] = user.status === 'active' ? 'disabled' : 'active'
   const token = claimFeedback()
   pendingByUser[user.id] = 'status'
@@ -553,7 +590,7 @@ onUnmounted(() => {
                 <button type="button" role="menuitem" :data-testid="`detail-user-${user.id}`" @click="openDetail(user)"><Eye :size="17" />详情</button>
                 <button type="button" role="menuitem" :data-testid="`balance-user-${user.id}`" @click="openBalance(user)"><Coins :size="17" />调整余额</button>
                 <button type="button" role="menuitem" :data-testid="`groups-user-${user.id}`" @click="openGroups(user)"><Layers3 :size="17" />用户分组</button>
-                <button type="button" role="menuitem" :data-testid="`toggle-user-${user.id}`" :disabled="user.role === 'admin' || Boolean(pendingByUser[user.id])" :title="user.role === 'admin' ? '管理员用户不能停用或启用' : undefined" @click="requestStatusChange(user)"><Power :size="17" />{{ user.status === 'active' ? '停用用户' : '启用用户' }}</button>
+                <button type="button" role="menuitem" :data-testid="`toggle-user-${user.id}`" :disabled="(user.role === 'admin' && user.status === 'active') || Boolean(pendingByUser[user.id])" :title="user.role === 'admin' && user.status === 'active' ? '管理员用户不能停用' : undefined" @click="requestStatusChange(user)"><Power :size="17" />{{ user.status === 'active' ? '停用用户' : '启用用户' }}</button>
                 <button class="danger" type="button" role="menuitem" :data-testid="`delete-user-${user.id}`" :disabled="user.role === 'admin' || Boolean(pendingByUser[user.id])" :title="user.role === 'admin' ? '管理员用户不能删除' : undefined" @click="openDelete(user)"><Trash2 :size="17" />删除用户</button>
               </div>
             </div>
