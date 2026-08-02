@@ -64,6 +64,7 @@ export default {
       title: 'Group subscriptions',
       description: 'Review subscription, quota, and balance status for group members',
       activeSubscriptions: 'Active subscriptions',
+      statusFilter: 'Subscription status',
       expired: 'Expired',
       noSubscription: 'No subscription',
       totalBalance: 'Member balance',

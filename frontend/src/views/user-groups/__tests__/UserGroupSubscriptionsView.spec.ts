@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   getSubscriptions: vi.fn(),
   error: vi.fn(),
-  route: { query: { group_id: '7' } as Record<string, string> },
+  route: { name: 'UserGroupSubscriptions', query: { group_id: '7' } as Record<string, string> },
   replace: vi.fn(),
 }))
 
@@ -90,6 +90,10 @@ function mountView() {
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
         Icon: { template: '<i />' },
+        RouterLink: {
+          props: ['to'],
+          template: '<a><slot /></a>',
+        },
         Pagination: {
           props: ['page', 'total', 'pageSize'],
           emits: ['update:page'],
@@ -119,6 +123,10 @@ describe('UserGroupSubscriptionsView', () => {
     expect(wrapper.text()).toContain('userGroups.subscriptions.noSubscription')
     expect(wrapper.findAll('[data-test="quota-progress"]')).toHaveLength(3)
     expect(wrapper.text()).toContain('$42.50')
+    expect(wrapper.get('[data-test="workspace-tab-subscriptions"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.get('[data-test="subscription-summary-band"]').classes()).toContain('sm:grid-cols-2')
+    expect(wrapper.get('[data-test="subscription-member-avatar"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="refresh-subscriptions"]').attributes('aria-label')).toBeTruthy()
   })
 
   it('shows the effective status for each subscription row', async () => {

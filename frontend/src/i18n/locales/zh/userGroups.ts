@@ -64,6 +64,7 @@ export default {
       title: '组成员订阅',
       description: '查看组内成员的订阅、额度与余额状态',
       activeSubscriptions: '有效订阅',
+      statusFilter: '订阅状态',
       expired: '已过期',
       noSubscription: '无订阅',
       totalBalance: '成员余额',

@@ -1,11 +1,6 @@
 <template>
   <AppLayout>
-    <div class="min-w-0 space-y-6">
-      <header>
-        <h1 class="text-2xl font-semibold text-gray-950 dark:text-white">{{ t('userGroups.subscriptions.title') }}</h1>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('userGroups.subscriptions.description') }}</p>
-      </header>
-
+    <UserGroupWorkspaceShell>
       <section v-if="groupsError" class="rounded-lg border border-red-200 bg-red-50 px-5 py-8 text-center dark:border-red-900/60 dark:bg-red-950/30">
         <p class="text-sm text-red-700 dark:text-red-300">{{ groupsError }}</p>
         <button class="btn btn-secondary mt-4" type="button" @click="loadGroups">{{ t('userGroups.common.retry') }}</button>
@@ -23,9 +18,32 @@
           :can-manage="canManage"
           :loading="loadingGroups"
           @update:model-value="handleGroupChange"
-        />
+        >
+          <template #controls>
+            <label class="block w-full sm:w-44">
+              <span class="sr-only">{{ t('userGroups.subscriptions.statusFilter') }}</span>
+              <select v-model="status" class="input" @change="applyStatus">
+                <option value="">{{ t('common.all') }}</option>
+                <option value="active">{{ t('userGroups.groups.active') }}</option>
+                <option value="expired">{{ t('userGroups.subscriptions.expired') }}</option>
+                <option value="none">{{ t('userGroups.subscriptions.noSubscription') }}</option>
+              </select>
+            </label>
+            <button
+              data-test="refresh-subscriptions"
+              type="button"
+              class="btn btn-secondary !px-2.5"
+              :aria-label="t('common.refresh')"
+              :title="t('common.refresh')"
+              :disabled="loadingData"
+              @click="loadSubscriptions"
+            >
+              <Icon name="refresh" size="sm" :class="loadingData ? 'animate-spin' : ''" />
+            </button>
+          </template>
+        </GroupContextRail>
 
-        <section v-if="result" class="grid divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-700 dark:border-dark-700 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
+        <section v-if="result" data-test="subscription-summary-band" class="grid grid-cols-2 divide-x divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-700 dark:border-dark-700 sm:grid-cols-2 xl:grid-cols-4 xl:divide-y-0">
           <div class="px-5 py-4">
             <p class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ t('userGroups.groups.members') }}</p>
             <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ result.summary.member_count }}</p>
@@ -43,21 +61,6 @@
             <p class="mt-1 text-2xl font-semibold tabular-nums text-primary-600 dark:text-primary-400">{{ formatCurrency(result.summary.active_subscription_usage) }}</p>
           </div>
         </section>
-
-        <div class="flex flex-wrap items-center justify-between gap-3">
-          <div class="w-full sm:w-48">
-            <select v-model="status" class="input" @change="applyStatus">
-              <option value="">{{ t('common.all') }}</option>
-              <option value="active">{{ t('userGroups.groups.active') }}</option>
-              <option value="expired">{{ t('userGroups.subscriptions.expired') }}</option>
-              <option value="none">{{ t('userGroups.subscriptions.noSubscription') }}</option>
-            </select>
-          </div>
-          <button type="button" class="btn btn-secondary" :disabled="loadingData" @click="loadSubscriptions">
-            <Icon name="refresh" size="sm" :class="loadingData ? 'animate-spin' : ''" />
-            <span class="sr-only">{{ t('common.refresh') }}</span>
-          </button>
-        </div>
 
         <section v-if="dataError" data-test="subscription-error" class="rounded-lg border border-red-200 bg-red-50 px-5 py-8 text-center dark:border-red-900/60 dark:bg-red-950/30">
           <p class="text-sm text-red-700 dark:text-red-300">{{ dataError }}</p>
@@ -79,9 +82,17 @@
               :key="`${row.member.user_id}-${row.subscription_id ?? 'none'}`"
               class="grid gap-4 border-t border-gray-100 px-5 py-5 first:border-t-0 dark:border-dark-700 xl:grid-cols-[minmax(190px,1.15fr)_minmax(150px,0.9fr)_minmax(310px,1.5fr)_120px] xl:items-center xl:gap-5"
             >
-              <div class="min-w-0">
-                <p class="truncate text-sm font-medium text-gray-950 dark:text-white">{{ row.member.username || row.member.email }}</p>
-                <p class="mt-0.5 truncate text-xs text-gray-500 dark:text-gray-400">{{ row.member.email }}</p>
+              <div class="flex min-w-0 items-center gap-3">
+                <img
+                  data-test="subscription-member-avatar"
+                  :src="resolveAvatarUrl(row.member.avatar_url)"
+                  :alt="row.member.username || row.member.email"
+                  class="h-9 w-9 shrink-0 rounded-full bg-gray-100 object-cover ring-1 ring-gray-950/5 dark:bg-dark-800 dark:ring-white/10"
+                />
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-gray-950 dark:text-white">{{ row.member.username || row.member.email }}</p>
+                  <p class="mt-0.5 truncate text-xs text-gray-600 dark:text-gray-300">{{ row.member.email }}</p>
+                </div>
               </div>
               <div v-if="row.subscription_id" class="min-w-0">
                 <p class="truncate text-sm font-medium text-gray-800 dark:text-gray-100">{{ row.billing_group }}</p>
@@ -124,7 +135,7 @@
           />
         </section>
       </template>
-    </div>
+    </UserGroupWorkspaceShell>
   </AppLayout>
 </template>
 
@@ -137,9 +148,11 @@ import Icon from '@/components/icons/Icon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import { userGroupAPI } from '@/api/userGroups'
 import { useAuthStore } from '@/stores/auth'
+import { resolveAvatarUrl } from '@/utils/avatar'
 import type { UserGroup, UserGroupSubscriptionResult } from '@/types/userGroups'
 import GroupContextRail from './components/GroupContextRail.vue'
 import QuotaProgress from './components/QuotaProgress.vue'
+import UserGroupWorkspaceShell from './components/UserGroupWorkspaceShell.vue'
 
 const { t, locale } = useI18n()
 const route = useRoute()
