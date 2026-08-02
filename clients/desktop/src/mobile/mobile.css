@@ -55,4 +55,19 @@ html[data-mobile='true'] .mobile-page-scroll {
     padding-right: 20px;
     padding-left: 20px;
   }
+
+  html[data-mobile='true'] :is(.dialog-backdrop, .backdrop, .drawer-backdrop) {
+    align-items: end;
+    padding: 0;
+  }
+
+  html[data-mobile='true'] :is(.dialog, [class$='-dialog'], .drawer-backdrop > aside) {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: none;
+    max-height: calc(100dvh - env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom);
+    overflow-y: auto;
+    border-radius: 8px 8px 0 0;
+  }
 }

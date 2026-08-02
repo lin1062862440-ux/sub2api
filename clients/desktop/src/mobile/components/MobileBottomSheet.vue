@@ -32,7 +32,9 @@ function focusableElements() {
 
 async function focusFirst() {
   await nextTick()
-  focusableElements()[0]?.focus()
+  const first = focusableElements()[0]
+  if (first) first.focus()
+  else sheet.value?.focus()
 }
 
 function restoreFocus() {
@@ -58,7 +60,11 @@ function handleKeydown(event: KeyboardEvent) {
   const elements = focusableElements()
   const first = elements[0]
   const last = elements[elements.length - 1]
-  if (!first || !last) return
+  if (!first || !last) {
+    event.preventDefault()
+    sheet.value?.focus()
+    return
+  }
   const active = document.activeElement
   const outside = !sheet.value?.contains(active)
   if (event.shiftKey ? active === first || outside : active === last || outside) {
@@ -111,6 +117,7 @@ onBeforeUnmount(() => {
           role="dialog"
           aria-modal="true"
           :aria-labelledby="titleId"
+          tabindex="-1"
         >
           <div class="mobile-bottom-sheet-handle" aria-hidden="true" />
           <header class="mobile-bottom-sheet-header">
@@ -210,6 +217,25 @@ onBeforeUnmount(() => {
   padding: 16px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.mobile-bottom-sheet-content :deep(button),
+.mobile-bottom-sheet-content :deep(a),
+.mobile-bottom-sheet-footer :deep(button),
+.mobile-bottom-sheet-footer :deep(a) {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+}
+
+.mobile-bottom-sheet-content :deep(input),
+.mobile-bottom-sheet-content :deep(select),
+.mobile-bottom-sheet-content :deep(textarea),
+.mobile-bottom-sheet-footer :deep(input),
+.mobile-bottom-sheet-footer :deep(select),
+.mobile-bottom-sheet-footer :deep(textarea) {
+  box-sizing: border-box;
+  min-height: 44px;
 }
 
 .mobile-bottom-sheet-footer {

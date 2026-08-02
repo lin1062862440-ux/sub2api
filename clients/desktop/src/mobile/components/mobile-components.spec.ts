@@ -1,5 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import MobileBottomSheet from './MobileBottomSheet.vue'
 import MobilePage from './MobilePage.vue'
@@ -99,15 +99,86 @@ describe('MobileBottomSheet', () => {
     expect(wrapper.emitted('update:modelValue')?.[0]).toEqual([false])
   })
 
-  it('honors closeDisabled and removes document listeners on unmount', async () => {
+  it('keeps focus in the dialog when closing is disabled and no enabled controls exist', async () => {
+    mountComponent(MobileBottomSheet, {
+      props: { modelValue: true, title: '提交中', closeDisabled: true },
+      slots: { default: '<button type="button" disabled>不可用</button>' },
+    })
+    await flushPromises()
+
+    const sheet = document.body.querySelector<HTMLElement>('[data-testid="mobile-bottom-sheet"]')!
+    expect(sheet.getAttribute('tabindex')).toBe('-1')
+    expect(document.activeElement).toBe(sheet)
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true })
+    document.dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(sheet)
+
+    const shiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true })
+    document.dispatchEvent(shiftTab)
+    expect(shiftTab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(sheet)
+  })
+
+  it('wraps Tab and Shift+Tab when the sheet has one enabled control', async () => {
+    mountComponent(MobileBottomSheet, {
+      props: { modelValue: true, title: '提交中', closeDisabled: true },
+      slots: { default: '<button type="button" data-testid="only-action">继续</button>' },
+    })
+    await flushPromises()
+
+    const action = document.body.querySelector<HTMLButtonElement>('[data-testid="only-action"]')!
+    expect(document.activeElement).toBe(action)
+
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true })
+    document.dispatchEvent(tab)
+    expect(tab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(action)
+
+    const shiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true })
+    document.dispatchEvent(shiftTab)
+    expect(shiftTab.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(action)
+  })
+
+  it('does not emit from any close path while closeDisabled', async () => {
     const wrapper = mountComponent(MobileBottomSheet, { props: { modelValue: true, title: '提交中', closeDisabled: true } })
     await flushPromises()
 
+    document.body.querySelector<HTMLButtonElement>('[data-testid="mobile-bottom-sheet-close"]')!.click()
+    document.body.querySelector<HTMLElement>('[data-testid="mobile-bottom-sheet-scrim"]')!.dispatchEvent(
+      new PointerEvent('pointerdown', { bubbles: true }),
+    )
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await flushPromises()
     expect(wrapper.emitted('close')).toBeUndefined()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+  })
+
+  it('renders default and footer controls inside the shared sheet regions', async () => {
+    mountComponent(MobileBottomSheet, {
+      props: { modelValue: true, title: '操作' },
+      slots: {
+        default: '<button type="button" data-testid="sheet-default-control">继续</button>',
+        footer: '<button type="button" data-testid="sheet-footer-control">确认</button>',
+      },
+    })
+    await flushPromises()
+
+    expect(document.body.querySelector('[data-testid="sheet-default-control"]')?.closest('.mobile-bottom-sheet-content')).toBeTruthy()
+    expect(document.body.querySelector('[data-testid="sheet-footer-control"]')?.closest('.mobile-bottom-sheet-footer')).toBeTruthy()
+  })
+
+  it('removes its Escape listener when unmounted', async () => {
+    const update = vi.fn()
+    const wrapper = mountComponent(MobileBottomSheet, {
+      props: { modelValue: true, title: '操作', 'onUpdate:modelValue': update },
+    })
+    await flushPromises()
     wrapper.unmount()
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
-    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(update).not.toHaveBeenCalled()
   })
 })
 
@@ -122,7 +193,27 @@ describe('MobilePagination', () => {
     expect(wrapper.emitted('change')).toEqual([[1], [3]])
   })
 
-  it('clamps invalid input and disables unavailable movement', () => {
+  it('disables the lower boundary and clamps values below the supported range', async () => {
+    const wrapper = mountComponent(MobilePagination, { props: { page: -4, pageCount: 3 } })
+
+    expect(wrapper.get('[data-testid="mobile-pagination-label"]').text()).toBe('第 1 / 3 页')
+    expect(wrapper.get('[data-testid="mobile-pagination-previous"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="mobile-pagination-previous"]').trigger('click')
+    await wrapper.get('[data-testid="mobile-pagination-next"]').trigger('click')
+    expect(wrapper.emitted('change')).toEqual([[2]])
+  })
+
+  it('disables the upper boundary and clamps values above the supported range', async () => {
+    const wrapper = mountComponent(MobilePagination, { props: { page: 99, pageCount: 3 } })
+
+    expect(wrapper.get('[data-testid="mobile-pagination-label"]').text()).toBe('第 3 / 3 页')
+    expect(wrapper.get('[data-testid="mobile-pagination-next"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="mobile-pagination-next"]').trigger('click')
+    await wrapper.get('[data-testid="mobile-pagination-previous"]').trigger('click')
+    expect(wrapper.emitted('change')).toEqual([[2]])
+  })
+
+  it('uses one page when pageCount is below one', () => {
     const wrapper = mountComponent(MobilePagination, { props: { page: 0, pageCount: 0 } })
 
     expect(wrapper.get('[data-testid="mobile-pagination-label"]').text()).toBe('第 1 / 1 页')
