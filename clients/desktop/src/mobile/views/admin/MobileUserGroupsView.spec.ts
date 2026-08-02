@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   replaceMembers: vi.fn(),
   replaceViewers: vi.fn(),
   users: vi.fn(),
+  refreshUser: vi.fn(),
   session: {
     user: { role: 'admin' },
     userGroupCapabilities: { can_access: true, can_manage: true, group_count: 1 },
@@ -31,7 +32,7 @@ vi.mock('@/api/user-groups', () => ({
   replaceUserGroupViewers: mocks.replaceViewers,
 }))
 vi.mock('@/api/admin/users', () => ({ listAdminUsers: mocks.users }))
-vi.mock('@/stores/session', () => ({ session: mocks.session }))
+vi.mock('@/stores/session', () => ({ session: mocks.session, refreshUser: mocks.refreshUser }))
 
 import MobileUserGroupsView from './MobileUserGroupsView.vue'
 
@@ -119,6 +120,7 @@ describe('MobileUserGroupsView', () => {
       page: 1,
       page_size: 100,
     })
+    mocks.refreshUser.mockResolvedValue(undefined)
   })
 
   it('keeps controls available while loading and renders safe directory cards without billing tabs', async () => {
@@ -146,6 +148,40 @@ describe('MobileUserGroupsView', () => {
     expect(wrapper.text()).not.toContain('Infinity')
     expect(wrapper.text()).not.toContain('订阅')
     expect(wrapper.text()).not.toContain('用量')
+  })
+
+  it('normalizes list records to unique positive IDs and canonical statuses', async () => {
+    mocks.list.mockResolvedValueOnce([
+      null,
+      [],
+      group({ id: 0 }),
+      group({ id: '3' as unknown as number }),
+      group({ id: 3, name: 'Canonical' }),
+      group({ id: 3, name: 'Duplicate' }),
+      group({ id: 4, status: 'unknown' as UserGroup['status'] }),
+      group({ id: 5, status: 'archived', name: 'Archived' }),
+    ] as unknown as UserGroup[])
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid="mobile-user-group-card"]')).toHaveLength(2)
+    expect(wrapper.text()).toContain('Canonical')
+    expect(wrapper.text()).toContain('Archived')
+    expect(wrapper.text()).not.toContain('Duplicate')
+    expect(wrapper.find('[data-testid="edit-user-group-0"]').exists()).toBe(false)
+  })
+
+  it('rejects a non-array list response and preserves the last valid directory', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    mocks.list.mockResolvedValueOnce({ items: [group({ id: 99 })] })
+
+    await wrapper.get('[data-testid="refresh-user-groups"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.findAll('[data-testid="mobile-user-group-card"]')).toHaveLength(2)
+    expect(wrapper.text()).toContain('研发团队')
+    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toContain('刷新失败')
   })
 
   it('searches locally, paginates, refreshes, and falls back when the current page shrinks', async () => {
@@ -193,6 +229,30 @@ describe('MobileUserGroupsView', () => {
     wrapper.unmount()
   })
 
+  it.each([
+    ['create', '[data-testid="create-user-group"]'],
+    ['edit', '[data-testid="edit-user-group-3"]'],
+  ])('reopens the editor after a successful %s while its directory refresh is pending', async (_, opener) => {
+    const refresh = deferred<UserGroup[]>()
+    const wrapper = mountView()
+    await flushPromises()
+    mocks.list.mockReturnValueOnce(refresh.promise)
+
+    await wrapper.get(opener).trigger('click')
+    if (opener.includes('create')) await wrapper.get('[data-testid="user-group-name"]').setValue('New Group')
+    await wrapper.get('[data-testid="user-group-editor-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="user-group-editor-sheet"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="create-user-group"]').trigger('click')
+    expect(wrapper.get('[data-testid="user-group-name"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('.sheet-primary').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="user-group-name"]').setValue('Reopened')
+    expect(wrapper.get('.sheet-primary').attributes('disabled')).toBeUndefined()
+    refresh.resolve([group()])
+    await flushPromises()
+  })
+
   it('redacts save failures and rejects a mismatched update response', async () => {
     mocks.update.mockResolvedValueOnce(group({ id: 999 }))
     const wrapper = mountView()
@@ -237,6 +297,23 @@ describe('MobileUserGroupsView', () => {
     wrapper.unmount()
   })
 
+  it('opens another archive confirmation while the previous success refresh is pending', async () => {
+    mocks.list.mockResolvedValueOnce([group(), group({ id: 4, name: '运营团队', status: 'active' })])
+    const refresh = deferred<UserGroup[]>()
+    const wrapper = mountView()
+    await flushPromises()
+    mocks.list.mockReturnValueOnce(refresh.promise)
+
+    await wrapper.get('[data-testid="archive-user-group-3"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-archive-user-group"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="archive-user-group-dialog"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="archive-user-group-4"]').trigger('click')
+    expect(wrapper.get('[data-testid="confirm-archive-user-group"]').attributes('disabled')).toBeUndefined()
+    refresh.resolve([group({ id: 4, name: '运营团队', status: 'active' })])
+    await flushPromises()
+  })
+
   it('keeps cards after an archive rejection and redacts the raw failure', async () => {
     mocks.archive.mockRejectedValueOnce(new Error('credential=archive-secret'))
     const wrapper = mountView()
@@ -250,6 +327,34 @@ describe('MobileUserGroupsView', () => {
     expect(wrapper.text()).not.toContain('archive-secret')
   })
 
+  it('keeps a created group and reports stale directory data when post-create sync fails', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    mocks.list.mockRejectedValueOnce(new Error('sync token=create-secret'))
+    await wrapper.get('[data-testid="create-user-group"]').trigger('click')
+    await wrapper.get('[data-testid="user-group-name"]').setValue('本地新组')
+    await wrapper.get('[data-testid="user-group-editor-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('用户组已创建')
+    expect(wrapper.find('[data-testid="edit-user-group-20"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('用户组列表同步失败，请手动刷新。')
+    expect(wrapper.text()).not.toContain('create-secret')
+  })
+
+  it('keeps an archived group removed and reports stale directory data when post-archive sync fails', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    mocks.list.mockRejectedValueOnce(new Error('sync token=archive-secret'))
+    await wrapper.get('[data-testid="archive-user-group-3"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-archive-user-group"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('用户组已归档')
+    expect(wrapper.find('[data-testid="edit-user-group-3"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('用户组列表同步失败，请手动刷新。')
+  })
+
   it('loads and replaces exact member and viewer selections with real APIs', async () => {
     const wrapper = mountView()
     await flushPromises()
@@ -258,6 +363,7 @@ describe('MobileUserGroupsView', () => {
     await flushPromises()
     expect(mocks.members).toHaveBeenCalledWith(3)
     expect(mocks.users).toHaveBeenCalledWith({ page: 1, page_size: 100 })
+    expect(wrapper.get('[data-testid="people-search"]').attributes('placeholder')).toBe('搜索名称或邮箱')
     await wrapper.get('[data-testid="people-option-9"]').trigger('click')
     await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
     await flushPromises()
@@ -270,6 +376,43 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
     await flushPromises()
     expect(mocks.replaceViewers).toHaveBeenCalledWith(3, [9, 7])
+  })
+
+  it('reopens people management while the previous successful save refresh is pending', async () => {
+    const refresh = deferred<UserGroup[]>()
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+    mocks.list.mockReturnValueOnce(refresh.promise)
+
+    await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="user-group-people-sheet"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="group-viewers-3"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="save-user-group-people"]').attributes('disabled')).toBeUndefined()
+    refresh.resolve([group()])
+    await flushPromises()
+  })
+
+  it('clears people loading ownership when closing a deferred initial load', async () => {
+    const pending = deferred<UserGroupMember[]>()
+    mocks.list.mockResolvedValueOnce(Array.from({ length: 11 }, (_, index) => group({ id: index + 1 })))
+    mocks.members.mockReturnValueOnce(pending.promise)
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="group-members-1"]').trigger('click')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('true')
+    await wrapper.get('[data-testid="close-user-group-people"]').trigger('click')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('false')
+    expect(wrapper.get('[data-testid="mobile-pagination-next"]').attributes('disabled')).toBeUndefined()
+
+    pending.resolve([member])
+    await flushPromises()
+    expect(wrapper.find('[data-testid="user-group-people-sheet"]').exists()).toBe(false)
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('false')
   })
 
   it('keeps an existing member outside the first candidate page visible and submits it unchanged', async () => {
@@ -465,7 +608,21 @@ describe('MobileUserGroupsView', () => {
     expect(wrapper.find('[data-testid="user-group-people-sheet"]').exists()).toBe(true)
   })
 
-  it('revokes mutation access on 403 without exposing raw errors and recovers on list refresh', async () => {
+  it('keeps people success feedback and reports stale counts when post-save sync fails', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+    mocks.list.mockRejectedValueOnce(new Error('sync token=people-secret'))
+    await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('成员已更新')
+    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('用户组列表同步失败，请手动刷新。')
+    expect(wrapper.text()).not.toContain('people-secret')
+  })
+
+  it('revokes mutation access on 403 and recovers only after an authoritative session refresh', async () => {
     mocks.members.mockRejectedValueOnce({ status: 403, code: 40301, message: 'permission token=secret' })
     const wrapper = mountView()
     await flushPromises()
@@ -479,7 +636,41 @@ describe('MobileUserGroupsView', () => {
 
     await wrapper.get('[data-testid="refresh-user-groups"]').trigger('click')
     await flushPromises()
+    expect(mocks.refreshUser).toHaveBeenCalledTimes(1)
     expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(true)
+  })
+
+  it('invalidates an older list request when a mutation revokes permission', async () => {
+    const staleList = deferred<UserGroup[]>()
+    const wrapper = mountView()
+    await flushPromises()
+    mocks.list.mockReturnValueOnce(staleList.promise)
+    await wrapper.get('[data-testid="refresh-user-groups"]').trigger('click')
+    mocks.members.mockRejectedValueOnce({ status: 403, code: 40301 })
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+
+    staleList.resolve([group()])
+    await flushPromises()
+    expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(false)
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('false')
+  })
+
+  it('does not restore management controls when authoritative refresh remains read-only', async () => {
+    mocks.members.mockRejectedValueOnce({ status: 403, code: 40301 })
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+    mocks.session.user.role = 'user'
+    mocks.session.userGroupCapabilities = { can_access: true, can_manage: false, group_count: 1 }
+    mocks.list.mockResolvedValueOnce([group()])
+
+    await wrapper.get('[data-testid="refresh-user-groups"]').trigger('click')
+    await flushPromises()
+    expect(mocks.refreshUser).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="edit-user-group-3"]').exists()).toBe(false)
   })
 
   it('keeps search, refresh and create in empty/error states and hides mutations for read-only users', async () => {

@@ -32,7 +32,7 @@ import {
 import MobileBottomSheet from '@/mobile/components/MobileBottomSheet.vue'
 import MobilePage from '@/mobile/components/MobilePage.vue'
 import MobilePagination from '@/mobile/components/MobilePagination.vue'
-import { session } from '@/stores/session'
+import { refreshUser, session } from '@/stores/session'
 
 type PeopleMode = 'members' | 'viewers'
 type GroupPerson = UserGroupMember | UserGroupViewer
@@ -84,6 +84,10 @@ let editorGeneration = 0
 let peopleGeneration = 0
 let peopleSearchGeneration = 0
 let feedbackGeneration = 0
+let editorSaveOwner = 0
+let archiveSaveOwner = 0
+let peopleSaveOwner = 0
+let peopleLoadOwner = 0
 
 const canManage = computed(() => (
   !permissionRevoked.value
@@ -166,7 +170,14 @@ function closeAllEditors() {
 
 function revokePermission() {
   permissionRevoked.value = true
+  listGeneration += 1
+  editorSaveOwner += 1
+  archiveSaveOwner += 1
+  peopleSaveOwner += 1
+  peopleLoadOwner += 1
   closeAllEditors()
+  initialLoading.value = false
+  listLoading.value = false
   editorSaving.value = false
   archiveSaving.value = false
   peopleLoading.value = false
@@ -175,12 +186,39 @@ function revokePermission() {
   actionError.value = ''
 }
 
-function normalizeList(payload: unknown): UserGroup[] {
-  if (!Array.isArray(payload)) throw new Error('INVALID_GROUP_LIST')
-  return payload.filter((item): item is UserGroup => Boolean(item && typeof item === 'object'))
+function normalizeGroup(payload: unknown): UserGroup | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const value = payload as Partial<UserGroup>
+  if (!safeId(value.id) || (value.status !== 'active' && value.status !== 'archived')) return null
+  return {
+    id: value.id,
+    name: safeText(value.name),
+    description: safeText(value.description),
+    status: value.status,
+    member_count: safeCount(value.member_count),
+    viewer_count: safeCount(value.viewer_count),
+    ...(value.created_by === null || safeId(value.created_by) ? { created_by: value.created_by } : {}),
+    created_at: safeText(value.created_at),
+    updated_at: safeText(value.updated_at),
+  }
 }
 
-async function loadGroups(background = loaded.value, feedbackToken?: number, reportFailure = true) {
+function normalizeList(payload: unknown): UserGroup[] {
+  if (!Array.isArray(payload)) throw new Error('INVALID_GROUP_LIST')
+  const byId = new Map<number, UserGroup>()
+  payload.forEach((item) => {
+    const normalized = normalizeGroup(item)
+    if (normalized && !byId.has(normalized.id)) byId.set(normalized.id, normalized)
+  })
+  return [...byId.values()]
+}
+
+async function loadGroups(
+  background = loaded.value,
+  feedbackToken?: number,
+  reportFailure = true,
+  failureMessage = '用户组列表刷新失败，已保留当前数据。',
+) {
   const generation = ++listGeneration
   if (!loaded.value && !background) initialLoading.value = true
   else listLoading.value = true
@@ -191,7 +229,6 @@ async function loadGroups(background = loaded.value, feedbackToken?: number, rep
     if (!mounted || generation !== listGeneration) return
     groups.value = normalizeList(response)
     loaded.value = true
-    permissionRevoked.value = false
     page.value = Math.min(page.value, Math.max(1, Math.ceil(filteredGroups.value.length / PAGE_SIZE)))
   } catch (caught) {
     if (!mounted || generation !== listGeneration) return
@@ -200,9 +237,7 @@ async function loadGroups(background = loaded.value, feedbackToken?: number, rep
       ? '用户组访问权限已失效，请刷新后重试。'
       : '用户组列表加载失败，请检查网络后重试。'
     else if (reportFailure && (feedbackToken === undefined || ownsFeedback(feedbackToken))) {
-      actionError.value = isPermissionError(caught)
-        ? '用户组访问权限已失效，请刷新后重试。'
-        : '用户组列表刷新失败，已保留当前数据。'
+      actionError.value = isPermissionError(caught) ? '用户组访问权限已失效，请刷新后重试。' : failureMessage
     }
   } finally {
     if (mounted && generation === listGeneration) {
@@ -212,9 +247,19 @@ async function loadGroups(background = loaded.value, feedbackToken?: number, rep
   }
 }
 
-function refreshGroups() {
+async function refreshGroups() {
   const token = claimFeedback()
-  void loadGroups(loaded.value, token, true)
+  if (permissionRevoked.value) {
+    try {
+      await refreshUser()
+      if (mounted && (session.user?.role === 'admin' || session.userGroupCapabilities?.can_manage === true)) {
+        permissionRevoked.value = false
+      }
+    } catch {
+      // Keep management revoked until an authoritative session refresh succeeds.
+    }
+  }
+  if (mounted) await loadGroups(loaded.value, token, true)
 }
 
 function submitSearch() {
@@ -277,6 +322,7 @@ async function saveGroup() {
   const targetId = editingGroup.value?.id
   if (targetId !== undefined && !safeId(targetId)) return
   const token = claimFeedback()
+  const saveOwner = ++editorSaveOwner
   editorSaving.value = true
   editorError.value = ''
   try {
@@ -285,10 +331,18 @@ async function saveGroup() {
       : await updateUserGroup(targetId, payload)
     if (!mounted || generation !== editorGeneration) return
     if (!validMutationResult(response, targetId)) throw new Error('INVALID_GROUP_MUTATION_RESPONSE')
+    const normalized = normalizeGroup(response)
+    if (normalized) {
+      const existingIndex = groups.value.findIndex((group) => group.id === normalized.id)
+      if (existingIndex >= 0) groups.value = groups.value.map((group) => group.id === normalized.id ? normalized : group)
+      else groups.value = [normalized, ...groups.value]
+      page.value = Math.min(page.value, pageCount.value)
+    }
+    if (saveOwner === editorSaveOwner) editorSaving.value = false
     editorOpen.value = false
     editingGroup.value = null
     if (ownsFeedback(token)) actionMessage.value = targetId === undefined ? '用户组已创建' : '用户组已更新'
-    await loadGroups(true, token, false)
+    await loadGroups(true, token, true, '用户组列表同步失败，请手动刷新。')
   } catch (caught) {
     if (!mounted || generation !== editorGeneration) return
     if (isPermissionError(caught)) {
@@ -297,7 +351,7 @@ async function saveGroup() {
     }
     editorError.value = '用户组保存失败，请稍后重试。'
   } finally {
-    if (mounted && generation === editorGeneration) editorSaving.value = false
+    if (mounted && saveOwner === editorSaveOwner) editorSaving.value = false
   }
 }
 
@@ -320,15 +374,19 @@ async function confirmArchive() {
   if (!target || !safeId(target.id) || archiveSaving.value || !canManage.value) return
   const targetId = target.id
   const token = claimFeedback()
+  const saveOwner = ++archiveSaveOwner
   archiveSaving.value = true
   archiveError.value = ''
   try {
     await archiveUserGroup(targetId)
     if (!mounted || archiveTarget.value?.id !== targetId) return
+    groups.value = groups.value.filter((group) => group.id !== targetId)
+    page.value = Math.min(page.value, pageCount.value)
+    if (saveOwner === archiveSaveOwner) archiveSaving.value = false
     archiveOpen.value = false
     archiveTarget.value = null
     if (ownsFeedback(token)) actionMessage.value = '用户组已归档'
-    await loadGroups(true, token, false)
+    await loadGroups(true, token, true, '用户组列表同步失败，请手动刷新。')
   } catch (caught) {
     if (!mounted || archiveTarget.value?.id !== targetId) return
     if (isPermissionError(caught)) {
@@ -337,7 +395,7 @@ async function confirmArchive() {
     }
     archiveError.value = '用户组归档失败，请稍后重试。'
   } finally {
-    if (mounted && (!archiveTarget.value || archiveTarget.value.id === targetId)) archiveSaving.value = false
+    if (mounted && saveOwner === archiveSaveOwner) archiveSaving.value = false
   }
 }
 
@@ -379,6 +437,8 @@ function mergeKnownPeople(people: AdminUser[], replace = false) {
 
 function closePeople() {
   if (peopleSaving.value) return
+  peopleLoadOwner += 1
+  peopleLoading.value = false
   peopleGeneration += 1
   peopleSearchGeneration += 1
   peopleOpen.value = false
@@ -407,6 +467,7 @@ async function loadPeople(generation = ++peopleGeneration, searchGeneration = ++
   const mode = peopleMode.value
   if (!target || !safeId(target.id)) return
   const targetId = target.id
+  const loadOwner = ++peopleLoadOwner
   peopleLoading.value = true
   peopleDataValid.value = false
   peopleDataError.value = ''
@@ -454,7 +515,7 @@ async function loadPeople(generation = ++peopleGeneration, searchGeneration = ++
       ? `${mode === 'members' ? '成员' : '查看者'}数据格式异常，请重试。`
       : `${mode === 'members' ? '成员' : '查看者'}加载失败，请重试。`
   } finally {
-    if (mounted && generation === peopleGeneration && searchGeneration === peopleSearchGeneration) peopleLoading.value = false
+    if (mounted && loadOwner === peopleLoadOwner) peopleLoading.value = false
   }
 }
 
@@ -463,6 +524,7 @@ async function loadPeopleCandidates(generation: number, searchGeneration: number
   const mode = peopleMode.value
   if (!target || !safeId(target.id)) return
   const targetId = target.id
+  const loadOwner = ++peopleLoadOwner
   peopleLoading.value = true
   peopleDataError.value = ''
   peopleError.value = ''
@@ -496,7 +558,7 @@ async function loadPeopleCandidates(generation: number, searchGeneration: number
       ? '候选用户数据格式异常，请重试。'
       : '候选用户加载失败，请重试。'
   } finally {
-    if (mounted && generation === peopleGeneration && searchGeneration === peopleSearchGeneration) peopleLoading.value = false
+    if (mounted && loadOwner === peopleLoadOwner) peopleLoading.value = false
   }
 }
 
@@ -532,16 +594,18 @@ async function savePeople() {
   const targetId = target.id
   const ids = [...new Set(selectedIds.value)].filter(safeId)
   const token = claimFeedback()
+  const saveOwner = ++peopleSaveOwner
   peopleSaving.value = true
   peopleError.value = ''
   try {
     if (mode === 'members') await replaceUserGroupMembers(targetId, ids)
     else await replaceUserGroupViewers(targetId, ids)
     if (!mounted || generation !== peopleGeneration || peopleGroup.value?.id !== targetId || peopleMode.value !== mode) return
+    if (saveOwner === peopleSaveOwner) peopleSaving.value = false
     peopleOpen.value = false
     peopleGroup.value = null
     if (ownsFeedback(token)) actionMessage.value = `${mode === 'members' ? '成员' : '查看者'}已更新`
-    await loadGroups(true, token, false)
+    await loadGroups(true, token, true, '用户组列表同步失败，请手动刷新。')
   } catch (caught) {
     if (!mounted || generation !== peopleGeneration || peopleGroup.value?.id !== targetId || peopleMode.value !== mode) return
     if (isPermissionError(caught)) {
@@ -550,7 +614,7 @@ async function savePeople() {
     }
     peopleError.value = `${mode === 'members' ? '成员' : '查看者'}保存失败，请稍后重试。`
   } finally {
-    if (mounted && generation === peopleGeneration) peopleSaving.value = false
+    if (mounted && saveOwner === peopleSaveOwner) peopleSaving.value = false
   }
 }
 
@@ -565,6 +629,7 @@ onUnmounted(() => {
   editorGeneration += 1
   peopleGeneration += 1
   peopleSearchGeneration += 1
+  peopleLoadOwner += 1
 })
 </script>
 
@@ -584,7 +649,7 @@ onUnmounted(() => {
       <div class="directory-meta"><span>共 {{ filteredGroups.length }} 个用户组</span><strong>{{ canManage ? '可管理' : '只读' }}</strong></div>
       <p v-if="permissionRevoked" class="permission-error" data-testid="user-group-permission-error" role="alert"><AlertCircle :size="17" />用户组管理权限已失效，请刷新后重试。</p>
       <p v-if="actionMessage" class="action-message" role="status"><Check :size="17" />{{ actionMessage }}</p>
-      <p v-if="actionError" class="action-error" role="alert"><AlertCircle :size="17" />{{ actionError }}</p>
+      <p v-if="actionError" class="action-error" data-testid="user-group-sync-warning" role="alert"><AlertCircle :size="17" />{{ actionError }}</p>
       <p v-if="listLoading" class="list-busy" role="status">正在刷新用户组</p>
 
       <div v-if="initialLoading && !loaded" class="page-state" data-testid="mobile-page-loading" role="status">正在加载用户组</div>
@@ -629,7 +694,7 @@ onUnmounted(() => {
     <MobileBottomSheet :model-value="peopleOpen" :title="`管理${peopleLabel}`" :close-disabled="peopleSaving" @update:model-value="value => { if (!value) closePeople() }" @close="closePeople">
       <div class="people-sheet" data-testid="user-group-people-sheet">
         <header><strong data-testid="user-group-people-title">{{ safeName(peopleGroup?.name) }}</strong><span>已选择 {{ selectedIds.length }} 人</span></header>
-        <form class="people-search" data-testid="people-search-form" @submit.prevent="submitPeopleSearch"><Search :size="17" /><input v-model="peopleSearch" data-testid="people-search" autocomplete="off" placeholder="搜索名称、邮箱或 ID" /><button type="submit" :disabled="peopleLoading || peopleSaving">搜索</button></form>
+        <form class="people-search" data-testid="people-search-form" @submit.prevent="submitPeopleSearch"><Search :size="17" /><input v-model="peopleSearch" data-testid="people-search" autocomplete="off" placeholder="搜索名称或邮箱" /><button type="submit" :disabled="peopleLoading || peopleSaving">搜索</button></form>
         <div v-if="peopleLoading" class="people-loading" role="status">正在加载{{ peopleLabel }}</div>
         <div v-else-if="peopleDataError" class="people-data-error" role="alert"><p data-testid="people-data-error">{{ peopleDataError }}</p><button type="button" data-testid="retry-user-group-people" @click="retryPeople">重试</button></div>
         <template v-else>
