@@ -1,9 +1,20 @@
 export default {
   userGroups: {
     nav: {
+      workspace: '用户组',
       groups: '用户组',
       subscriptions: '组成员订阅',
       usage: '组用量',
+    },
+    workspace: {
+      title: '用户组工作区',
+      description: '维护业务组、成员订阅和用量记录',
+      navigation: '用户组工作区导航',
+      tabs: {
+        groups: '组列表',
+        subscriptions: '成员订阅',
+        usage: '组用量',
+      },
     },
     common: {
       selectGroup: '选择用户组',

@@ -715,12 +715,10 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   return items
 }
 
+const userGroupWorkspacePaths = ['/user-groups', '/user-group-subscriptions', '/user-group-usage']
+
 function buildUserGroupNavItems(): NavItem[] {
-  return [
-    { path: '/user-groups', label: t('userGroups.nav.groups'), icon: FolderIcon },
-    { path: '/user-group-subscriptions', label: t('userGroups.nav.subscriptions'), icon: CreditCardIcon },
-    { path: '/user-group-usage', label: t('userGroups.nav.usage'), icon: ChartIcon },
-  ]
+  return [{ path: '/user-groups', label: t('userGroups.nav.workspace'), icon: FolderIcon }]
 }
 
 // finalizeNav 合并三重过滤：featureFlag 过滤 + simple 模式过滤。
@@ -879,6 +877,7 @@ function handleMenuItemClick(itemPath: string) {
 }
 
 function isActive(path: string): boolean {
+  if (path === '/user-groups' && userGroupWorkspacePaths.includes(route.path)) return true
   return route.path === path || route.path.startsWith(path + '/')
 }
 

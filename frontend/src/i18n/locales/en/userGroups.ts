@@ -1,9 +1,20 @@
 export default {
   userGroups: {
     nav: {
+      workspace: 'User groups',
       groups: 'User groups',
       subscriptions: 'Group subscriptions',
       usage: 'Group usage',
+    },
+    workspace: {
+      title: 'User group workspace',
+      description: 'Manage business groups, member subscriptions, and usage records',
+      navigation: 'User group workspace navigation',
+      tabs: {
+        groups: 'Groups',
+        subscriptions: 'Member subscriptions',
+        usage: 'Group usage',
+      },
     },
     common: {
       selectGroup: 'Select group',
