@@ -57,6 +57,8 @@ function progress(overrides: Partial<AdminSubscriptionProgress> = {}): AdminSubs
       limit_usd: 400,
       remaining_usd: 367.95,
       percentage: 8.009257707,
+      window_start: '2026-08-01T00:00:00Z',
+      resets_at: '2026-08-02T00:00:00Z',
       resets_in_seconds: 21_600,
     },
     weekly: {
@@ -64,6 +66,8 @@ function progress(overrides: Partial<AdminSubscriptionProgress> = {}): AdminSubs
       limit_usd: 500,
       remaining_usd: 0,
       percentage: 100,
+      window_start: '2026-07-28T00:00:00Z',
+      resets_at: '2026-08-04T00:00:00Z',
       resets_in_seconds: 360_000,
     },
     monthly: null,
@@ -84,7 +88,7 @@ function response(
     total,
     page: 1,
     page_size: pageSize,
-    pages: Math.max(1, Math.ceil(total / pageSize)),
+    pages: Math.ceil(total / pageSize),
     ...overrides,
   }
 }
@@ -176,8 +180,52 @@ describe('MobileAdminSubscriptionsView', () => {
     expect(wrapper.text()).not.toContain('progress-secret')
   })
 
+  it('accepts the real empty pagination envelope and renders the empty state', async () => {
+    mocks.list.mockResolvedValueOnce(response([]))
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+
+    expect(mocks.list).toHaveBeenCalledWith({ page: 1, page_size: 20 })
+    expect(wrapper.get('[data-testid="subscription-list-empty"]').text()).toContain('暂无订阅')
+    expect(wrapper.find('[data-testid="subscription-list-error"]').exists()).toBe(false)
+    expect(mocks.progress).not.toHaveBeenCalled()
+  })
+
+  it('renders a completed progress response without quota windows instead of loading forever', async () => {
+    mocks.progress.mockResolvedValueOnce(progress({ daily: null, weekly: null, monthly: null }))
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="subscription-progress-empty-3"]').text()).toContain('未设置周期额度')
+    expect(wrapper.find('[data-testid="subscription-progress-error-3"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('正在加载额度')
+  })
+
+  it.each([
+    ['wrong id type', { id: '3' }],
+    ['invalid expiry', { expires_at: 'not-a-date' }],
+    ['invalid expiry days', { expires_in_days: Number.NaN }],
+    ['invalid quota amount', { daily: { ...progress().daily!, limit_usd: Number.POSITIVE_INFINITY } }],
+    ['missing quota date', { daily: { ...progress().daily!, resets_at: undefined } }],
+    ['invalid reset seconds', { daily: { ...progress().daily!, resets_in_seconds: -1 } }],
+  ])('rejects malformed progress with %s and retries safely', async (_caseName, overrides) => {
+    mocks.progress.mockResolvedValueOnce(progress(overrides as Partial<AdminSubscriptionProgress>))
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="subscription-progress-error-3"]').text()).toContain('额度暂时无法加载')
+    expect(wrapper.get('[data-testid="retry-subscription-progress-3"]')).toBeTruthy()
+    mocks.progress.mockResolvedValueOnce(progress())
+    await wrapper.get('[data-testid="retry-subscription-progress-3"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="subscription-quota-daily-3"]').text()).toContain('$32.05')
+  })
+
   it.each([
     ['missing envelope fields', {}],
+    ['empty result with one page', response([], { pages: 1 })],
+    ['empty result with a non-empty item', response([subscription()], { total: 0, pages: 0 })],
+    ['non-empty result with zero pages', response([subscription()], { pages: 0 })],
     ['wrong response page', response([subscription()], { page: 2 })],
     ['wrong response page size', response([subscription()], { page_size: 50, pages: 1 })],
     ['string subscription ids', response([{ ...subscription(), id: '3', user_id: '7', group_id: '2' } as unknown as AdminSubscription])],
@@ -480,28 +528,77 @@ describe('MobileAdminSubscriptionsView', () => {
     expect(document.body.textContent).not.toContain('assign-secret')
   })
 
-  it('supports assignment cancellation and keeps the returned subscription when refresh fails', async () => {
-    const assigned = subscription({
-      id: 10,
-      user_id: 10,
-      user: { id: 10, email: 'assigned@example.com', username: 'Assigned' },
-    })
+  it.each([
+    ['off-page reused', subscription({ id: 10, user_id: 10, user: { id: 10, email: 'reused-off-page@example.com', username: 'Reused' } })],
+    ['new ambiguous', subscription({ id: 11, user_id: 10, user: { id: 10, email: 'ambiguous-new@example.com', username: 'Ambiguous' } })],
+  ])('keeps a single assignment result conservative for %s when refresh fails', async (_caseName, assigned) => {
     mocks.assign.mockResolvedValueOnce(assigned)
-    mocks.list.mockResolvedValueOnce(response()).mockRejectedValueOnce(new Error('token=assignment-refresh-secret'))
+    mocks.list
+      .mockResolvedValueOnce(response([subscription()], { total: 19 }))
+      .mockRejectedValueOnce(new Error('token=assignment-refresh-secret'))
     const wrapper = mount(MobileAdminSubscriptionsView)
     await flushPromises()
 
-    await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
-    await clickBody('mobile-bottom-sheet-close')
-    expect(document.body.querySelector('[data-testid="subscription-assignment-sheet"]')).toBeNull()
     await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
     await setBodyValue('subscription-user-id', '10')
     await setBodyValue('subscription-assignment-group-id', '2')
     await clickBody('confirm-subscription-assignment')
 
-    expect(wrapper.text()).toContain('assigned@example.com')
+    expect(wrapper.text()).not.toContain(assigned.user!.email)
+    expect(wrapper.findAll('[data-testid="mobile-subscription-card"]')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([3])
+    expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('已为用户 #10 分配订阅')
     expect(wrapper.get('[data-testid="subscription-sync-warning"]').text()).toContain('同步失败')
     expect(wrapper.text()).not.toContain('assignment-refresh-secret')
+  })
+
+  it('updates an existing visible subscription after single assignment without changing total', async () => {
+    const updated = subscription({ user: { id: 7, email: 'updated@example.com', username: 'Updated' } })
+    mocks.assign.mockResolvedValueOnce(updated)
+    mocks.list.mockResolvedValueOnce(response([subscription()], { total: 19 })).mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+    await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
+    await setBodyValue('subscription-user-id', '7')
+    await setBodyValue('subscription-assignment-group-id', '2')
+    await clickBody('confirm-subscription-assignment')
+
+    expect(wrapper.text()).toContain('updated@example.com')
+    expect(wrapper.findAll('[data-testid="mobile-subscription-card"]')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
+  })
+
+  it('loads progress for an unseen single assignment only after refresh includes it', async () => {
+    const assigned = subscription({
+      id: 10,
+      user_id: 10,
+      user: { id: 10, email: 'confirmed@example.com', username: 'Confirmed' },
+    })
+    mocks.assign.mockResolvedValueOnce(assigned)
+    mocks.list
+      .mockResolvedValueOnce(response())
+      .mockResolvedValueOnce(response([assigned, subscription()]))
+    mocks.progress.mockImplementation((id: number) => Promise.resolve(progress({ id })))
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+    await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
+    await setBodyValue('subscription-user-id', '10')
+    await setBodyValue('subscription-assignment-group-id', '2')
+    await clickBody('confirm-subscription-assignment')
+
+    expect(wrapper.text()).toContain('confirmed@example.com')
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([3, 10])
+    expect(wrapper.get('[data-testid="subscription-quota-daily-10"]').text()).toContain('$32.05')
+  })
+
+  it('keeps assignment cancellation available', async () => {
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+    await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
+    await clickBody('mobile-bottom-sheet-close')
+
+    expect(document.body.querySelector('[data-testid="subscription-assignment-sheet"]')).toBeNull()
   })
 
   it('uses exact ids and payloads for extend, quota reset, revoke, and restore', async () => {
@@ -576,6 +673,25 @@ describe('MobileAdminSubscriptionsView', () => {
     expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('已撤销')
     expect(wrapper.get('[data-testid="subscription-sync-warning"]').text()).toContain('同步失败')
     expect(wrapper.text()).not.toContain('refresh-secret')
+  })
+
+  it('accepts an expired subscription becoming active after extension and preserves local success on sync failure', async () => {
+    const expired = subscription({ status: 'expired', expires_at: '2026-07-01T00:00:00Z' })
+    const extended = subscription({ status: 'active', expires_at: '2026-09-02T00:00:00Z' })
+    mocks.list.mockResolvedValueOnce(response([expired])).mockRejectedValueOnce(new Error('token=expired-sync-secret'))
+    mocks.extend.mockResolvedValueOnce(extended)
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+    await openMenu(wrapper, 3)
+    await wrapper.get('[data-testid="extend-subscription-3"]').trigger('click')
+    await setBodyValue('subscription-extend-days', '30')
+    await clickBody('confirm-subscription-action')
+
+    expect(document.body.querySelector('[data-testid="subscription-action-sheet"]')).toBeNull()
+    expect(wrapper.get('[data-testid="subscription-status-3"]').text()).toBe('有效')
+    expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('已延长 30 天')
+    expect(wrapper.get('[data-testid="subscription-sync-warning"]').text()).toContain('同步失败')
+    expect(wrapper.text()).not.toContain('expired-sync-secret')
   })
 
   it('does not persist a malformed lifecycle response when synchronization fails', async () => {

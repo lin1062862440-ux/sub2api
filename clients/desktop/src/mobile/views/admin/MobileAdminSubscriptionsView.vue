@@ -97,6 +97,7 @@ const assignment = reactive({
 })
 const openMenuId = ref<number | null>(null)
 const progressById = ref<Record<number, AdminSubscriptionProgress>>({})
+const progressLoadedById = ref<Record<number, boolean>>({})
 const progressErrors = ref<Record<number, boolean>>({})
 const lifecycle = reactive({
   type: null as LifecycleAction | null,
@@ -404,7 +405,7 @@ function decodeListResponse(value: unknown, requestedPage: number) {
   const total = strictNonNegativeInteger(response.total)
   const page = strictId(response.page)
   const pageSize = strictId(response.page_size)
-  const pages = strictId(response.pages)
+  const pages = strictNonNegativeInteger(response.pages)
   const items = decodeSubscriptions(response.items)
   if (
     total === null ||
@@ -414,8 +415,13 @@ function decodeListResponse(value: unknown, requestedPage: number) {
     !items
   )
     return null
-  const expectedPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  if (total === 0) {
+    if (page !== 1 || pages !== 0 || items.length !== 0) return null
+    return { items, total, page, page_size: PAGE_SIZE, pages }
+  }
+  const expectedPages = Math.ceil(total / PAGE_SIZE)
   if (
+    pages === 0 ||
     pages !== expectedPages ||
     items.length > PAGE_SIZE ||
     total < items.length
@@ -449,25 +455,99 @@ function ownsFeedback(token: number) {
   return mounted && token === feedbackGeneration
 }
 
+function decodeProgressWindow(
+  value: unknown,
+): AdminSubscriptionQuotaWindow | null {
+  const window = plainRecord(value)
+  if (!window) return null
+  const amounts = [window.limit_usd, window.used_usd, window.remaining_usd]
+  if (
+    amounts.some(
+      (amount) =>
+        typeof amount !== 'number' || !Number.isFinite(amount) || amount < 0,
+    ) ||
+    window.limit_usd === 0 ||
+    typeof window.percentage !== 'number' ||
+    !Number.isFinite(window.percentage) ||
+    window.percentage < 0 ||
+    window.percentage > 100 ||
+    !validDate(window.window_start) ||
+    !validDate(window.resets_at) ||
+    strictNonNegativeInteger(window.resets_in_seconds) === null
+  )
+    return null
+  return {
+    limit_usd: window.limit_usd as number,
+    used_usd: window.used_usd as number,
+    remaining_usd: window.remaining_usd as number,
+    percentage: window.percentage,
+    window_start: window.window_start,
+    resets_at: window.resets_at,
+    resets_in_seconds: window.resets_in_seconds as number,
+  }
+}
+
+function decodeProgress(
+  value: unknown,
+  expectedId: number,
+): AdminSubscriptionProgress | null {
+  const detail = plainRecord(value)
+  if (
+    !detail ||
+    strictId(detail.id) !== expectedId ||
+    typeof detail.group_name !== 'string' ||
+    !detail.group_name.trim() ||
+    (detail.expires_at !== null && !validDate(detail.expires_at)) ||
+    typeof detail.expires_in_days !== 'number' ||
+    !Number.isSafeInteger(detail.expires_in_days)
+  )
+    return null
+
+  const decoded: AdminSubscriptionProgress = {
+    id: expectedId,
+    group_name: detail.group_name.trim(),
+    expires_at: detail.expires_at as string | null,
+    expires_in_days: detail.expires_in_days as number,
+  }
+  for (const key of ['daily', 'weekly', 'monthly'] as const) {
+    const window = detail[key]
+    if (window === undefined || window === null) {
+      decoded[key] = window
+      continue
+    }
+    const decodedWindow = decodeProgressWindow(window)
+    if (!decodedWindow) return null
+    decoded[key] = decodedWindow
+  }
+  return decoded
+}
+
 async function loadProgressItem(item: AdminSubscription, generation: number) {
   if (!mounted || generation !== progressGeneration) return
   const { [item.id]: _previousProgress, ...remainingProgress } =
     progressById.value
   progressById.value = remainingProgress
+  progressLoadedById.value = {
+    ...progressLoadedById.value,
+    [item.id]: false,
+  }
   progressErrors.value = { ...progressErrors.value, [item.id]: false }
   try {
     if (!mounted || generation !== progressGeneration) return
-    const detail = await getAdminSubscriptionProgress(item.id)
-    if (
-      !mounted ||
-      generation !== progressGeneration ||
-      strictId(detail?.id) !== item.id
-    ) {
+    const detail = decodeProgress(
+      await getAdminSubscriptionProgress(item.id),
+      item.id,
+    )
+    if (!mounted || generation !== progressGeneration || !detail) {
       if (mounted && generation === progressGeneration)
         progressErrors.value = { ...progressErrors.value, [item.id]: true }
       return
     }
     progressById.value = { ...progressById.value, [item.id]: detail }
+    progressLoadedById.value = {
+      ...progressLoadedById.value,
+      [item.id]: true,
+    }
   } catch {
     if (mounted && generation === progressGeneration)
       progressErrors.value = { ...progressErrors.value, [item.id]: true }
@@ -477,6 +557,7 @@ async function loadProgressItem(item: AdminSubscription, generation: number) {
 async function loadProgress(items: AdminSubscription[]) {
   const generation = ++progressGeneration
   progressById.value = {}
+  progressLoadedById.value = {}
   progressErrors.value = {}
   let nextIndex = 0
 
@@ -824,6 +905,7 @@ async function submitAssignment() {
   const token = claimFeedback()
   assignmentPending.value = true
   assignmentError.value = ''
+  let ambiguousSingleResult: { id: number; wasVisible: boolean } | null = null
   try {
     if (assignment.mode === 'single') {
       const response = await assignAdminSubscription({
@@ -841,13 +923,11 @@ async function submitAssignment() {
         assignmentError.value = '订阅分配结果无法确认，请重试。'
         return
       }
-      const additions = mergeAssignedSubscriptions(
-        [decoded],
-        new Set([decoded.id]),
+      const wasVisible = result.value.items.some(
+        (item) => item.id === decoded.id,
       )
-      additions.forEach((item) => {
-        void loadProgressItem(item, progressGeneration)
-      })
+      mergeAssignedSubscriptions([decoded], new Set())
+      ambiguousSingleResult = { id: decoded.id, wasVisible }
       if (ownsFeedback(token))
         actionMessage.value = `已为用户 #${userId} 分配订阅`
     } else {
@@ -899,6 +979,12 @@ async function submitAssignment() {
       false,
       false,
     )
+    if (synced && ambiguousSingleResult && !ambiguousSingleResult.wasVisible) {
+      const refreshed = result.value.items.find(
+        (item) => item.id === ambiguousSingleResult!.id,
+      )
+      if (refreshed) void loadProgressItem(refreshed, progressGeneration)
+    }
     if (!synced && ownsFeedback(token))
       syncWarning.value = '订阅已分配，但列表同步失败，请刷新重试。'
   } catch {
@@ -1047,7 +1133,9 @@ async function confirmLifecycle() {
       const decoded = decodeLifecycleResponse(
         response,
         item,
-        new Set([item.status]),
+        item.status === 'expired'
+          ? new Set(['expired', 'active'])
+          : new Set([item.status]),
       )
       if (!decoded) {
         reportUnconfirmedLifecycleResult()
@@ -1440,6 +1528,13 @@ onUnmounted(() => {
                 resetLabel(window.value.resets_in_seconds)
               }}</small>
             </div>
+          </div>
+          <div
+            v-else-if="progressLoadedById[item.id]"
+            class="progress-empty"
+            :data-testid="`subscription-progress-empty-${item.id}`"
+          >
+            未设置周期额度
           </div>
           <div v-else class="progress-loading" role="status">正在加载额度</div>
 
@@ -2030,6 +2125,7 @@ onUnmounted(() => {
   font-size: 10px;
 }
 .progress-loading,
+.progress-empty,
 .progress-error {
   display: flex;
   min-height: 44px;
