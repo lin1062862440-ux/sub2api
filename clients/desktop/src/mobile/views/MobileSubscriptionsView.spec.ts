@@ -206,6 +206,32 @@ describe('MobileSubscriptionsView', () => {
     expect(wrapper.html()).not.toContain('#/redeem')
   })
 
+  it('surfaces a private retryable error when refreshing an empty result fails', async () => {
+    mocks.getSubscriptions.mockResolvedValueOnce([])
+    const wrapper = mountView()
+    await flushPromises()
+
+    const refresh = deferred<UserSubscription[]>()
+    mocks.getSubscriptions.mockReturnValueOnce(refresh.promise)
+    await wrapper.get('[data-testid="mobile-page-refresh"]').trigger('click')
+
+    const action = wrapper.get('[data-testid="subscriptions-refresh"]')
+    expect(action.attributes('disabled')).toBeDefined()
+    expect(action.attributes('aria-label')).toBe('正在刷新订阅')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('true')
+    expect(wrapper.find('[data-testid="mobile-page-refresh"]').exists()).toBe(true)
+
+    refresh.reject(new Error('backend bearer secret must remain private'))
+    await flushPromises()
+
+    const error = wrapper.get('[data-testid="mobile-page-error"]')
+    expect(error.text()).toContain('刷新失败')
+    expect(error.text()).not.toContain('backend bearer secret')
+    expect(error.find('[data-testid="mobile-page-retry"]').exists()).toBe(true)
+    expect(action.attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('false')
+  })
+
   it('keeps the newer result when an older request finishes last', async () => {
     const first = deferred<UserSubscription[]>()
     mocks.getSubscriptions.mockReturnValueOnce(first.promise)

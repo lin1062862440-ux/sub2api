@@ -67,7 +67,9 @@ async function load(isRefresh = false): Promise<void> {
     loaded.value = true
   } catch {
     if (!mounted || generation !== requestGeneration) return
-    if (loaded.value) inlineError.value = '刷新失败，请检查网络后重试。'
+    if (loaded.value && subscriptions.value.length === 0) {
+      fatalError.value = '刷新失败，请检查网络后重试。'
+    } else if (loaded.value) inlineError.value = '刷新失败，请检查网络后重试。'
     else fatalError.value = '订阅信息暂时无法获取，请检查网络后重试。'
   } finally {
     if (mounted && generation === requestGeneration) {
