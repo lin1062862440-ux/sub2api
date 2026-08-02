@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AdminUser, AdminUserListResponse } from '@/api/admin/types'
+import type { AdminGroupOption, AdminUser, AdminUserListResponse } from '@/api/admin/types'
 import UserBalanceDialog from '@/components/admin/UserBalanceDialog.vue'
 import UserDeleteDialog from '@/components/admin/UserDeleteDialog.vue'
 import UserDetailDrawer from '@/components/admin/UserDetailDrawer.vue'
@@ -381,8 +381,10 @@ describe('MobileAdminUsersView', () => {
   })
 
   it('keeps latest mutation feedback when user operations finish out of order', async () => {
+    const secondUser = adminUser({ id: 9, username: 'Second User', email: 'second@example.com', status: 'disabled' })
     const older = deferred<AdminUser>()
     const newer = deferred<AdminUser>()
+    mocks.list.mockResolvedValueOnce(response([activeUser, secondUser]))
     mocks.update.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
     const wrapper = mount(MobileAdminUsersView)
     await flushPromises()
@@ -390,10 +392,10 @@ describe('MobileAdminUsersView', () => {
     await openMenu(wrapper, 7)
     await wrapper.get('[data-testid="toggle-user-7"]').trigger('click')
     await wrapper.get('[data-testid="confirm-user-status"]').trigger('click')
-    await openMenu(wrapper, 8)
-    await wrapper.get('[data-testid="toggle-user-8"]').trigger('click')
+    await openMenu(wrapper, 9)
+    await wrapper.get('[data-testid="toggle-user-9"]').trigger('click')
     await wrapper.get('[data-testid="confirm-user-status"]').trigger('click')
-    newer.resolve({ ...disabledUser, status: 'active' })
+    newer.resolve({ ...secondUser, status: 'active' })
     await flushPromises()
     older.reject(new Error('token=older-operation-secret'))
     await flushPromises()
@@ -415,21 +417,55 @@ describe('MobileAdminUsersView', () => {
     expect(wrapper.text()).not.toContain('list-secret')
   })
 
-  it('shows initial loading, retryable fatal error and empty state', async () => {
+  it('keeps tools and dialogs accessible through initial loading, error and empty states', async () => {
     const first = deferred<AdminUserListResponse>()
     mocks.list.mockReturnValueOnce(first.promise)
     const wrapper = mount(MobileAdminUsersView)
-    expect(wrapper.find('[data-testid="mobile-page-loading"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="user-list-loading"]').text()).toContain('正在加载用户')
+    expect(wrapper.find('[data-testid="user-search"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="create-user"]').exists()).toBe(true)
 
     first.reject(new Error('credential=fatal-secret'))
     await flushPromises()
-    expect(wrapper.get('[data-testid="mobile-page-error"]').text()).toContain('用户列表加载失败')
+    expect(wrapper.get('[data-testid="user-list-error"]').text()).toContain('用户列表加载失败')
+    await wrapper.get('[data-testid="create-user"]').trigger('click')
+    expect(wrapper.find('.editor.mobile').exists()).toBe(true)
+    await wrapper.get('[data-testid="user-editor-close"]').trigger('click')
     expect(wrapper.text()).not.toContain('fatal-secret')
 
     mocks.list.mockResolvedValueOnce(response([]))
-    await wrapper.get('[data-testid="mobile-page-retry"]').trigger('click')
+    await wrapper.get('[data-testid="user-list-retry"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="mobile-page-empty"]').text()).toContain('暂无用户')
+    expect(wrapper.get('[data-testid="user-list-empty"]').text()).toContain('暂无用户')
+    expect(wrapper.find('[data-testid="user-filter-trigger"]').exists()).toBe(true)
+
+    await wrapper.get('[data-testid="create-user"]').trigger('click')
+    await wrapper.get('[data-testid="user-editor-email"]').setValue('first@example.com')
+    await wrapper.get('[data-testid="user-editor-password"]').setValue('first-password')
+    await wrapper.get('[data-testid="user-editor-submit"]').trigger('submit')
+    await flushPromises()
+    expect(mocks.create).toHaveBeenCalledWith(expect.objectContaining({ email: 'first@example.com' }))
+  })
+
+  it('keeps filters available in a filtered empty state and resets them', async () => {
+    const wrapper = mount(MobileAdminUsersView, { attachTo: document.body })
+    await flushPromises()
+    mocks.list.mockResolvedValueOnce(response([]))
+
+    await wrapper.get('[data-testid="user-filter-trigger"]').trigger('click')
+    const status = document.querySelector<HTMLSelectElement>('[data-testid="user-status-filter"]')!
+    status.value = 'disabled'
+    status.dispatchEvent(new Event('change', { bubbles: true }))
+    document.querySelector<HTMLButtonElement>('[data-testid="user-filter-apply"]')!.click()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="user-list-empty"]').text()).toContain('当前筛选范围内没有用户')
+    expect(wrapper.find('[data-testid="user-filter-trigger"]').exists()).toBe(true)
+    mocks.list.mockResolvedValueOnce(response())
+    await wrapper.get('[data-testid="user-empty-reset"]').trigger('click')
+    await flushPromises()
+    expect(mocks.list).toHaveBeenLastCalledWith({ page: 1, page_size: 20 })
+    wrapper.unmount()
   })
 
   it('uses compact previous-next pagination with a fixed page size', async () => {
@@ -451,7 +487,6 @@ describe('MobileAdminUsersView', () => {
     mocks.list
       .mockResolvedValueOnce(response([activeUser], { total: 21, page: 1 }))
       .mockResolvedValueOnce(response([lastUser], { total: 21, page: 2 }))
-      .mockResolvedValueOnce(response([], { total: 20, page: 2 }))
       .mockResolvedValueOnce(response([activeUser], { total: 20, page: 1 }))
     const wrapper = mount(MobileAdminUsersView)
     await flushPromises()
@@ -472,6 +507,240 @@ describe('MobileAdminUsersView', () => {
     expect(mocks.list).toHaveBeenLastCalledWith({ page: 1, page_size: 20 })
     expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
     expect(wrapper.text()).toContain(activeUser.email)
+  })
+
+  it('decrements delete totals locally, shrinks the page and preserves success on sync failure', async () => {
+    const lastUser = adminUser({ id: 21, username: 'Last User', email: 'last@example.com' })
+    mocks.list
+      .mockResolvedValueOnce(response([activeUser], { total: 21, page: 1 }))
+      .mockResolvedValueOnce(response([lastUser], { total: 21, page: 2 }))
+      .mockRejectedValueOnce(new Error('token=delete-sync-secret'))
+      .mockResolvedValueOnce(response([activeUser], { total: 20, page: 1 }))
+    const wrapper = mount(MobileAdminUsersView)
+    await flushPromises()
+    await wrapper.get('[data-testid="mobile-pagination-next"]').trigger('click')
+    await flushPromises()
+
+    await openMenu(wrapper, 21)
+    await wrapper.get('[data-testid="delete-user-21"]').trigger('click')
+    await wrapper.get('[data-testid="delete-user-identity"]').setValue('Last User')
+    await wrapper.get('[data-testid="confirm-delete-user"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.remove).toHaveBeenCalledWith(21)
+    expect(mocks.list).toHaveBeenLastCalledWith({ page: 1, page_size: 20 })
+    expect(wrapper.get('[data-testid="user-action-message"]').text()).toContain('用户已删除')
+    expect(wrapper.get('[data-testid="user-action-error"]').text()).toContain('列表同步失败')
+    expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('delete-sync-secret')
+
+    await wrapper.get('[data-testid="user-sync-retry"]').trigger('click')
+    await flushPromises()
+    expect(mocks.list).toHaveBeenLastCalledWith({ page: 1, page_size: 20 })
+    expect(wrapper.text()).toContain(activeUser.email)
+  })
+
+  it('invalidates a same-user detail request when the drawer closes and reopens', async () => {
+    const stale = deferred<AdminUser>()
+    const fresh = deferred<AdminUser>()
+    mocks.get.mockReturnValueOnce(stale.promise).mockReturnValueOnce(fresh.promise)
+    const wrapper = mount(MobileAdminUsersView)
+    await flushPromises()
+
+    await openMenu(wrapper, 7)
+    await wrapper.get('[data-testid="detail-user-7"]').trigger('click')
+    await wrapper.get('[data-testid="user-detail"] [aria-label="关闭"]').trigger('click')
+    await openMenu(wrapper, 7)
+    await wrapper.get('[data-testid="detail-user-7"]').trigger('click')
+    fresh.resolve(adminUser({ username: 'Fresh Detail' }))
+    await flushPromises()
+    expect(wrapper.get('#user-detail-title').text()).toBe('Fresh Detail')
+
+    stale.resolve(adminUser({ username: 'Stale Detail' }))
+    await flushPromises()
+    expect(wrapper.get('#user-detail-title').text()).toBe('Fresh Detail')
+  })
+
+  it('blocks status changes and deletion for admin users in the mobile UI', async () => {
+    const wrapper = mount(MobileAdminUsersView)
+    await flushPromises()
+    await openMenu(wrapper, 8)
+
+    const toggle = wrapper.get('[data-testid="toggle-user-8"]')
+    const remove = wrapper.get('[data-testid="delete-user-8"]')
+    expect(toggle.attributes('disabled')).toBeDefined()
+    expect(remove.attributes('disabled')).toBeDefined()
+    expect(toggle.attributes('title')).toContain('管理员')
+    expect(remove.attributes('title')).toContain('管理员')
+    await toggle.trigger('click')
+    await remove.trigger('click')
+    expect(wrapper.find('[data-testid="user-status-dialog"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="confirm-delete-user"]').exists()).toBe(false)
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.remove).not.toHaveBeenCalled()
+
+    const direct = mount(UserDeleteDialog, { props: { user: disabledUser, mobile: true } })
+    await direct.get('[data-testid="delete-user-identity"]').setValue(disabledUser.username)
+    expect(direct.text()).toContain('管理员用户不能删除')
+    expect(direct.get('[data-testid="confirm-delete-user"]').attributes('disabled')).toBeDefined()
+    await direct.get('[data-testid="confirm-delete-user"]').trigger('click')
+    expect(mocks.remove).not.toHaveBeenCalled()
+  })
+
+  it('rejects mismatched editor results but accepts a valid create id', async () => {
+    mocks.update.mockResolvedValueOnce(adminUser({ id: 999 }))
+    const edit = mount(UserEditorDialog, { props: { modelValue: true, user: activeUser, mobile: true } })
+    await edit.get('[data-testid="user-editor-submit"]').trigger('submit')
+    await flushPromises()
+    expect(edit.emitted('saved')).toBeUndefined()
+    expect(edit.emitted('update:modelValue')).toBeUndefined()
+    expect(edit.get('[role="alert"]').text()).toBe('用户保存失败，请稍后重试。')
+
+    mocks.create.mockResolvedValueOnce(adminUser({ id: 99, email: 'created@example.com' }))
+    const create = mount(UserEditorDialog, { props: { modelValue: true, mobile: true } })
+    await create.get('[data-testid="user-editor-email"]').setValue('created@example.com')
+    await create.get('[data-testid="user-editor-password"]').setValue('created-password')
+    await create.get('[data-testid="user-editor-submit"]').trigger('submit')
+    await flushPromises()
+    expect(create.emitted('saved')?.[0]?.[0]).toMatchObject({ id: 99 })
+    expect(create.emitted('update:modelValue')?.[0]).toEqual([false])
+  })
+
+  it('keeps the create editor open when the API returns an invalid id', async () => {
+    mocks.create.mockResolvedValueOnce({ ...activeUser, id: Number.NaN })
+    const wrapper = mount(UserEditorDialog, { props: { modelValue: true, mobile: true } })
+    await wrapper.get('[data-testid="user-editor-email"]').setValue('created@example.com')
+    await wrapper.get('[data-testid="user-editor-password"]').setValue('created-password')
+    await wrapper.get('[data-testid="user-editor-submit"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.emitted('saved')).toBeUndefined()
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
+    expect(wrapper.get('[role="alert"]').text()).toBe('用户保存失败，请稍后重试。')
+  })
+
+  it('keeps balance and groups dialogs open for mismatched mutation ids', async () => {
+    mocks.balance.mockResolvedValueOnce(adminUser({ id: 999 }))
+    const balance = mount(UserBalanceDialog, { props: { user: activeUser, mobile: true } })
+    await balance.get('[data-testid="balance-amount"]').setValue('5')
+    await balance.get('[data-testid="balance-form"]').trigger('submit')
+    await flushPromises()
+    expect(balance.emitted('updated')).toBeUndefined()
+    expect(balance.emitted('close')).toBeUndefined()
+    expect(balance.get('[role="alert"]').text()).toBe('余额更新失败，请稍后重试。')
+
+    mocks.update.mockResolvedValueOnce(adminUser({ id: 999 }))
+    const groups = mount(UserGroupsDialog, {
+      props: { user: activeUser, groups: [{ id: 1, name: 'Exclusive', is_exclusive: true }], mobile: true },
+    })
+    await groups.get('[data-testid="user-groups-submit"]').trigger('click')
+    await flushPromises()
+    expect(groups.emitted('updated')).toBeUndefined()
+    expect(groups.emitted('close')).toBeUndefined()
+    expect(groups.get('[role="alert"]').text()).toBe('分组权限保存失败，请稍后重试。')
+  })
+
+  it('submits only deduplicated exclusive ids from successfully loaded groups', async () => {
+    const user = adminUser({ allowed_groups: [1, 1, 2, 999] })
+    const groups = [
+      { id: 1, name: 'Exclusive', is_exclusive: true },
+      { id: 1, name: 'Duplicate', is_exclusive: true },
+      { id: 2, name: 'Public', is_exclusive: false },
+      { id: Number.NaN, name: 'Malformed', is_exclusive: true },
+      null,
+    ] as unknown as AdminGroupOption[]
+    mocks.update.mockResolvedValueOnce(user)
+    const wrapper = mount(UserGroupsDialog, { props: { user, groups, mobile: true } })
+    await wrapper.get('[data-testid="user-groups-submit"]').trigger('click')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenCalledWith(7, { allowed_groups: [1] })
+  })
+
+  it('shows an explicit retryable group load error and disables saving', async () => {
+    mocks.groups.mockReset().mockRejectedValueOnce(new Error('token=groups-load-secret'))
+    const wrapper = mount(MobileAdminUsersView)
+    await flushPromises()
+    await openMenu(wrapper, 7)
+    await wrapper.get('[data-testid="groups-user-7"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="user-groups-load-error"]').text()).toContain('分组列表加载失败')
+    expect(wrapper.text()).not.toContain('暂无可分配的专属分组')
+    expect(wrapper.text()).not.toContain('groups-load-secret')
+    expect(wrapper.get('[data-testid="user-groups-submit"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="user-groups-submit"]').trigger('click')
+    expect(mocks.update).not.toHaveBeenCalled()
+
+    mocks.groups.mockResolvedValueOnce([{ id: 1, name: 'Exclusive', is_exclusive: true }])
+    await wrapper.get('[data-testid="user-groups-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="user-group-1"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="user-groups-submit"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('clears all detail state before loading another user and disables unavailable quotas', async () => {
+    const userB = adminUser({ id: 12, username: 'User B', email: 'b@example.com', balance: 5 })
+    mocks.keys.mockReset()
+      .mockResolvedValueOnce({ items: [{ id: 1, name: 'A Key', status: 'active', quota_used: 1 }], total: 1, page: 1, page_size: 20 })
+      .mockRejectedValueOnce(new Error('B keys failed'))
+    mocks.usage.mockReset()
+      .mockResolvedValueOnce({ total_requests: 1, total_tokens: 2, total_cost: 3 })
+      .mockResolvedValueOnce({ total_requests: 4, total_tokens: 5, total_cost: 6 })
+    mocks.history.mockReset()
+      .mockResolvedValueOnce({ items: [{ id: 1, type: 'credit', value: 9, status: 'done', created_at: '2026-08-01T00:00:00Z', notes: 'A history' }], total: 1, page: 1, page_size: 20 })
+      .mockRejectedValueOnce(new Error('B history failed'))
+    mocks.quotas.mockReset()
+      .mockResolvedValueOnce({ platform_quotas: [{ platform: 'anthropic', daily_limit_usd: 123, weekly_limit_usd: 456, monthly_limit_usd: 789, daily_usage_usd: 1, weekly_usage_usd: 2, monthly_usage_usd: 3 }] })
+      .mockRejectedValueOnce(new Error('B quotas failed'))
+    const wrapper = mount(UserDetailDrawer, { props: { user: activeUser, mobile: true } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('A Key')
+    expect(wrapper.text()).toContain('A history')
+    expect((wrapper.get('.quota-row input').element as HTMLInputElement).value).toBe('123')
+    await wrapper.findAll('.identity-form input')[1]!.setValue('A subject')
+
+    await wrapper.setProps({ user: userB })
+    await flushPromises()
+    expect(wrapper.text()).not.toContain('A Key')
+    expect(wrapper.text()).not.toContain('A history')
+    expect(wrapper.get('.warning').text()).toContain('API Key')
+    expect(wrapper.get('.warning').text()).toContain('余额记录')
+    expect(wrapper.get('.warning').text()).toContain('平台额度')
+    expect((wrapper.get('.quota-row input').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.findAll('.identity-form input')[1]!.element as HTMLInputElement).value).toBe('')
+    expect(wrapper.get('[data-testid="user-quota-save"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="reset-quota-anthropic-daily"]').attributes('disabled')).toBeDefined()
+    await wrapper.get('[data-testid="user-quota-save"]').trigger('click')
+    await wrapper.get('[data-testid="reset-quota-anthropic-daily"]').trigger('click')
+    expect(mocks.updateQuotas).not.toHaveBeenCalled()
+    expect(mocks.resetQuota).not.toHaveBeenCalled()
+  })
+
+  it('sanitizes malformed detail collections and display values', async () => {
+    mocks.keys.mockResolvedValueOnce({
+      items: [null, {}, { id: Number.NaN }, { id: 1, name: 'Safe Key', status: null, quota_used: Number.POSITIVE_INFINITY }],
+      total: 4,
+      page: 1,
+      page_size: 20,
+    })
+    mocks.usage.mockResolvedValueOnce({ total_requests: Number.NaN, total_tokens: Number.POSITIVE_INFINITY, total_cost: 'bad' })
+    mocks.history.mockResolvedValueOnce({
+      items: [null, {}, { id: Number.POSITIVE_INFINITY }, { id: 1, type: null, value: Number.POSITIVE_INFINITY, status: null, created_at: Number.MAX_VALUE, notes: null }],
+      total: 4,
+      page: 1,
+      page_size: 20,
+    })
+    mocks.quotas.mockResolvedValueOnce({
+      platform_quotas: [null, {}, { platform: 'anthropic', daily_limit_usd: Number.POSITIVE_INFINITY, weekly_limit_usd: -1, monthly_limit_usd: null, daily_usage_usd: Number.NaN, weekly_usage_usd: 2, monthly_usage_usd: 3 }],
+    })
+    const wrapper = mount(UserDetailDrawer, { props: { user: activeUser, mobile: true } })
+    await flushPromises()
+
+    expect(wrapper.findAll('.key-row')).toHaveLength(1)
+    expect(wrapper.findAll('.history-row')).toHaveLength(1)
+    expect(wrapper.text()).toContain('Safe Key')
+    expect(wrapper.text()).toContain('—')
+    expect(wrapper.text()).not.toContain('NaN')
+    expect(wrapper.text()).not.toContain('Infinity')
+    expect(wrapper.text()).not.toContain('Invalid Date')
   })
 
   it('blocks pending delete dismissal, traps focus and restores the menu trigger', async () => {

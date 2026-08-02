@@ -12,31 +12,33 @@ import {
   updateAdminUserPlatformQuotas,
 } from '@/api/admin/users'
 import type {
-  AdminBalanceHistoryResponse,
   AdminPlatformQuota,
   AdminQuotaPlatform,
   AdminQuotaWindow,
   AdminUser,
-  AdminUserApiKeysResponse,
-  AdminUserUsageSummary,
 } from '@/api/admin/types'
 import { formatDateTime, formatPlatform } from '@/lib/format'
 
 const props = withDefaults(defineProps<{ user: AdminUser | null; mobile?: boolean }>(), { mobile: false })
 const emit = defineEmits<{ close: []; updated: [user: AdminUser] }>()
+interface DetailKey { id: number; name: string; status: string; quota_used: number | null }
+interface DetailHistoryItem { id: number; type: string; value: number | null; created_at: string | null; notes: string }
+interface DetailUsage { total_requests: number | null; total_tokens: number | null; total_cost: number | null }
+
 const loading = ref(false)
 const issues = ref<string[]>([])
-const keys = ref<AdminUserApiKeysResponse | null>(null)
-const usage = ref<AdminUserUsageSummary | null>(null)
-const history = ref<AdminBalanceHistoryResponse | null>(null)
+const keys = ref<{ items: DetailKey[] } | null>(null)
+const usage = ref<DetailUsage | null>(null)
+const history = ref<{ items: DetailHistoryItem[] } | null>(null)
 const quotas = ref<AdminPlatformQuota[]>([])
+const quotasReady = ref(false)
 const identity = reactive({ provider_type: 'oidc', provider_key: 'main', provider_subject: '' })
 const saving = ref('')
 const message = ref('')
 const detail = ref<HTMLElement | null>(null)
 const platforms: AdminQuotaPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok']
 const quotaDraft = ref<Record<string, { daily: string; weekly: string; monthly: string }>>(
-  Object.fromEntries(platforms.map((platform) => [platform, { daily: '', weekly: '', monthly: '' }])),
+  emptyQuotaDraft(),
 )
 let mounted = false
 let loadGeneration = 0
@@ -51,6 +53,114 @@ const quotaRows = computed(() => platforms.map((platform) => quotas.value.find((
   weekly_usage_usd: 0,
   monthly_usage_usd: 0,
 }))
+
+function emptyQuotaDraft() {
+  return Object.fromEntries(platforms.map((platform) => [platform, { daily: '', weekly: '', monthly: '' }]))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function validId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
+function safeMetric(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null
+}
+
+function safeDateValue(value: unknown) {
+  if (typeof value !== 'string' || !value) return null
+  const time = new Date(value).getTime()
+  return Number.isFinite(time) ? value : null
+}
+
+function safeDateTime(value: unknown) {
+  const date = safeDateValue(value)
+  if (!date) return '—'
+  try {
+    const formatted = formatDateTime(date)
+    return formatted && !formatted.includes('Invalid') ? formatted : '—'
+  } catch {
+    return '—'
+  }
+}
+
+function sanitizeKeys(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.items)) return null
+  const items = value.items.flatMap((item): DetailKey[] => {
+    if (!isRecord(item) || !validId(item.id)) return []
+    return [{
+      id: item.id,
+      name: typeof item.name === 'string' ? item.name : '',
+      status: typeof item.status === 'string' ? item.status : '',
+      quota_used: safeMetric(item.quota_used),
+    }]
+  })
+  return { items }
+}
+
+function sanitizeUsage(value: unknown): DetailUsage | null {
+  if (!isRecord(value)) return null
+  return {
+    total_requests: safeMetric(value.total_requests),
+    total_tokens: safeMetric(value.total_tokens),
+    total_cost: safeMetric(value.total_cost),
+  }
+}
+
+function sanitizeHistory(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.items)) return null
+  const items = value.items.flatMap((item): DetailHistoryItem[] => {
+    if (!isRecord(item) || !validId(item.id)) return []
+    return [{
+      id: item.id,
+      type: typeof item.type === 'string' ? item.type : '',
+      value: safeMetric(item.value),
+      created_at: safeDateValue(item.created_at),
+      notes: typeof item.notes === 'string' ? item.notes : '',
+    }]
+  })
+  return { items }
+}
+
+function sanitizeQuotas(value: unknown) {
+  if (!isRecord(value) || !Array.isArray(value.platform_quotas)) return null
+  const seen = new Set<AdminQuotaPlatform>()
+  return value.platform_quotas.flatMap((item): AdminPlatformQuota[] => {
+    if (!isRecord(item) || !platforms.includes(item.platform as AdminQuotaPlatform)) return []
+    const platform = item.platform as AdminQuotaPlatform
+    if (seen.has(platform)) return []
+    seen.add(platform)
+    return [{
+      platform,
+      daily_limit_usd: safeMetric(item.daily_limit_usd),
+      weekly_limit_usd: safeMetric(item.weekly_limit_usd),
+      monthly_limit_usd: safeMetric(item.monthly_limit_usd),
+      daily_usage_usd: safeMetric(item.daily_usage_usd) ?? 0,
+      weekly_usage_usd: safeMetric(item.weekly_usage_usd) ?? 0,
+      monthly_usage_usd: safeMetric(item.monthly_usage_usd) ?? 0,
+    }]
+  })
+}
+
+function resetUserState() {
+  loadGeneration += 1
+  loading.value = false
+  issues.value = []
+  keys.value = null
+  usage.value = null
+  history.value = null
+  quotas.value = []
+  quotasReady.value = false
+  quotaDraft.value = emptyQuotaDraft()
+  identity.provider_type = 'oidc'
+  identity.provider_key = 'main'
+  identity.provider_subject = ''
+  saving.value = ''
+  message.value = ''
+}
 
 function safeNumber(value: unknown) {
   if (value === null || value === undefined || value === '') return null
@@ -139,15 +249,24 @@ async function load() {
     getAdminUserPlatformQuotas(user.id),
   ])
   if (!mounted || generation !== loadGeneration || props.user?.id !== user.id) return
-  if (keyResult.status === 'fulfilled') keys.value = keyResult.value
+  const sanitizedKeys = keyResult.status === 'fulfilled' ? sanitizeKeys(keyResult.value) : null
+  if (sanitizedKeys) keys.value = sanitizedKeys
   else issues.value.push('API Key')
-  if (usageResult.status === 'fulfilled') usage.value = usageResult.value
+  const sanitizedUsage = usageResult.status === 'fulfilled' ? sanitizeUsage(usageResult.value) : null
+  if (sanitizedUsage) usage.value = sanitizedUsage
   else issues.value.push('用量')
-  if (historyResult.status === 'fulfilled') history.value = historyResult.value
+  const sanitizedHistory = historyResult.status === 'fulfilled' ? sanitizeHistory(historyResult.value) : null
+  if (sanitizedHistory) history.value = sanitizedHistory
   else issues.value.push('余额记录')
   if (quotaResult.status === 'fulfilled') {
-    quotas.value = Array.isArray(quotaResult.value?.platform_quotas) ? quotaResult.value.platform_quotas : []
-    syncDraft()
+    const sanitizedQuotas = sanitizeQuotas(quotaResult.value)
+    if (sanitizedQuotas) {
+      quotas.value = sanitizedQuotas
+      quotasReady.value = true
+      syncDraft()
+    } else {
+      issues.value.push('平台额度')
+    }
   } else {
     issues.value.push('平台额度')
   }
@@ -156,23 +275,24 @@ async function load() {
 
 async function bindIdentity() {
   if (!props.user || !identity.provider_subject.trim() || (props.mobile && saving.value)) return
+  const targetId = props.user.id
   saving.value = 'identity'
   message.value = ''
   try {
-    await bindAdminUserIdentity(props.user.id, {
+    await bindAdminUserIdentity(targetId, {
       provider_type: identity.provider_type,
       provider_key: identity.provider_key,
       provider_subject: identity.provider_subject.trim(),
     })
-    if (!mounted) return
+    if (!mounted || props.user?.id !== targetId) return
     message.value = '身份绑定完成'
     identity.provider_subject = ''
   } catch (caught) {
-    if (mounted) message.value = props.mobile
+    if (mounted && props.user?.id === targetId) message.value = props.mobile
       ? '身份绑定失败，请稍后重试。'
       : caught instanceof Error && caught.message ? caught.message : '身份绑定失败'
   } finally {
-    if (mounted) saving.value = ''
+    if (mounted && props.user?.id === targetId && saving.value === 'identity') saving.value = ''
   }
 }
 
@@ -187,7 +307,8 @@ function legacyNullable(value: string) {
 }
 
 async function saveQuotas() {
-  if (!props.user || (props.mobile && saving.value)) return
+  if (!props.user || !quotasReady.value || (props.mobile && saving.value)) return
+  const targetId = props.user.id
   const payload = platforms.map((platform) => ({
     platform,
     daily_limit_usd: props.mobile ? parseQuota(quotaDraft.value[platform]?.daily ?? '') : legacyNullable(quotaDraft.value[platform]?.daily ?? ''),
@@ -201,50 +322,60 @@ async function saveQuotas() {
   saving.value = 'quotas'
   message.value = ''
   try {
-    const data = await updateAdminUserPlatformQuotas(props.user.id, payload.map((quota) => ({
+    const data = await updateAdminUserPlatformQuotas(targetId, payload.map((quota) => ({
       platform: quota.platform,
       daily_limit_usd: quota.daily_limit_usd!,
       weekly_limit_usd: quota.weekly_limit_usd!,
       monthly_limit_usd: quota.monthly_limit_usd!,
     })))
-    if (!mounted) return
-    quotas.value = Array.isArray(data?.platform_quotas) ? data.platform_quotas : []
+    if (!mounted || props.user?.id !== targetId) return
+    const sanitized = sanitizeQuotas(data)
+    if (!sanitized) {
+      message.value = props.mobile ? '额度保存失败，请稍后重试。' : '额度保存返回结果无效'
+      return
+    }
+    quotas.value = sanitized
     syncDraft()
     message.value = '平台额度已保存'
   } catch (caught) {
-    if (mounted) message.value = props.mobile
+    if (mounted && props.user?.id === targetId) message.value = props.mobile
       ? '额度保存失败，请稍后重试。'
       : caught instanceof Error && caught.message ? caught.message : '额度保存失败'
   } finally {
-    if (mounted) saving.value = ''
+    if (mounted && props.user?.id === targetId && saving.value === 'quotas') saving.value = ''
   }
 }
 
 async function resetQuota(platform: AdminQuotaPlatform, window: AdminQuotaWindow) {
-  if (!props.user || (props.mobile && saving.value)) return
+  if (!props.user || !quotasReady.value || (props.mobile && saving.value)) return
+  const targetId = props.user.id
   const windowLabel = { daily: '日', weekly: '周', monthly: '月' }[window]
   if (!globalThis.confirm(`确认重置 ${props.user.email} 的 ${formatPlatform(platform)} ${windowLabel}用量？`)) return
   saving.value = `${platform}-${window}`
   message.value = ''
   try {
-    const data = await resetAdminUserPlatformQuota(props.user.id, platform, window)
-    if (!mounted) return
-    quotas.value = Array.isArray(data?.platform_quotas) ? data.platform_quotas : []
+    const data = await resetAdminUserPlatformQuota(targetId, platform, window)
+    if (!mounted || props.user?.id !== targetId) return
+    const sanitized = sanitizeQuotas(data)
+    if (!sanitized) {
+      message.value = props.mobile ? '额度重置失败，请稍后重试。' : '额度重置返回结果无效'
+      return
+    }
+    quotas.value = sanitized
     syncDraft()
     message.value = `${formatPlatform(platform)} ${windowLabel}用量已重置`
   } catch (caught) {
-    if (mounted) message.value = props.mobile
+    if (mounted && props.user?.id === targetId) message.value = props.mobile
       ? '额度重置失败，请稍后重试。'
       : caught instanceof Error && caught.message ? caught.message : '额度重置失败'
   } finally {
-    if (mounted) saving.value = ''
+    if (mounted && props.user?.id === targetId && saving.value === `${platform}-${window}`) saving.value = ''
   }
 }
 
 watch(() => props.user?.id, (id, previousId) => {
-  message.value = ''
+  resetUserState()
   if (id && mounted) void load()
-  else loadGeneration += 1
   if (!mounted || !props.mobile) return
   if (id && !previousId) {
     previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -258,6 +389,7 @@ onMounted(() => {
   mounted = true
   document.addEventListener('keydown', handleKeydown)
   if (props.user) {
+    resetUserState()
     void load()
     if (props.mobile) {
       previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
@@ -285,9 +417,9 @@ onBeforeUnmount(() => {
         <template v-else>
           <section class="metrics"><div><span>近 30 天请求</span><strong>{{ safeCount(usage?.total_requests) }}</strong></div><div><span>Token</span><strong>{{ safeCount(usage?.total_tokens) }}</strong></div><div><span>消费</span><strong>{{ safeCost(usage?.total_cost) }}</strong></div><div><span>当前余额</span><strong>{{ safeCost(user.balance) }}</strong></div></section>
           <section class="panel"><h3><KeyRound :size="16" />API Key</h3><div v-if="!keys?.items?.length" class="empty">暂无 API Key</div><div v-for="key in keys?.items ?? []" :key="key.id" class="key-row"><div><strong>{{ safeText(key.name, '未命名 Key') }}</strong><span>{{ safeText(key.status, '未知状态') }}</span></div><span>已用 {{ safeCost(key.quota_used) }}</span></div></section>
-          <section class="panel"><h3><ArrowUpRight :size="16" />余额记录</h3><div v-if="!history?.items?.length" class="empty">暂无记录</div><div v-for="item in (history?.items ?? []).slice(0, 5)" :key="item.id" class="history-row"><div><strong>{{ safeText(item.type, '未知类型') }}</strong><span>{{ safeText(item.notes, '无备注') }}</span></div><em>{{ Number(item.value) > 0 ? '+' : '' }}{{ safeCost(item.value) }}</em><span>{{ formatDateTime(typeof item.created_at === 'string' ? item.created_at : null) }}</span></div></section>
+          <section class="panel"><h3><ArrowUpRight :size="16" />余额记录</h3><div v-if="!history?.items?.length" class="empty">暂无记录</div><div v-for="item in (history?.items ?? []).slice(0, 5)" :key="item.id" class="history-row"><div><strong>{{ safeText(item.type, '未知类型') }}</strong><span>{{ safeText(item.notes, '无备注') }}</span></div><em>{{ Number(item.value) > 0 ? '+' : '' }}{{ safeCost(item.value) }}</em><span>{{ safeDateTime(item.created_at) }}</span></div></section>
           <section class="panel"><h3><Link2 :size="16" />绑定登录身份</h3><form class="identity-form" @submit.prevent="bindIdentity"><select v-model="identity.provider_type"><option value="oidc">OIDC</option><option value="linuxdo">LinuxDo</option><option value="github">GitHub</option><option value="google">Google</option><option value="wechat">微信</option><option value="dingtalk">钉钉</option></select><input v-model="identity.provider_key" placeholder="Provider Key" /><input v-model="identity.provider_subject" placeholder="Provider Subject" /><button type="submit" :disabled="mobile && Boolean(saving)">绑定</button></form></section>
-          <section class="panel quota-panel"><div class="panel-title"><h3><RefreshCw :size="16" />平台额度</h3><button type="button" :disabled="mobile ? Boolean(saving) : saving === 'quotas'" @click="saveQuotas">保存额度</button></div><div class="quota-head"><span>平台</span><span>日限额</span><span>周限额</span><span>月限额</span><span>日 / 周 / 月用量</span></div><div v-for="quota in quotaRows" :key="quota.platform" class="quota-row"><strong>{{ formatPlatform(quota.platform) }}</strong><input v-model="quotaDraft[quota.platform]!.daily" placeholder="不限" /><input v-model="quotaDraft[quota.platform]!.weekly" placeholder="不限" /><input v-model="quotaDraft[quota.platform]!.monthly" placeholder="不限" /><div class="quota-usage"><span><small>日 {{ safeCost(quota.daily_usage_usd) }}</small><button type="button" title="重置日用量" :data-testid="`reset-quota-${quota.platform}-daily`" :disabled="mobile ? Boolean(saving) : saving === `${quota.platform}-daily`" @click="resetQuota(quota.platform, 'daily')"><RotateCcw :size="12" /></button></span><span><small>周 {{ safeCost(quota.weekly_usage_usd) }}</small><button type="button" title="重置周用量" :data-testid="`reset-quota-${quota.platform}-weekly`" :disabled="mobile ? Boolean(saving) : saving === `${quota.platform}-weekly`" @click="resetQuota(quota.platform, 'weekly')"><RotateCcw :size="12" /></button></span><span><small>月 {{ safeCost(quota.monthly_usage_usd) }}</small><button type="button" title="重置月用量" :data-testid="`reset-quota-${quota.platform}-monthly`" :disabled="mobile ? Boolean(saving) : saving === `${quota.platform}-monthly`" @click="resetQuota(quota.platform, 'monthly')"><RotateCcw :size="12" /></button></span></div></div></section>
+          <section class="panel quota-panel"><div class="panel-title"><h3><RefreshCw :size="16" />平台额度</h3><button type="button" data-testid="user-quota-save" :disabled="!quotasReady || (mobile ? Boolean(saving) : saving === 'quotas')" @click="saveQuotas">保存额度</button></div><div class="quota-head"><span>平台</span><span>日限额</span><span>周限额</span><span>月限额</span><span>日 / 周 / 月用量</span></div><div v-for="quota in quotaRows" :key="quota.platform" class="quota-row"><strong>{{ formatPlatform(quota.platform) }}</strong><input v-model="quotaDraft[quota.platform]!.daily" placeholder="不限" /><input v-model="quotaDraft[quota.platform]!.weekly" placeholder="不限" /><input v-model="quotaDraft[quota.platform]!.monthly" placeholder="不限" /><div class="quota-usage"><span><small>日 {{ safeCost(quota.daily_usage_usd) }}</small><button type="button" title="重置日用量" :data-testid="`reset-quota-${quota.platform}-daily`" :disabled="!quotasReady || (mobile ? Boolean(saving) : saving === `${quota.platform}-daily`)" @click="resetQuota(quota.platform, 'daily')"><RotateCcw :size="12" /></button></span><span><small>周 {{ safeCost(quota.weekly_usage_usd) }}</small><button type="button" title="重置周用量" :data-testid="`reset-quota-${quota.platform}-weekly`" :disabled="!quotasReady || (mobile ? Boolean(saving) : saving === `${quota.platform}-weekly`)" @click="resetQuota(quota.platform, 'weekly')"><RotateCcw :size="12" /></button></span><span><small>月 {{ safeCost(quota.monthly_usage_usd) }}</small><button type="button" title="重置月用量" :data-testid="`reset-quota-${quota.platform}-monthly`" :disabled="!quotasReady || (mobile ? Boolean(saving) : saving === `${quota.platform}-monthly`)" @click="resetQuota(quota.platform, 'monthly')"><RotateCcw :size="12" /></button></span></div></div></section>
         </template>
       </aside>
     </div>

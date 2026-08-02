@@ -11,7 +11,8 @@ const identity = ref('')
 const deleting = ref(false)
 const error = ref('')
 const dialog = ref<HTMLElement | null>(null)
-const confirmed = computed(() => Boolean(props.user) && (identity.value === props.user?.username || identity.value === props.user?.email))
+const protectedAdmin = computed(() => props.mobile && props.user?.role === 'admin')
+const confirmed = computed(() => Boolean(props.user) && !protectedAdmin.value && (identity.value === props.user?.username || identity.value === props.user?.email))
 const displayError = computed(() => props.mobile && error.value ? '用户删除失败，请稍后重试。' : error.value)
 let mounted = false
 let previousFocus: HTMLElement | null = null
@@ -60,7 +61,7 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 async function remove() {
-  if (!props.user || !confirmed.value || deleting.value) return
+  if (!props.user || protectedAdmin.value || !confirmed.value || deleting.value) return
   const id = props.user.id
   deleting.value = true
   error.value = ''
@@ -109,7 +110,7 @@ onBeforeUnmount(() => {
     <div v-if="user" class="backdrop" :class="{ mobile }" @mousedown.self="requestClose">
       <section ref="dialog" class="dialog" :class="{ mobile }" role="dialog" aria-modal="true" aria-labelledby="delete-user-title" tabindex="-1">
         <header><span><AlertTriangle :size="20" /></span><div><h2 id="delete-user-title">删除用户</h2><p>此操作会停用并移除用户访问权限</p></div><button type="button" aria-label="关闭" :disabled="mobile && deleting" @click="requestClose"><X :size="18" /></button></header>
-        <div class="body"><p>请输入用户名 <strong>{{ user.username }}</strong> 或邮箱 <strong>{{ user.email }}</strong> 以确认删除。</p><input v-model="identity" data-testid="delete-user-identity" autocomplete="off" /><span v-if="displayError" class="error" role="alert">{{ displayError }}</span></div>
+        <div class="body"><p v-if="protectedAdmin" class="admin-warning">管理员用户不能删除。</p><p v-else>请输入用户名 <strong>{{ user.username }}</strong> 或邮箱 <strong>{{ user.email }}</strong> 以确认删除。</p><input v-model="identity" data-testid="delete-user-identity" autocomplete="off" :disabled="protectedAdmin" /><span v-if="displayError" class="error" role="alert">{{ displayError }}</span></div>
         <footer><button type="button" class="secondary" data-testid="cancel-delete-user" :disabled="mobile && deleting" @click="requestClose">取消</button><button type="button" data-testid="confirm-delete-user" :disabled="!confirmed || deleting" @click="remove"><LoaderCircle v-if="deleting" :size="16" class="spinning" /><Trash2 v-else :size="16" />确认删除</button></footer>
       </section>
     </div>

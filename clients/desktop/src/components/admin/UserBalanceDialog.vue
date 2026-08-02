@@ -24,6 +24,10 @@ function safeBalance(value: unknown) {
   return parsed === 0 ? '$0.00' : `$${parsed.toFixed(2)}`
 }
 
+function validUserId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
 function focusableElements() {
   if (!dialog.value) return []
   return Array.from(dialog.value.querySelectorAll<HTMLElement>(
@@ -69,6 +73,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 async function submit() {
   if (!props.user || saving.value) return
+  const targetId = props.user.id
   const amount = Number(form.amount)
   if (form.amount === '' || !Number.isFinite(amount) || amount <= 0) {
     error.value = '请输入大于 0 的金额'
@@ -82,12 +87,16 @@ async function submit() {
   saving.value = true
   error.value = ''
   try {
-    const user = await updateAdminUserBalance(props.user.id, {
+    const user = await updateAdminUserBalance(targetId, {
       balance: amount,
       operation: form.operation,
       notes: form.notes.trim(),
     })
     if (!mounted) return
+    if (!user || !validUserId(user.id) || user.id !== targetId || props.user?.id !== targetId) {
+      error.value = '余额更新返回结果无效'
+      return
+    }
     emit('updated', user)
     emit('close')
   } catch (caught) {

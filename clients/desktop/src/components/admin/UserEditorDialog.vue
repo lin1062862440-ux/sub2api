@@ -39,6 +39,10 @@ function normalizeMobileError(value: string) {
   return validation.includes(value) ? value : '用户保存失败，请稍后重试。'
 }
 
+function validUserId(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0
+}
+
 function reset() {
   form.email = props.user?.email ?? ''
   form.password = ''
@@ -126,6 +130,7 @@ async function submit() {
   const concurrency = props.mobile ? concurrencyInput : Math.max(1, concurrencyInput || 1)
   const rpmLimit = props.mobile ? rpmLimitInput : Math.max(0, rpmLimitInput || 0)
 
+  const targetId = props.user?.id ?? null
   saving.value = true
   try {
     const common = {
@@ -137,9 +142,14 @@ async function submit() {
       rpm_limit: rpmLimit,
     }
     const saved = props.user
-      ? await updateAdminUser(props.user.id, { ...common, ...(form.password ? { password: form.password } : {}) })
+      ? await updateAdminUser(targetId!, { ...common, ...(form.password ? { password: form.password } : {}) })
       : await createAdminUser({ ...common, password: form.password })
     if (!mounted) return
+    const stillTargetsUser = targetId === null ? props.user == null : props.user?.id === targetId
+    if (!saved || !validUserId(saved.id) || (targetId !== null && saved.id !== targetId) || !stillTargetsUser) {
+      error.value = '用户保存返回结果无效'
+      return
+    }
     form.password = ''
     emit('saved', saved)
     emit('update:modelValue', false)
