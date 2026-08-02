@@ -45,7 +45,7 @@ function restoreFocus() {
 }
 
 function requestClose() {
-  if (!saving.value) emit('close')
+  if (!props.mobile || !saving.value) emit('close')
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -71,7 +71,7 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 function toggle(id: number) {
-  if (saving.value) return
+  if (props.mobile && saving.value) return
   const index = selected.value.indexOf(id)
   if (index >= 0) selected.value.splice(index, 1)
   else selected.value.push(id)
@@ -127,16 +127,16 @@ onBeforeUnmount(() => {
   <Transition name="dialog-fade">
     <div v-if="user" class="dialog-backdrop" :class="{ mobile }" @mousedown.self="requestClose">
       <section ref="dialog" class="groups-dialog" :class="{ mobile }" data-testid="user-groups-dialog" role="dialog" aria-modal="true" aria-labelledby="groups-dialog-title" tabindex="-1">
-        <header><span><Layers3 :size="20" /></span><div><h2 id="groups-dialog-title">用户分组</h2><p>{{ user.email }}</p></div><button type="button" aria-label="关闭" :disabled="saving" @click="requestClose"><X :size="18" /></button></header>
+        <header><span><Layers3 :size="20" /></span><div><h2 id="groups-dialog-title">用户分组</h2><p>{{ user.email }}</p></div><button type="button" aria-label="关闭" :disabled="mobile && saving" @click="requestClose"><X :size="18" /></button></header>
         <div class="dialog-body">
           <div class="public-note"><strong>公共分组</strong><span>用户默认可以访问所有已启用的公共分组。</span></div>
           <div class="group-list">
-            <button v-for="group in safeGroups().filter(item => item.is_exclusive)" :key="group.id" type="button" :data-testid="`user-group-${group.id}`" :aria-pressed="selected.includes(group.id)" :disabled="saving" @click="toggle(group.id)"><i><span /></i><div><strong>{{ safeName(group.name) }}</strong><small>{{ formatPlatform(group.platform || '') }} · 专属分组</small></div></button>
+            <button v-for="group in safeGroups().filter(item => item.is_exclusive)" :key="group.id" type="button" :data-testid="`user-group-${group.id}`" :aria-pressed="selected.includes(group.id)" :disabled="mobile && saving" @click="toggle(group.id)"><i><span /></i><div><strong>{{ safeName(group.name) }}</strong><small>{{ formatPlatform(group.platform || '') }} · 专属分组</small></div></button>
             <p v-if="!safeGroups().some(item => item.is_exclusive)">暂无可分配的专属分组</p>
           </div>
           <p v-if="displayError" class="form-error" role="alert">{{ displayError }}</p>
         </div>
-        <footer><span>已选择 {{ selected.length }} 个专属分组</span><div><button type="button" :disabled="saving" @click="requestClose">取消</button><button class="primary" type="button" data-testid="user-groups-submit" :disabled="saving" @click="submit"><LoaderCircle v-if="saving" :size="15" class="spinning" /><Save v-else :size="15" />{{ saving ? '保存中' : '保存分组' }}</button></div></footer>
+        <footer><span>已选择 {{ selected.length }} 个专属分组</span><div><button type="button" :disabled="mobile && saving" @click="requestClose">取消</button><button class="primary" type="button" data-testid="user-groups-submit" :disabled="saving" @click="submit"><LoaderCircle v-if="saving" :size="15" class="spinning" /><Save v-else :size="15" />{{ saving ? '保存中' : '保存分组' }}</button></div></footer>
       </section>
     </div>
   </Transition>

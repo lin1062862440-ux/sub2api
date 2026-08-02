@@ -34,7 +34,7 @@ function restoreFocus() {
 }
 
 function requestClose() {
-  if (!deleting.value) emit('close')
+  if (!props.mobile || !deleting.value) emit('close')
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -108,9 +108,9 @@ onBeforeUnmount(() => {
   <Transition name="fade">
     <div v-if="user" class="backdrop" :class="{ mobile }" @mousedown.self="requestClose">
       <section ref="dialog" class="dialog" :class="{ mobile }" role="dialog" aria-modal="true" aria-labelledby="delete-user-title" tabindex="-1">
-        <header><span><AlertTriangle :size="20" /></span><div><h2 id="delete-user-title">删除用户</h2><p>此操作会停用并移除用户访问权限</p></div><button type="button" aria-label="关闭" :disabled="deleting" @click="requestClose"><X :size="18" /></button></header>
+        <header><span><AlertTriangle :size="20" /></span><div><h2 id="delete-user-title">删除用户</h2><p>此操作会停用并移除用户访问权限</p></div><button type="button" aria-label="关闭" :disabled="mobile && deleting" @click="requestClose"><X :size="18" /></button></header>
         <div class="body"><p>请输入用户名 <strong>{{ user.username }}</strong> 或邮箱 <strong>{{ user.email }}</strong> 以确认删除。</p><input v-model="identity" data-testid="delete-user-identity" autocomplete="off" /><span v-if="displayError" class="error" role="alert">{{ displayError }}</span></div>
-        <footer><button type="button" class="secondary" data-testid="cancel-delete-user" :disabled="deleting" @click="requestClose">取消</button><button type="button" data-testid="confirm-delete-user" :disabled="!confirmed || deleting" @click="remove"><LoaderCircle v-if="deleting" :size="16" class="spinning" /><Trash2 v-else :size="16" />确认删除</button></footer>
+        <footer><button type="button" class="secondary" data-testid="cancel-delete-user" :disabled="mobile && deleting" @click="requestClose">取消</button><button type="button" data-testid="confirm-delete-user" :disabled="!confirmed || deleting" @click="remove"><LoaderCircle v-if="deleting" :size="16" class="spinning" /><Trash2 v-else :size="16" />确认删除</button></footer>
       </section>
     </div>
   </Transition>

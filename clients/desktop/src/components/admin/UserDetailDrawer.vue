@@ -101,7 +101,7 @@ function restoreFocus() {
 }
 
 function requestClose() {
-  if (!saving.value) emit('close')
+  if (!props.mobile || !saving.value) emit('close')
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -155,7 +155,7 @@ async function load() {
 }
 
 async function bindIdentity() {
-  if (!props.user || !identity.provider_subject.trim() || saving.value) return
+  if (!props.user || !identity.provider_subject.trim() || (props.mobile && saving.value)) return
   saving.value = 'identity'
   message.value = ''
   try {
@@ -187,7 +187,7 @@ function legacyNullable(value: string) {
 }
 
 async function saveQuotas() {
-  if (!props.user || saving.value) return
+  if (!props.user || (props.mobile && saving.value)) return
   const payload = platforms.map((platform) => ({
     platform,
     daily_limit_usd: props.mobile ? parseQuota(quotaDraft.value[platform]?.daily ?? '') : legacyNullable(quotaDraft.value[platform]?.daily ?? ''),
@@ -221,7 +221,7 @@ async function saveQuotas() {
 }
 
 async function resetQuota(platform: AdminQuotaPlatform, window: AdminQuotaWindow) {
-  if (!props.user || saving.value) return
+  if (!props.user || (props.mobile && saving.value)) return
   const windowLabel = { daily: '日', weekly: '周', monthly: '月' }[window]
   if (!globalThis.confirm(`确认重置 ${props.user.email} 的 ${formatPlatform(platform)} ${windowLabel}用量？`)) return
   saving.value = `${platform}-${window}`
@@ -278,7 +278,7 @@ onBeforeUnmount(() => {
   <Transition name="drawer">
     <div v-if="user" class="backdrop" :class="{ mobile }" @mousedown.self="requestClose">
       <aside ref="detail" class="detail" :class="{ mobile }" data-testid="user-detail" role="dialog" aria-modal="true" aria-labelledby="user-detail-title" tabindex="-1">
-        <header><div><h2 id="user-detail-title">{{ safeText(user.username, '未命名用户') }}</h2><p>{{ safeText(user.email, '未提供邮箱') }}</p></div><button type="button" aria-label="关闭" :disabled="Boolean(saving)" @click="requestClose"><X :size="18" /></button></header>
+        <header><div><h2 id="user-detail-title">{{ safeText(user.username, '未命名用户') }}</h2><p>{{ safeText(user.email, '未提供邮箱') }}</p></div><button type="button" aria-label="关闭" :disabled="mobile && Boolean(saving)" @click="requestClose"><X :size="18" /></button></header>
         <p v-if="issues.length" class="warning">部分数据不可用：{{ issues.join('、') }}</p>
         <p v-if="message" class="message" role="status">{{ message }}</p>
         <div v-if="loading" class="loading"><i v-for="n in 7" :key="n" /></div>
@@ -286,8 +286,8 @@ onBeforeUnmount(() => {
           <section class="metrics"><div><span>近 30 天请求</span><strong>{{ safeCount(usage?.total_requests) }}</strong></div><div><span>Token</span><strong>{{ safeCount(usage?.total_tokens) }}</strong></div><div><span>消费</span><strong>{{ safeCost(usage?.total_cost) }}</strong></div><div><span>当前余额</span><strong>{{ safeCost(user.balance) }}</strong></div></section>
           <section class="panel"><h3><KeyRound :size="16" />API Key</h3><div v-if="!keys?.items?.length" class="empty">暂无 API Key</div><div v-for="key in keys?.items ?? []" :key="key.id" class="key-row"><div><strong>{{ safeText(key.name, '未命名 Key') }}</strong><span>{{ safeText(key.status, '未知状态') }}</span></div><span>已用 {{ safeCost(key.quota_used) }}</span></div></section>
           <section class="panel"><h3><ArrowUpRight :size="16" />余额记录</h3><div v-if="!history?.items?.length" class="empty">暂无记录</div><div v-for="item in (history?.items ?? []).slice(0, 5)" :key="item.id" class="history-row"><div><strong>{{ safeText(item.type, '未知类型') }}</strong><span>{{ safeText(item.notes, '无备注') }}</span></div><em>{{ Number(item.value) > 0 ? '+' : '' }}{{ safeCost(item.value) }}</em><span>{{ formatDateTime(typeof item.created_at === 'string' ? item.created_at : null) }}</span></div></section>
-          <section class="panel"><h3><Link2 :size="16" />绑定登录身份</h3><form class="identity-form" @submit.prevent="bindIdentity"><select v-model="identity.provider_type"><option value="oidc">OIDC</option><option value="linuxdo">LinuxDo</option><option value="github">GitHub</option><option value="google">Google</option><option value="wechat">微信</option><option value="dingtalk">钉钉</option></select><input v-model="identity.provider_key" placeholder="Provider Key" /><input v-model="identity.provider_subject" placeholder="Provider Subject" /><button type="submit" :disabled="Boolean(saving)">绑定</button></form></section>
-          <section class="panel quota-panel"><div class="panel-title"><h3><RefreshCw :size="16" />平台额度</h3><button type="button" :disabled="Boolean(saving)" @click="saveQuotas">保存额度</button></div><div class="quota-head"><span>平台</span><span>日限额</span><span>周限额</span><span>月限额</span><span>日 / 周 / 月用量</span></div><div v-for="quota in quotaRows" :key="quota.platform" class="quota-row"><strong>{{ formatPlatform(quota.platform) }}</strong><input v-model="quotaDraft[quota.platform]!.daily" placeholder="不限" /><input v-model="quotaDraft[quota.platform]!.weekly" placeholder="不限" /><input v-model="quotaDraft[quota.platform]!.monthly" placeholder="不限" /><div class="quota-usage"><span><small>日 {{ safeCost(quota.daily_usage_usd) }}</small><button type="button" title="重置日用量" :data-testid="`reset-quota-${quota.platform}-daily`" :disabled="Boolean(saving)" @click="resetQuota(quota.platform, 'daily')"><RotateCcw :size="12" /></button></span><span><small>周 {{ safeCost(quota.weekly_usage_usd) }}</small><button type="button" title="重置周用量" :data-testid="`reset-quota-${quota.platform}-weekly`" :disabled="Boolean(saving)" @click="resetQuota(quota.platform, 'weekly')"><RotateCcw :size="12" /></button></span><span><small>月 {{ safeCost(quota.monthly_usage_usd) }}</small><button type="button" title="重置月用量" :data-testid="`reset-quota-${quota.platform}-monthly`" :disabled="Boolean(saving)" @click="resetQuota(quota.platform, 'monthly')"><RotateCcw :size="12" /></button></span></div></div></section>
+          <section class="panel"><h3><Link2 :size="16" />绑定登录身份</h3><form class="identity-form" @submit.prevent="bindIdentity"><select v-model="identity.provider_type"><option value="oidc">OIDC</option><option value="linuxdo">LinuxDo</option><option value="github">GitHub</option><option value="google">Google</option><option value="wechat">微信</option><option value="dingtalk">钉钉</option></select><input v-model="identity.provider_key" placeholder="Provider Key" /><input v-model="identity.provider_subject" placeholder="Provider Subject" /><button type="submit" :disabled="mobile && Boolean(saving)">绑定</button></form></section>
+          <section class="panel quota-panel"><div class="panel-title"><h3><RefreshCw :size="16" />平台额度</h3><button type="button" :disabled="mobile ? Boolean(saving) : saving === 'quotas'" @click="saveQuotas">保存额度</button></div><div class="quota-head"><span>平台</span><span>日限额</span><span>周限额</span><span>月限额</span><span>日 / 周 / 月用量</span></div><div v-for="quota in quotaRows" :key="quota.platform" class="quota-row"><strong>{{ formatPlatform(quota.platform) }}</strong><input v-model="quotaDraft[quota.platform]!.daily" placeholder="不限" /><input v-model="quotaDraft[quota.platform]!.weekly" placeholder="不限" /><input v-model="quotaDraft[quota.platform]!.monthly" placeholder="不限" /><div class="quota-usage"><span><small>日 {{ safeCost(quota.daily_usage_usd) }}</small><button type="button" title="重置日用量" :data-testid="`reset-quota-${quota.platform}-daily`" :disabled="mobile ? Boolean(saving) : saving === `${quota.platform}-daily`" @click="resetQuota(quota.platform, 'daily')"><RotateCcw :size="12" /></button></span><span><small>周 {{ safeCost(quota.weekly_usage_usd) }}</small><button type="button" title="重置周用量" :data-testid="`reset-quota-${quota.platform}-weekly`" :disabled="mobile ? Boolean(saving) : saving === `${quota.platform}-weekly`" @click="resetQuota(quota.platform, 'weekly')"><RotateCcw :size="12" /></button></span><span><small>月 {{ safeCost(quota.monthly_usage_usd) }}</small><button type="button" title="重置月用量" :data-testid="`reset-quota-${quota.platform}-monthly`" :disabled="mobile ? Boolean(saving) : saving === `${quota.platform}-monthly`" @click="resetQuota(quota.platform, 'monthly')"><RotateCcw :size="12" /></button></span></div></div></section>
         </template>
       </aside>
     </div>

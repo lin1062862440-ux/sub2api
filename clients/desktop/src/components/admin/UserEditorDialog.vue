@@ -188,7 +188,7 @@ onBeforeUnmount(() => {
         <form data-testid="user-editor-submit" @submit.prevent="submit">
           <label><span>邮箱</span><input v-model="form.email" data-testid="user-editor-email" type="email" /></label><label><span>用户名</span><input v-model="form.username" /></label>
           <label><span>{{ user ? '新密码（留空不修改）' : '初始密码' }}</span><input v-model="form.password" data-testid="user-editor-password" type="password" autocomplete="new-password" /></label><label><span>角色</span><select v-model="form.role"><option value="user">普通用户</option><option value="admin">管理员</option></select></label>
-          <label><span>并发上限</span><input v-model="form.concurrency" data-testid="user-editor-concurrency" type="number" min="0" step="1" /></label><label><span>RPM 上限（0 为不限）</span><input v-model="form.rpmLimit" data-testid="user-editor-rpm" type="number" min="0" step="1" /></label>
+          <label><span>并发上限</span><input v-model="form.concurrency" data-testid="user-editor-concurrency" type="number" :min="mobile ? 0 : 1" step="1" /></label><label><span>RPM 上限（0 为不限）</span><input v-model="form.rpmLimit" data-testid="user-editor-rpm" type="number" min="0" step="1" /></label>
           <label class="wide"><span>管理员备注</span><textarea v-model="form.notes" rows="3" /></label><p v-if="displayError" class="error wide" role="alert">{{ displayError }}</p><footer class="wide"><button class="secondary" type="button" :disabled="saving" @click="close">取消</button><button type="submit" data-testid="user-editor-save" :disabled="saving"><LoaderCircle v-if="saving" :size="16" class="spinning" /><Save v-else :size="16" />{{ saving ? '保存中' : '保存用户' }}</button></footer>
         </form>
       </section>

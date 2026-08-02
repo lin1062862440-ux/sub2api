@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AdminUser, AdminUserListResponse } from '@/api/admin/types'
 import UserBalanceDialog from '@/components/admin/UserBalanceDialog.vue'
 import UserDeleteDialog from '@/components/admin/UserDeleteDialog.vue'
+import UserDetailDrawer from '@/components/admin/UserDetailDrawer.vue'
 import UserEditorDialog from '@/components/admin/UserEditorDialog.vue'
 import UserGroupsDialog from '@/components/admin/UserGroupsDialog.vue'
 import userBalanceSource from '@/components/admin/UserBalanceDialog.vue?raw'
@@ -530,6 +531,125 @@ describe('MobileAdminUsersView', () => {
     for (const source of [userEditorSource, userBalanceSource, userGroupsSource, userDeleteSource, userDetailSource]) {
       expect(source).toMatch(/\.mobile[^{}]*\{[^}]*44px/)
     }
+  })
+
+  it('preserves desktop editor minimum and submit normalization while mobile accepts zero', async () => {
+    const desktop = mount(UserEditorDialog, { props: { modelValue: true, user: activeUser } })
+    const desktopConcurrency = desktop.get('[data-testid="user-editor-concurrency"]')
+    expect(desktopConcurrency.attributes('min')).toBe('1')
+    await desktopConcurrency.setValue('0')
+    await desktop.get('[data-testid="user-editor-submit"]').trigger('submit')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenLastCalledWith(7, expect.objectContaining({ concurrency: 1 }))
+    desktop.unmount()
+
+    mocks.update.mockClear()
+    const mobile = mount(UserEditorDialog, { props: { modelValue: true, user: activeUser, mobile: true } })
+    const mobileConcurrency = mobile.get('[data-testid="user-editor-concurrency"]')
+    expect(mobileConcurrency.attributes('min')).toBe('0')
+    await mobileConcurrency.setValue('0')
+    await mobile.get('[data-testid="user-editor-submit"]').trigger('submit')
+    await flushPromises()
+    expect(mocks.update).toHaveBeenLastCalledWith(7, expect.objectContaining({ concurrency: 0 }))
+    mobile.unmount()
+  })
+
+  it('keeps desktop balance dismissal available during submit and blocks only mobile dismissal', async () => {
+    const desktopPending = deferred<AdminUser>()
+    mocks.balance.mockReturnValueOnce(desktopPending.promise)
+    const desktop = mount(UserBalanceDialog, { props: { user: activeUser } })
+    await desktop.get('[data-testid="balance-amount"]').setValue('5')
+    await desktop.get('[data-testid="balance-form"]').trigger('submit')
+    expect(desktop.get('.balance-dialog header button').attributes('disabled')).toBeUndefined()
+    expect(desktop.get('.balance-dialog footer button[type="button"]').attributes('disabled')).toBeUndefined()
+    await desktop.get('.dialog-backdrop').trigger('mousedown')
+    expect(desktop.emitted('close')).toHaveLength(1)
+    desktop.unmount()
+
+    const mobilePending = deferred<AdminUser>()
+    mocks.balance.mockReturnValueOnce(mobilePending.promise)
+    const mobile = mount(UserBalanceDialog, { props: { user: activeUser, mobile: true } })
+    await mobile.get('[data-testid="balance-amount"]').setValue('5')
+    await mobile.get('[data-testid="balance-form"]').trigger('submit')
+    expect(mobile.get('.balance-dialog header button').attributes('disabled')).toBeDefined()
+    expect(mobile.get('.balance-dialog footer button[type="button"]').attributes('disabled')).toBeDefined()
+    await mobile.get('.dialog-backdrop').trigger('mousedown')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(mobile.emitted('close')).toBeUndefined()
+    mobile.unmount()
+  })
+
+  it('keeps desktop groups dismissal available during submit and blocks only mobile dismissal', async () => {
+    const desktopPending = deferred<AdminUser>()
+    mocks.update.mockReturnValueOnce(desktopPending.promise)
+    const desktop = mount(UserGroupsDialog, { props: { user: activeUser, groups: [] } })
+    await desktop.get('[data-testid="user-groups-submit"]').trigger('click')
+    expect(desktop.get('.groups-dialog header button').attributes('disabled')).toBeUndefined()
+    expect(desktop.get('.groups-dialog footer button[type="button"]').attributes('disabled')).toBeUndefined()
+    await desktop.get('.dialog-backdrop').trigger('mousedown')
+    expect(desktop.emitted('close')).toHaveLength(1)
+    desktop.unmount()
+
+    const mobilePending = deferred<AdminUser>()
+    mocks.update.mockReturnValueOnce(mobilePending.promise)
+    const mobile = mount(UserGroupsDialog, { props: { user: activeUser, groups: [], mobile: true } })
+    await mobile.get('[data-testid="user-groups-submit"]').trigger('click')
+    expect(mobile.get('.groups-dialog header button').attributes('disabled')).toBeDefined()
+    expect(mobile.get('.groups-dialog footer button[type="button"]').attributes('disabled')).toBeDefined()
+    await mobile.get('.dialog-backdrop').trigger('mousedown')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(mobile.emitted('close')).toBeUndefined()
+    mobile.unmount()
+  })
+
+  it('keeps desktop delete dismissal available during submit and blocks only mobile dismissal', async () => {
+    const desktopPending = deferred<{ message: string }>()
+    mocks.remove.mockReturnValueOnce(desktopPending.promise)
+    const desktop = mount(UserDeleteDialog, { props: { user: activeUser } })
+    await desktop.get('[data-testid="delete-user-identity"]').setValue('Lin')
+    await desktop.get('[data-testid="confirm-delete-user"]').trigger('click')
+    expect(desktop.get('.dialog header button').attributes('disabled')).toBeUndefined()
+    expect(desktop.get('[data-testid="cancel-delete-user"]').attributes('disabled')).toBeUndefined()
+    await desktop.get('.backdrop').trigger('mousedown')
+    expect(desktop.emitted('close')).toHaveLength(1)
+    desktop.unmount()
+
+    const mobilePending = deferred<{ message: string }>()
+    mocks.remove.mockReturnValueOnce(mobilePending.promise)
+    const mobile = mount(UserDeleteDialog, { props: { user: activeUser, mobile: true } })
+    await mobile.get('[data-testid="delete-user-identity"]').setValue('Lin')
+    await mobile.get('[data-testid="confirm-delete-user"]').trigger('click')
+    expect(mobile.get('.dialog header button').attributes('disabled')).toBeDefined()
+    expect(mobile.get('[data-testid="cancel-delete-user"]').attributes('disabled')).toBeDefined()
+    await mobile.get('.backdrop').trigger('mousedown')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(mobile.emitted('close')).toBeUndefined()
+    mobile.unmount()
+  })
+
+  it('keeps desktop detail dismissal available during mutation and blocks only mobile dismissal', async () => {
+    const desktopPending = deferred<{ provider_type: string; provider_subject: string }>()
+    mocks.bindIdentity.mockReturnValueOnce(desktopPending.promise)
+    const desktop = mount(UserDetailDrawer, { props: { user: activeUser } })
+    await flushPromises()
+    await desktop.findAll('.identity-form input')[1]!.setValue('subject-desktop')
+    await desktop.get('.identity-form').trigger('submit')
+    expect(desktop.get('.detail header button').attributes('disabled')).toBeUndefined()
+    await desktop.get('.backdrop').trigger('mousedown')
+    expect(desktop.emitted('close')).toHaveLength(1)
+    desktop.unmount()
+
+    const mobilePending = deferred<{ provider_type: string; provider_subject: string }>()
+    mocks.bindIdentity.mockReturnValueOnce(mobilePending.promise)
+    const mobile = mount(UserDetailDrawer, { props: { user: activeUser, mobile: true } })
+    await flushPromises()
+    await mobile.findAll('.identity-form input')[1]!.setValue('subject-mobile')
+    await mobile.get('.identity-form').trigger('submit')
+    expect(mobile.get('.detail header button').attributes('disabled')).toBeDefined()
+    await mobile.get('.backdrop').trigger('mousedown')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    expect(mobile.emitted('close')).toBeUndefined()
+    mobile.unmount()
   })
 
   it('traps editor, balance, groups and detail focus and restores each trigger', async () => {

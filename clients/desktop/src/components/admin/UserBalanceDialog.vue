@@ -42,7 +42,7 @@ function restoreFocus() {
 }
 
 function requestClose() {
-  if (!saving.value) emit('close')
+  if (!props.mobile || !saving.value) emit('close')
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -131,13 +131,13 @@ onBeforeUnmount(() => {
   <Transition name="dialog-fade">
     <div v-if="user" class="dialog-backdrop" :class="{ mobile }" @mousedown.self="requestClose">
       <section ref="dialog" class="balance-dialog" :class="{ mobile }" role="dialog" aria-modal="true" aria-labelledby="balance-dialog-title" tabindex="-1">
-        <header><span><Coins :size="20" /></span><div><h2 id="balance-dialog-title">调整余额</h2><p>{{ user.email }} · 当前 {{ safeBalance(user.balance) }}</p></div><button type="button" aria-label="关闭" :disabled="saving" @click="requestClose"><X :size="18" /></button></header>
+        <header><span><Coins :size="20" /></span><div><h2 id="balance-dialog-title">调整余额</h2><p>{{ user.email }} · 当前 {{ safeBalance(user.balance) }}</p></div><button type="button" aria-label="关闭" :disabled="mobile && saving" @click="requestClose"><X :size="18" /></button></header>
         <form data-testid="balance-form" @submit.prevent="submit">
           <label><span>操作方式</span><select v-model="form.operation"><option value="add">增加余额</option><option value="subtract">扣减余额</option><option value="set">设为指定金额</option></select></label>
           <label><span>金额</span><input v-model="form.amount" data-testid="balance-amount" type="number" min="0.01" step="0.01" /></label>
           <label><span>操作备注</span><textarea v-model="form.notes" rows="3" placeholder="可选，用于审计记录" /></label>
           <p v-if="displayError" class="form-error" role="alert">{{ displayError }}</p>
-          <footer><button type="button" :disabled="saving" @click="requestClose">取消</button><button class="primary" type="submit" :disabled="saving"><LoaderCircle v-if="saving" :size="15" class="spinning" /><Save v-else :size="15" />{{ saving ? '处理中' : '确认调整' }}</button></footer>
+          <footer><button type="button" :disabled="mobile && saving" @click="requestClose">取消</button><button class="primary" type="submit" :disabled="saving"><LoaderCircle v-if="saving" :size="15" class="spinning" /><Save v-else :size="15" />{{ saving ? '处理中' : '确认调整' }}</button></footer>
         </form>
       </section>
     </div>
