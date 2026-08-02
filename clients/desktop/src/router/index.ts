@@ -254,7 +254,7 @@ router.beforeEach((to) => {
   })
 })
 
-watch(
+export const stopUserGroupAccessWatch = watch(
   () => session.userGroupCapabilities?.can_access === true,
   (hasAccess) => {
     if (shouldExitUserGroupWorkspace(hasAccess, router.currentRoute.value.meta)) {

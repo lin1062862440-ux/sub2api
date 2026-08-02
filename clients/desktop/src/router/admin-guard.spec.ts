@@ -1,8 +1,8 @@
 import type { Router } from 'vue-router'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 
 import { capabilitiesFor } from '@/lib/platform-capabilities'
-import { resolveRouteAccess, router, shouldExitUserGroupWorkspace } from './index'
+import { resolveRouteAccess, router, shouldExitUserGroupWorkspace, stopUserGroupAccessWatch } from './index'
 
 const mobileRouteModules = {
   dashboard: () => import('@/mobile/views/MobileDashboardView.vue'),
@@ -50,7 +50,7 @@ async function evaluatedRouter(mobile: boolean) {
   }))
   const module = await import('./index')
   vi.doUnmock('@/lib/platform-capabilities')
-  return module.router
+  return { router: module.router, stopWatch: module.stopUserGroupAccessWatch }
 }
 
 async function lazyRouteComponent(platformRouter: Router, name: string) {
@@ -62,21 +62,31 @@ async function lazyRouteComponent(platformRouter: Router, name: string) {
 }
 
 describe('desktop administrator route guard', () => {
-  it('evaluates all nine approved routes to mobile lazy views on Android', async () => {
-    const androidRouter = await evaluatedRouter(true)
+  afterAll(() => stopUserGroupAccessWatch())
 
-    for (const [name, loadExpected] of Object.entries(mobileRouteModules)) {
-      const expected = await loadExpected()
-      expect(await lazyRouteComponent(androidRouter, name), name).toBe(expected.default)
+  it('evaluates all nine approved routes to mobile lazy views on Android', async () => {
+    const evaluated = await evaluatedRouter(true)
+
+    try {
+      for (const [name, loadExpected] of Object.entries(mobileRouteModules)) {
+        const expected = await loadExpected()
+        expect(await lazyRouteComponent(evaluated.router, name), name).toBe(expected.default)
+      }
+    } finally {
+      evaluated.stopWatch()
     }
   })
 
   it('retains all nine original desktop lazy views outside mobile mode', async () => {
-    const desktopRouter = await evaluatedRouter(false)
+    const evaluated = await evaluatedRouter(false)
 
-    for (const [name, loadExpected] of Object.entries(desktopRouteModules)) {
-      const expected = await loadExpected()
-      expect(await lazyRouteComponent(desktopRouter, name), name).toBe(expected.default)
+    try {
+      for (const [name, loadExpected] of Object.entries(desktopRouteModules)) {
+        const expected = await loadExpected()
+        expect(await lazyRouteComponent(evaluated.router, name), name).toBe(expected.default)
+      }
+    } finally {
+      evaluated.stopWatch()
     }
   })
 
