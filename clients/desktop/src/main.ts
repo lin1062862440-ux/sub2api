@@ -4,9 +4,11 @@ import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import App from './App.vue'
 import { router } from './router'
 import { parseResetDeepLink, setResetHandoff } from '@/lib/deep-link'
+import { appCapabilities } from '@/lib/platform-capabilities'
 import { bootstrap } from '@/stores/session'
 import './style.css'
 import './components/user-groups/user-groups.css'
+import './mobile/mobile.css'
 
 async function handleDeepLinks(urls: string[]) {
   const handoff = urls.map(parseResetDeepLink).find((value) => value !== null)
@@ -16,13 +18,16 @@ async function handleDeepLinks(urls: string[]) {
 }
 
 async function start() {
+  document.documentElement.dataset.mobile = String(appCapabilities.mobile)
   await bootstrap()
 
   try {
     const current = await getCurrent()
     if (current?.length) await handleDeepLinks(current)
     await onOpenUrl((urls) => void handleDeepLinks(urls))
-    await listen<string[]>('linai://new-url', (event) => void handleDeepLinks(event.payload))
+    if (appCapabilities.desktopSecondInstance) {
+      await listen<string[]>('linai://new-url', (event) => void handleDeepLinks(event.payload))
+    }
   } catch {
     // Deep-link APIs are unavailable in browser/Vite preview mode.
   }
