@@ -114,6 +114,8 @@ let listGeneration = 0
 let groupGeneration = 0
 let progressGeneration = 0
 let feedbackGeneration = 0
+let progressSequence = 0
+const progressTokenById = new Map<number, number>()
 
 const pageCount = computed(() =>
   Math.max(1, Math.ceil(safeNonNegative(result.value.total) / PAGE_SIZE)),
@@ -455,6 +457,20 @@ function ownsFeedback(token: number) {
   return mounted && token === feedbackGeneration
 }
 
+function claimProgressToken(id: number) {
+  const token = ++progressSequence
+  progressTokenById.set(id, token)
+  return token
+}
+
+function ownsProgress(id: number, generation: number, token: number) {
+  return (
+    mounted &&
+    generation === progressGeneration &&
+    progressTokenById.get(id) === token
+  )
+}
+
 function decodeProgressWindow(
   value: unknown,
 ): AdminSubscriptionQuotaWindow | null {
@@ -522,8 +538,12 @@ function decodeProgress(
   return decoded
 }
 
-async function loadProgressItem(item: AdminSubscription, generation: number) {
-  if (!mounted || generation !== progressGeneration) return
+async function loadProgressItem(
+  item: AdminSubscription,
+  generation: number,
+  token = claimProgressToken(item.id),
+) {
+  if (!ownsProgress(item.id, generation, token)) return
   const { [item.id]: _previousProgress, ...remainingProgress } =
     progressById.value
   progressById.value = remainingProgress
@@ -533,13 +553,13 @@ async function loadProgressItem(item: AdminSubscription, generation: number) {
   }
   progressErrors.value = { ...progressErrors.value, [item.id]: false }
   try {
-    if (!mounted || generation !== progressGeneration) return
+    if (!ownsProgress(item.id, generation, token)) return
     const detail = decodeProgress(
       await getAdminSubscriptionProgress(item.id),
       item.id,
     )
-    if (!mounted || generation !== progressGeneration || !detail) {
-      if (mounted && generation === progressGeneration)
+    if (!ownsProgress(item.id, generation, token) || !detail) {
+      if (ownsProgress(item.id, generation, token))
         progressErrors.value = { ...progressErrors.value, [item.id]: true }
       return
     }
@@ -549,31 +569,60 @@ async function loadProgressItem(item: AdminSubscription, generation: number) {
       [item.id]: true,
     }
   } catch {
-    if (mounted && generation === progressGeneration)
+    if (ownsProgress(item.id, generation, token))
       progressErrors.value = { ...progressErrors.value, [item.id]: true }
   }
 }
 
 async function loadProgress(items: AdminSubscription[]) {
   const generation = ++progressGeneration
+  progressTokenById.clear()
   progressById.value = {}
   progressLoadedById.value = {}
   progressErrors.value = {}
+  const tasks = [...new Map(items.map((item) => [item.id, item])).values()].map(
+    (item) => ({ item, token: claimProgressToken(item.id) }),
+  )
   let nextIndex = 0
 
   async function worker() {
-    while (nextIndex < items.length) {
+    while (nextIndex < tasks.length) {
       if (!mounted || generation !== progressGeneration) return
       const index = nextIndex
       nextIndex += 1
-      const item = items[index]
-      if (!item) return
-      await loadProgressItem(item, generation)
+      const task = tasks[index]
+      if (!task) return
+      await loadProgressItem(task.item, generation, task.token)
     }
   }
 
   await Promise.all(
-    Array.from({ length: Math.min(PROGRESS_CONCURRENCY, items.length) }, () =>
+    Array.from({ length: Math.min(PROGRESS_CONCURRENCY, tasks.length) }, () =>
+      worker(),
+    ),
+  )
+}
+
+async function reloadProgress(items: AdminSubscription[]) {
+  const generation = progressGeneration
+  const tasks = [...new Map(items.map((item) => [item.id, item])).values()].map(
+    (item) => ({ item, token: claimProgressToken(item.id) }),
+  )
+  let nextIndex = 0
+
+  async function worker() {
+    while (nextIndex < tasks.length) {
+      if (!mounted || generation !== progressGeneration) return
+      const index = nextIndex
+      nextIndex += 1
+      const task = tasks[index]
+      if (!task) return
+      await loadProgressItem(task.item, generation, task.token)
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(PROGRESS_CONCURRENCY, tasks.length) }, () =>
       worker(),
     ),
   )
@@ -905,7 +954,7 @@ async function submitAssignment() {
   const token = claimFeedback()
   assignmentPending.value = true
   assignmentError.value = ''
-  let ambiguousSingleResult: { id: number; wasVisible: boolean } | null = null
+  const successfulAssignmentIds = new Set<number>()
   try {
     if (assignment.mode === 'single') {
       const response = await assignAdminSubscription({
@@ -923,11 +972,8 @@ async function submitAssignment() {
         assignmentError.value = '订阅分配结果无法确认，请重试。'
         return
       }
-      const wasVisible = result.value.items.some(
-        (item) => item.id === decoded.id,
-      )
       mergeAssignedSubscriptions([decoded], new Set())
-      ambiguousSingleResult = { id: decoded.id, wasVisible }
+      successfulAssignmentIds.add(decoded.id)
       if (ownsFeedback(token))
         actionMessage.value = `已为用户 #${userId} 分配订阅`
     } else {
@@ -951,13 +997,10 @@ async function submitAssignment() {
           .filter((item) => decoded.createdUserIds.has(item.user_id))
           .map((item) => item.id),
       )
-      const additions = mergeAssignedSubscriptions(
-        decoded.subscriptions,
-        createdSubscriptionIds,
+      mergeAssignedSubscriptions(decoded.subscriptions, createdSubscriptionIds)
+      decoded.subscriptions.forEach((item) =>
+        successfulAssignmentIds.add(item.id),
       )
-      additions.forEach((item) => {
-        void loadProgressItem(item, progressGeneration)
-      })
       if (ownsFeedback(token)) {
         if (decoded.failedCount) {
           const failedIds = [...decoded.failedUserIds]
@@ -979,12 +1022,10 @@ async function submitAssignment() {
       false,
       false,
     )
-    if (synced && ambiguousSingleResult && !ambiguousSingleResult.wasVisible) {
-      const refreshed = result.value.items.find(
-        (item) => item.id === ambiguousSingleResult!.id,
-      )
-      if (refreshed) void loadProgressItem(refreshed, progressGeneration)
-    }
+    const visibleSuccesses = result.value.items.filter((item) =>
+      successfulAssignmentIds.has(item.id),
+    )
+    if (visibleSuccesses.length) void reloadProgress(visibleSuccesses)
     if (!synced && ownsFeedback(token))
       syncWarning.value = '订阅已分配，但列表同步失败，请刷新重试。'
   } catch {
@@ -1280,6 +1321,7 @@ onUnmounted(() => {
   listGeneration += 1
   groupGeneration += 1
   progressGeneration += 1
+  progressTokenById.clear()
   document.removeEventListener('keydown', handleDocumentKeydown)
   document.removeEventListener('pointerdown', handleDocumentPointer)
 })

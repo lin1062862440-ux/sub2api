@@ -481,6 +481,70 @@ describe('MobileAdminSubscriptionsView', () => {
     expect(wrapper.find('[data-testid="subscription-sync-warning"]').exists()).toBe(false)
   })
 
+  it('reloads progress once for visible reused and newly visible bulk successes after authoritative sync', async () => {
+    const visible = subscription({ status: 'expired', expires_at: '2026-07-01T00:00:00Z' })
+    const renewedVisible = subscription({ status: 'active' })
+    const newlyVisible = subscription({ id: 44, user_id: 9, user: { id: 9, email: 'renewed@example.com', username: 'Renewed' } })
+    const renewedProgress = progress({
+      daily: { ...progress().daily!, used_usd: 0, remaining_usd: 400, percentage: 0 },
+    })
+    mocks.list
+      .mockResolvedValueOnce(response([visible]))
+      .mockResolvedValueOnce(response([renewedVisible, newlyVisible]))
+    mocks.bulkAssign.mockResolvedValueOnce({
+      success_count: 2,
+      created_count: 0,
+      reused_count: 2,
+      failed_count: 0,
+      subscriptions: [renewedVisible, newlyVisible],
+      errors: [],
+      statuses: { 7: 'reused', 9: 'reused' },
+    })
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+    mocks.progress.mockClear()
+    mocks.progress.mockImplementation((id: number) => Promise.resolve(id === 3 ? renewedProgress : progress({ id })))
+
+    await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
+    await clickBody('subscription-mode-bulk')
+    await setBodyValue('subscription-user-ids', '7,9')
+    await setBodyValue('subscription-assignment-group-id', '2')
+    await clickBody('confirm-subscription-assignment')
+
+    expect(mocks.progress.mock.calls.map(([id]) => id).sort((left, right) => left - right)).toEqual([3, 44])
+    expect(wrapper.get('[data-testid="subscription-quota-daily-3"]').text()).toContain('$0.00 / $400.00')
+    expect(wrapper.get('[data-testid="subscription-quota-daily-44"]').text()).toContain('$32.05')
+  })
+
+  it('reloads progress only for successful bulk users and not failed visible users', async () => {
+    const failedVisible = subscription({ id: 4, user_id: 8, user: { id: 8, email: 'failed@example.com', username: 'Failed' } })
+    mocks.list
+      .mockResolvedValueOnce(response([subscription(), failedVisible]))
+      .mockResolvedValueOnce(response([subscription(), failedVisible]))
+    mocks.bulkAssign.mockResolvedValueOnce({
+      success_count: 1,
+      created_count: 0,
+      reused_count: 1,
+      failed_count: 1,
+      subscriptions: [subscription()],
+      errors: ['user 8 failed'],
+      statuses: { 7: 'reused', 8: 'failed' },
+    })
+    mocks.progress.mockImplementation((id: number) => Promise.resolve(progress({ id })))
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+    mocks.progress.mockClear()
+
+    await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
+    await clickBody('subscription-mode-bulk')
+    await setBodyValue('subscription-user-ids', '7,8')
+    await setBodyValue('subscription-assignment-group-id', '2')
+    await clickBody('confirm-subscription-assignment')
+
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([3])
+    expect(wrapper.get('[data-testid="subscription-bulk-warning"]').text()).toContain('#8')
+  })
+
   it('shows a fixed retryable progress failure for a newly created subscription', async () => {
     const created = subscription({ id: 45, user_id: 8, user: { id: 8, email: 'created@example.com', username: 'Created' } })
     mocks.list.mockResolvedValueOnce(response()).mockRejectedValueOnce(new Error('offline'))
@@ -555,10 +619,15 @@ describe('MobileAdminSubscriptionsView', () => {
 
   it('updates an existing visible subscription after single assignment without changing total', async () => {
     const updated = subscription({ user: { id: 7, email: 'updated@example.com', username: 'Updated' } })
+    const renewedProgress = progress({
+      daily: { ...progress().daily!, used_usd: 0, remaining_usd: 400, percentage: 0 },
+    })
     mocks.assign.mockResolvedValueOnce(updated)
     mocks.list.mockResolvedValueOnce(response([subscription()], { total: 19 })).mockRejectedValueOnce(new Error('offline'))
     const wrapper = mount(MobileAdminSubscriptionsView)
     await flushPromises()
+    mocks.progress.mockClear()
+    mocks.progress.mockResolvedValueOnce(renewedProgress)
     await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
     await setBodyValue('subscription-user-id', '7')
     await setBodyValue('subscription-assignment-group-id', '2')
@@ -567,6 +636,31 @@ describe('MobileAdminSubscriptionsView', () => {
     expect(wrapper.text()).toContain('updated@example.com')
     expect(wrapper.findAll('[data-testid="mobile-subscription-card"]')).toHaveLength(1)
     expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([3])
+    expect(wrapper.get('[data-testid="subscription-quota-daily-3"]').text()).toContain('$0.00 / $400.00')
+  })
+
+  it('reloads one visible reused single subscription and replaces stale progress', async () => {
+    const expired = subscription({ status: 'expired', expires_at: '2026-07-01T00:00:00Z' })
+    const renewed = subscription({ status: 'active' })
+    const renewedProgress = progress({
+      daily: { ...progress().daily!, used_usd: 0, remaining_usd: 400, percentage: 0 },
+    })
+    mocks.list.mockResolvedValueOnce(response([expired])).mockResolvedValueOnce(response([renewed]))
+    mocks.assign.mockResolvedValueOnce(renewed)
+    mocks.progress.mockResolvedValueOnce(progress()).mockResolvedValueOnce(renewedProgress)
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+    mocks.progress.mockClear()
+
+    await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
+    await setBodyValue('subscription-user-id', '7')
+    await setBodyValue('subscription-assignment-group-id', '2')
+    await clickBody('confirm-subscription-assignment')
+
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([3])
+    expect(wrapper.get('[data-testid="subscription-status-3"]').text()).toBe('有效')
+    expect(wrapper.get('[data-testid="subscription-quota-daily-3"]').text()).toContain('$0.00 / $400.00')
   })
 
   it('loads progress for an unseen single assignment only after refresh includes it', async () => {
@@ -762,6 +856,33 @@ describe('MobileAdminSubscriptionsView', () => {
     await wrapper.get('[data-testid="retry-subscription-progress-3"]').trigger('click')
     await flushPromises()
     expect(wrapper.get('[data-testid="subscription-quota-daily-3"]').text()).toContain('$32.05')
+  })
+
+  it('does not let an older initial progress response overwrite a newer reset response for the same id', async () => {
+    const oldProgress = deferred<AdminSubscriptionProgress>()
+    const resetProgress = deferred<AdminSubscriptionProgress>()
+    const renewedProgress = progress({
+      daily: { ...progress().daily!, used_usd: 0, remaining_usd: 400, percentage: 0 },
+    })
+    mocks.progress.mockReturnValueOnce(oldProgress.promise).mockReturnValueOnce(resetProgress.promise)
+    mocks.reset.mockResolvedValueOnce(subscription({ daily_usage_usd: 0, monthly_usage_usd: 0 }))
+    mocks.list.mockResolvedValueOnce(response()).mockRejectedValueOnce(new Error('offline'))
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+    await openMenu(wrapper, 3)
+    await wrapper.get('[data-testid="reset-subscription-3"]').trigger('click')
+    bodyElement<HTMLInputElement>('subscription-reset-weekly').click()
+    await clickBody('confirm-subscription-action')
+    expect(mocks.progress).toHaveBeenCalledTimes(2)
+
+    resetProgress.resolve(renewedProgress)
+    await flushPromises()
+    expect(wrapper.get('[data-testid="subscription-quota-daily-3"]').text()).toContain('$0.00 / $400.00')
+    oldProgress.resolve(progress())
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="subscription-quota-daily-3"]').text()).toContain('$0.00 / $400.00')
+    expect(wrapper.get('[data-testid="subscription-quota-daily-3"]').text()).not.toContain('$32.05')
   })
 
   it('removes a revoked card from the active filter and decrements the trusted total', async () => {
