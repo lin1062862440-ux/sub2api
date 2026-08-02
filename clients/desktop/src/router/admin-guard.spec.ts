@@ -98,7 +98,20 @@ describe('desktop administrator route guard', () => {
       capabilities: capabilitiesFor('android'),
       toName: 'api-keys',
       meta: { requiresCapability: 'apiKeys' },
-    })).toEqual({ name: 'dashboard' })
+    })).toEqual({ name: 'admin-dashboard' })
+  })
+
+  it('redirects Android simple mode away from admin standard-only routes', () => {
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'admin',
+      workspace: 'admin',
+      runMode: 'simple',
+      userGroupAccess: true,
+      capabilities: capabilitiesFor('android'),
+      toName: 'admin-users',
+      meta: { requiresAdmin: true, standardOnly: true },
+    })).toEqual({ name: 'admin-dashboard' })
   })
 
   it('redirects Android personal workspace away from excluded routes', () => {
@@ -186,5 +199,29 @@ describe('desktop administrator route guard', () => {
       toName: 'channels',
       meta: { standardOnly: true },
     })).toBe(true)
+  })
+
+  it('retains dashboard redirects for desktop capability failures', () => {
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'admin',
+      workspace: 'admin',
+      runMode: 'standard',
+      userGroupAccess: true,
+      capabilities: capabilitiesFor('macos'),
+      toName: 'api-keys',
+      meta: { requiresCapability: 'apiKeys' },
+    })).toBe(true)
+
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'admin',
+      workspace: 'admin',
+      runMode: 'standard',
+      userGroupAccess: true,
+      capabilities: { ...capabilitiesFor('macos'), apiKeys: false },
+      toName: 'api-keys',
+      meta: { requiresCapability: 'apiKeys' },
+    })).toEqual({ name: 'dashboard' })
   })
 })

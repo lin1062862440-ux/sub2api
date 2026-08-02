@@ -12,13 +12,23 @@ export type MobileRouteName =
   | 'user-groups'
   | 'admin-subscriptions'
 
+export type MobileIconKey =
+  | 'layout-dashboard'
+  | 'chart-no-axes-combined'
+  | 'receipt-text'
+  | 'circle-user-round'
+  | 'users-round'
+  | 'layers-3'
+  | 'user-round-cog'
+  | 'building-2'
+
 export interface MobileNavigationItem {
   routeName: MobileRouteName
   title: string
-  iconKey: string
+  iconKey: MobileIconKey
 }
 
-interface MobileNavigation {
+export interface MobileNavigation {
   direct: readonly MobileNavigationItem[]
   overflow: readonly MobileNavigationItem[]
 }
@@ -65,11 +75,11 @@ export function isMobileOverflowActive(routeName: unknown, workspace: MobileWork
   return mobileNavigation(workspace).overflow.some((item) => item.routeName === routeName)
 }
 
-export function mobileRouteTitle(routeName: unknown): string | undefined {
+export function mobileRouteTitle(routeName: unknown): string {
   if (routeName === profileItem.routeName) return profileItem.title
   for (const navigation of [personalNavigation, adminNavigation]) {
     const item = [...navigation.direct, ...navigation.overflow].find((candidate) => candidate.routeName === routeName)
     if (item) return item.title
   }
-  return undefined
+  return ''
 }

@@ -31,11 +31,12 @@ export function resolveRouteAccess(input: RouteAccessInput): true | { name: stri
   if (input.workspace === 'admin' && input.role !== 'admin') return { name: 'dashboard' }
 
   const workspaceHome = workspaceDestination(input.workspace)
+  const restrictedRouteHome = input.capabilities.mobile ? workspaceHome : 'dashboard'
   const requiredCapability = input.meta.requiresCapability as keyof PlatformCapabilities | undefined
-  if (requiredCapability && !input.capabilities[requiredCapability]) return { name: 'dashboard' }
+  if (requiredCapability && !input.capabilities[requiredCapability]) return { name: restrictedRouteHome }
   if (input.meta.requiresAdmin && input.role !== 'admin') return { name: 'dashboard' }
   if (input.meta.requiresUserGroupAccess && !input.userGroupAccess) return { name: 'dashboard' }
-  if (input.meta.standardOnly && input.runMode === 'simple') return { name: 'dashboard' }
+  if (input.meta.standardOnly && input.runMode === 'simple') return { name: restrictedRouteHome }
   if (input.capabilities.mobile && !isMobileRouteAllowed(input.toName, input.workspace)) {
     return { name: workspaceHome }
   }
