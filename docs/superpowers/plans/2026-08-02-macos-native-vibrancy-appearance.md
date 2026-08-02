@@ -39,7 +39,7 @@
 - Modify: `clients/desktop/src/features/usage-display/internal/settings/UsageAppearanceChooser.vue`
 - Modify: `clients/desktop/src/features/usage-display/internal/settings/UsageAppearanceChooser.spec.ts`
 
-- [ ] **Step 1: Write failing storage and chooser tests**
+- [x] **Step 1: Write failing storage and chooser tests**
 
 Add a storage case that loads and saves `appearance: 'native'`, then update the chooser expectation to four choices and assert `苹果原生风` emits `native`:
 
@@ -65,7 +65,7 @@ await wrapper.get('[data-testid="usage-appearance-native"]').trigger('click')
 expect(wrapper.emitted('update:modelValue')).toContainEqual(['native'])
 ```
 
-- [ ] **Step 2: Run focused tests and verify they fail**
+- [x] **Step 2: Run focused tests and verify they fail**
 
 Run:
 
@@ -76,7 +76,7 @@ pnpm exec vitest run src/features/usage-display/core/storage.spec.ts src/feature
 
 Expected: failure because `native` is not normalized and the fourth chooser button does not exist.
 
-- [ ] **Step 3: Implement the contract and chooser**
+- [x] **Step 3: Implement the contract and chooser**
 
 Extend the type and both validation paths:
 
@@ -94,7 +94,7 @@ function normalizeAppearance(value: unknown): UsageDisplayAppearance {
 
 Use `normalizeAppearance(value.appearance) === value.appearance` in `isValidConfig`, add `{ id: 'native', label: '苹果原生风' }` to `usageAppearances`, change the chooser grid to four tracks, and add a neutral translucent native thumbnail with no gradient.
 
-- [ ] **Step 4: Run focused tests and verify they pass**
+- [x] **Step 4: Run focused tests and verify they pass**
 
 Run the Task 1 command again. Expected: all selected tests pass.
 
@@ -108,7 +108,7 @@ Run the Task 1 command again. Expected: all selected tests pass.
 - Modify: `clients/desktop/src/features/usage-display/external/macos/floating-window/FloatingUsageCard.spec.ts`
 - Modify: `clients/desktop/src/features/usage-display/external/macos/menu-bar/MacOSMenuBarPopover.spec.ts`
 
-- [ ] **Step 1: Write failing landscape assertions**
+- [x] **Step 1: Write failing landscape assertions**
 
 Add native cases that assert the shared card is marked as landscape, balance has no quota track, and subscription rows remain ordered:
 
@@ -120,7 +120,7 @@ expect(wrapper.findAll('[data-testid="usage-quota-row"]')).toHaveLength(2)
 
 In the menu-bar test, set `appearance: 'native'` and assert the same `native-landscape` class.
 
-- [ ] **Step 2: Run focused tests and verify they fail**
+- [x] **Step 2: Run focused tests and verify they fail**
 
 Run:
 
@@ -131,7 +131,7 @@ pnpm exec vitest run src/features/usage-display/external/macos/floating-window/F
 
 Expected: failure because the native landscape marker and layout do not exist.
 
-- [ ] **Step 3: Implement the landscape branch**
+- [x] **Step 3: Implement the landscape branch**
 
 Bind a dedicated class without changing other appearances:
 
@@ -145,7 +145,7 @@ Bind a dedicated class without changing other appearances:
 
 Add `[data-appearance='native']` tokens with a neutral readable fallback and no themed gradient or `backdrop-filter`. Under `.native-landscape`, use a 468 by 276 shell, a horizontal header, a two- or three-column quota grid, compact 7-pixel progress tracks, and bottom-right expiration. Keep `.balance-overview` as a dominant available balance plus a three-column consumption grid with no progress element.
 
-- [ ] **Step 4: Run focused tests and verify they pass**
+- [x] **Step 4: Run focused tests and verify they pass**
 
 Run the Task 2 command again. Expected: all selected tests pass and existing appearance assertions remain green.
 
@@ -155,9 +155,9 @@ Run the Task 2 command again. Expected: all selected tests pass and existing app
 - Modify: `clients/desktop/src/features/usage-display/external/macos/floating-window/macos-floating-window.css`
 - Modify: `clients/desktop/src/features/usage-display/internal/settings/UsageDisplaySettingsForm.vue`
 - Modify: `clients/desktop/src/features/usage-display/external/macos/floating-window/MacOSFloatingWindow.spec.ts`
-- Modify: `clients/desktop/src/features/usage-display/internal/settings/UsageDisplaySettingsForm.spec.ts`
+- Modify: `clients/desktop/src/features/usage-display/internal/settings/UsageDisplayDialog.spec.ts`
 
-- [ ] **Step 1: Write failing native compact-state tests**
+- [x] **Step 1: Write failing native compact-state tests**
 
 Add parameterized balance and subscription cases with `appearance = 'native'`. Assert the orb and bar retain the existing compact values, and add structural assertions for native preview hooks:
 
@@ -167,18 +167,18 @@ expect(wrapper.get('[data-testid="floating-usage-bar"]').text()).toContain('剩�
 expect(settings.get('[data-testid="usage-floating-bar-preview"]').attributes('data-appearance')).toBe('native')
 ```
 
-- [ ] **Step 2: Run focused tests and verify they fail**
+- [x] **Step 2: Run focused tests and verify they fail**
 
 Run:
 
 ```bash
 cd clients/desktop
-pnpm exec vitest run src/features/usage-display/external/macos/floating-window/MacOSFloatingWindow.spec.ts src/features/usage-display/internal/settings/UsageDisplaySettingsForm.spec.ts
+pnpm exec vitest run src/features/usage-display/external/macos/floating-window/MacOSFloatingWindow.spec.ts src/features/usage-display/internal/settings/UsageDisplayDialog.spec.ts
 ```
 
 Expected: native type or preview-style assertions fail.
 
-- [ ] **Step 3: Implement isolated native compact styles**
+- [x] **Step 3: Implement isolated native compact styles**
 
 Add rules that override only native elements:
 
@@ -200,7 +200,7 @@ Add rules that override only native elements:
 
 Keep the native orb at 68 by 68 with a circular radius. Add matching neutral preview overrides inside the internal settings component; do not import external CSS into the settings dialog.
 
-- [ ] **Step 4: Run focused tests and verify they pass**
+- [x] **Step 4: Run focused tests and verify they pass**
 
 Run the Task 3 command again. Expected: all selected tests pass.
 
@@ -211,7 +211,7 @@ Run the Task 3 command again. Expected: all selected tests pass.
 - Modify: `clients/desktop/src-tauri/src/usage_display/macos/menu_bar.rs`
 - Modify: `clients/desktop/src-tauri/src/usage_display/macos/floating_window.rs`
 
-- [ ] **Step 1: Write failing Rust unit tests**
+- [x] **Step 1: Write failing Rust unit tests**
 
 Add pure appearance and geometry assertions:
 
@@ -233,7 +233,7 @@ fn themed_floating_sizes_keep_shadow_gutters() {
 
 Add validation assertions that `native` parses and invalid strings fail. Add a pure material-action test that maps `native` to apply and all old themes to clear.
 
-- [ ] **Step 2: Run Rust tests and verify they fail**
+- [x] **Step 2: Run Rust tests and verify they fail**
 
 Run:
 
@@ -244,7 +244,7 @@ cargo test usage_display --lib
 
 Expected: compilation failure because `Appearance`, appearance-dependent geometry, and material action are not implemented.
 
-- [ ] **Step 3: Add typed appearance and material helpers**
+- [x] **Step 3: Add typed appearance and material helpers**
 
 Introduce one Rust enum in `usage_display/mod.rs`:
 
@@ -283,7 +283,7 @@ window_vibrancy::apply_vibrancy(
 
 Treat application failure as non-fatal so the CSS fallback remains visible.
 
-- [ ] **Step 4: Implement appearance-specific sizing and transition order**
+- [x] **Step 4: Implement appearance-specific sizing and transition order**
 
 Store `Appearance` in `FloatingWindowState`. Use exact logical sizes:
 
@@ -307,7 +307,7 @@ const fn expanded_logical_size(appearance: Appearance) -> (f64, f64) {
 
 On configure, expand, and collapse, resize before rendering the next Vue state and reapply radius 34 for the native orb, radius 22 for the native bar, or radius 23 for the native landscape window. For old appearances, clear Vibrancy and preserve the current sizes. Set the menu-bar popover to 468 by 276 only for native and restore 352 by 352 for other appearances.
 
-- [ ] **Step 5: Run Rust tests and verify they pass**
+- [x] **Step 5: Run Rust tests and verify they pass**
 
 Run the Task 4 command again. Expected: all usage-display Rust tests pass.
 
@@ -319,7 +319,7 @@ Run the Task 4 command again. Expected: all usage-display Rust tests pass.
 - Modify: `clients/desktop/src/features/usage-display/internal/settings/UsageDisplayDialog.spec.ts`
 - Verify: all files listed above.
 
-- [ ] **Step 1: Remove stale three-value test unions**
+- [x] **Step 1: Remove stale three-value test unions**
 
 Replace local test-only unions such as:
 
@@ -329,7 +329,7 @@ appearance: 'sky' as 'sky' | 'meadow' | 'sunset'
 
 with the exported `UsageDisplayAppearance` type or include `native`. Do not weaken assertions with `as never` when the production type is available.
 
-- [ ] **Step 2: Run the focused usage-display frontend suite**
+- [x] **Step 2: Run the focused usage-display frontend suite**
 
 Run:
 
@@ -340,7 +340,7 @@ pnpm exec vitest run src/features/usage-display
 
 Expected: all usage-display tests pass.
 
-- [ ] **Step 3: Run Rust formatting and tests**
+- [x] **Step 3: Run Rust formatting and tests**
 
 Run:
 
@@ -352,7 +352,9 @@ cargo test usage_display --lib
 
 Expected: formatting check and all usage-display tests pass.
 
-- [ ] **Step 4: Run frontend build checks**
+Actual verification: the four usage-display Rust modules pass `rustfmt --check`, and all 21 usage-display Rust tests pass. The repository-wide format check additionally reports unrelated, unstaged formatting in `src/lib.rs` and `src/text_export.rs`.
+
+- [x] **Step 4: Run frontend build checks**
 
 Run:
 
@@ -364,7 +366,9 @@ pnpm build
 
 Expected: direct Vite build passes. If `pnpm build` fails only in unrelated dirty admin modules, capture the exact errors and verify that no error points to a usage-display file.
 
-- [ ] **Step 5: Launch and inspect the native macOS dev client**
+Actual verification: `vite build --minify=false` passes. The default minified build is blocked by an unrelated admin `@container app-content(` syntax error, and `pnpm build` is blocked only by an unrelated missing `AdminUser.notes` field in `UserDetailDrawer.spec.ts`; neither error points to a usage-display file.
+
+- [x] **Step 5: Launch and inspect the native macOS dev client**
 
 Run:
 
@@ -383,7 +387,9 @@ Verify on the real client:
 - switching back to sky, meadow, or sunset removes Vibrancy and restores square geometry;
 - rapid source, subscription, appearance, and floating-form switches do not produce black corners, transparent disappearance, or clipped content.
 
-- [ ] **Step 6: Review the final diff and commit only feature files**
+Actual verification: Tauri dev remains running. The visual harness confirms a 68 by 68 orb, a 196 by 44 capsule, and 468 by 276 floating/menu-bar detail surfaces with matching client and scroll dimensions.
+
+- [x] **Step 6: Review the final diff and commit only feature files**
 
 Run:
 

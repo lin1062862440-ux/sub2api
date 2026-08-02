@@ -140,7 +140,11 @@ function toggle() {
 
     <fieldset :disabled="!supported">
       <legend>展示样式</legend>
-      <UsageAppearanceChooser :model-value="config.appearance" @update:model-value="setAppearance" />
+      <UsageAppearanceChooser
+        :model-value="config.appearance"
+        :platform="platform"
+        @update:model-value="setAppearance"
+      />
     </fieldset>
 
     <fieldset v-if="config.surface === 'floating-window'" :disabled="!supported">
@@ -337,6 +341,12 @@ legend { margin-bottom: 8px; }
 }
 .floating-preview[data-appearance='meadow'] { --preview-bg: #edf1c9; --preview-border: rgba(116, 129, 54, 0.2); --preview-text: #364126; box-shadow: inset -16px -14px 24px rgba(172, 183, 79, 0.18), 0 5px 12px rgba(63, 70, 35, 0.1); }
 .floating-preview[data-appearance='sunset'] { --preview-bg: #f4d6cd; --preview-border: rgba(162, 81, 67, 0.2); --preview-text: #52302c; box-shadow: inset -16px -14px 24px rgba(206, 106, 87, 0.17), 0 5px 12px rgba(88, 48, 40, 0.1); }
+.floating-preview[data-appearance='native'] {
+  --preview-bg: rgba(229, 235, 241, 0.74);
+  --preview-border: rgba(255, 255, 255, 0.72);
+  --preview-text: #29313a;
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.76), 0 4px 10px rgba(50, 62, 73, 0.1);
+}
 .orb-preview {
   display: grid;
   width: 62px;
@@ -359,6 +369,7 @@ legend { margin-bottom: 8px; }
   padding: 0 14px;
   border-radius: 14px;
 }
+.bar-preview[data-appearance='native'] { width: 154px; min-height: 36px; border-radius: 18px; }
 .bar-preview span { color: inherit; font-size: 10px; font-weight: 560; opacity: 0.68; }
 .bar-preview b { font-size: 15px; font-weight: 680; }
 

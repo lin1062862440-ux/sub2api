@@ -7,6 +7,7 @@ import {
   formatUsageTrayTitle,
   resolveBalanceRanges,
   resolveQuotaSummary,
+  resolveShortestUsageQuota,
   type UsageQuotaInput,
   type UsageQuotaSummary,
 } from '@/features/usage-display/core/format'
@@ -153,10 +154,11 @@ export function createUsageDisplayStore(
         : formatUsageTrayTitle({ kind: 'balance', balance: state.balance.available })
     }
     if (!state.subscription || !state.quotaSummary) return formatUsageTrayTitle({ kind: 'unavailable' })
+    const quota = resolveShortestUsageQuota(state.quotaSummary.quotas)
     return formatUsageTrayTitle({
       kind: 'subscription',
       name: state.subscription.group?.name || `订阅 #${state.subscription.id}`,
-      remainingPercent: state.quotaSummary.remainingPercent,
+      remainingPercent: quota?.remainingPercent ?? null,
     })
   }
 

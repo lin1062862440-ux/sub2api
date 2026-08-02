@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Clock3 } from '@lucide/vue'
 
 import type { ResolvedUsageQuota } from '@/features/usage-display/core/format'
 
 const props = withDefaults(defineProps<{
   quota: ResolvedUsageQuota
-  showIcon?: boolean
   fillMode?: 'used' | 'remaining'
-}>(), { showIcon: true, fillMode: 'used' })
+}>(), { fillMode: 'used' })
 const progressStyle = computed(() => ({
   width: `${props.fillMode === 'remaining'
     ? props.quota.remainingPercent
@@ -27,15 +25,22 @@ function resetLabel(value: Date | null) {
 <template>
   <div
     class="quota-row"
-    :class="{ constrained: quota.remainingPercent <= 20 }"
+    :class="{
+      constrained: quota.remainingPercent <= 20,
+      'compact-value': quota.remainingPercent < 20,
+    }"
     data-testid="usage-quota-row"
   >
     <div class="quota-head">
       <strong>{{ quota.label }}</strong>
-      <span>${{ quota.used.toFixed(2) }} / ${{ quota.limit.toFixed(2) }}</span>
-      <b>{{ quota.remainingPercent }}%</b>
+      <span>{{ quota.remainingPercent }}%</span>
     </div>
-    <div class="quota-track" aria-hidden="true"><span :style="progressStyle" /></div>
-    <small><Clock3 v-if="showIcon" :size="11" />{{ resetLabel(quota.resetAt) }}</small>
+    <div class="quota-track" aria-hidden="true">
+      <span :style="progressStyle"><b>{{ quota.remainingPercent }}%</b></span>
+    </div>
+    <div class="quota-meta">
+      <span>${{ quota.used.toFixed(2) }} / ${{ quota.limit.toFixed(2) }}</span>
+      <small>{{ resetLabel(quota.resetAt) }}</small>
+    </div>
   </div>
 </template>

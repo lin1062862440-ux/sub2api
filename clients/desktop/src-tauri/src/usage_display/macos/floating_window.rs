@@ -6,12 +6,14 @@ use std::sync::{
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_os = "macos")]
-use tauri::{Manager, Monitor, PhysicalPosition, PhysicalSize, Position, Size, WebviewWindow};
+use tauri::{Manager, Monitor, PhysicalPosition, PhysicalSize, Position, Size};
 #[cfg(target_os = "macos")]
 use tauri_plugin_store::StoreExt;
 
 #[cfg(target_os = "macos")]
-use super::super::{FloatingStyle, UsageDisplayHost, FLOATING_LABEL};
+use super::super::{Appearance, FloatingStyle, UsageDisplayHost, FLOATING_LABEL};
+#[cfg(target_os = "macos")]
+use super::apply_window_material;
 
 pub(in crate::usage_display) const ORB_LOGICAL_WIDTH: f64 = 88.0;
 pub(in crate::usage_display) const ORB_LOGICAL_HEIGHT: f64 = 88.0;
@@ -19,6 +21,11 @@ const BAR_LOGICAL_WIDTH: f64 = 176.0;
 const BAR_LOGICAL_HEIGHT: f64 = 52.0;
 const EXPANDED_LOGICAL_WIDTH: f64 = 352.0;
 const EXPANDED_LOGICAL_HEIGHT: f64 = 352.0;
+const NATIVE_ORB_LOGICAL_SIZE: f64 = 68.0;
+const NATIVE_BAR_LOGICAL_WIDTH: f64 = 196.0;
+const NATIVE_BAR_LOGICAL_HEIGHT: f64 = 44.0;
+const NATIVE_EXPANDED_LOGICAL_WIDTH: f64 = 468.0;
+const NATIVE_EXPANDED_LOGICAL_HEIGHT: f64 = 276.0;
 const EDGE_MARGIN_LOGICAL: f64 = 20.0;
 const POSITION_KEY: &str = "usage_display:floating_position";
 
@@ -118,21 +125,46 @@ fn expand_from_anchor(collapsed: WindowRect, expanded: WindowSize, area: WorkAre
     clamp_to_work_area(point, expanded, area)
 }
 
-const fn collapsed_logical_size(style: FloatingStyle) -> (f64, f64) {
-    match style {
-        FloatingStyle::Orb => (ORB_LOGICAL_WIDTH, ORB_LOGICAL_HEIGHT),
-        FloatingStyle::Bar => (BAR_LOGICAL_WIDTH, BAR_LOGICAL_HEIGHT),
+const fn collapsed_logical_size(style: FloatingStyle, appearance: Appearance) -> (f64, f64) {
+    match (style, appearance) {
+        (FloatingStyle::Orb, Appearance::Native) => {
+            (NATIVE_ORB_LOGICAL_SIZE, NATIVE_ORB_LOGICAL_SIZE)
+        }
+        (FloatingStyle::Bar, Appearance::Native) => {
+            (NATIVE_BAR_LOGICAL_WIDTH, NATIVE_BAR_LOGICAL_HEIGHT)
+        }
+        (FloatingStyle::Orb, _) => (ORB_LOGICAL_WIDTH, ORB_LOGICAL_HEIGHT),
+        (FloatingStyle::Bar, _) => (BAR_LOGICAL_WIDTH, BAR_LOGICAL_HEIGHT),
     }
 }
 
-const fn expanded_logical_size() -> (f64, f64) {
-    (EXPANDED_LOGICAL_WIDTH, EXPANDED_LOGICAL_HEIGHT)
+const fn expanded_logical_size(appearance: Appearance) -> (f64, f64) {
+    match appearance {
+        Appearance::Native => (
+            NATIVE_EXPANDED_LOGICAL_WIDTH,
+            NATIVE_EXPANDED_LOGICAL_HEIGHT,
+        ),
+        _ => (EXPANDED_LOGICAL_WIDTH, EXPANDED_LOGICAL_HEIGHT),
+    }
+}
+
+const fn collapsed_radius(style: FloatingStyle, appearance: Appearance) -> f64 {
+    match (style, appearance) {
+        (FloatingStyle::Orb, Appearance::Native) => 34.0,
+        (FloatingStyle::Bar, Appearance::Native) => 22.0,
+        _ => 0.0,
+    }
+}
+
+const fn expansion_transition_needed(current: bool, requested: bool) -> bool {
+    current != requested
 }
 
 #[derive(Default)]
 pub(in crate::usage_display) struct FloatingWindowState {
     expanded: AtomicBool,
     collapsed_style: Mutex<FloatingStyle>,
+    appearance: Mutex<Appearance>,
     collapsed_anchor: Mutex<Option<WindowPoint>>,
     expand_offset: Mutex<WindowPoint>,
     persist_generation: AtomicU64,
@@ -250,33 +282,30 @@ fn restored_anchor(
 }
 
 #[cfg(target_os = "macos")]
-pub(in crate::usage_display) fn apply_appearance(window: &WebviewWindow, appearance: &str) {
-    let _ = window_vibrancy::clear_vibrancy(window);
-    let _ = appearance;
-}
-
-#[cfg(target_os = "macos")]
 pub(in crate::usage_display) fn configure(
     app: &tauri::AppHandle,
     state: &UsageDisplayHost,
     visible: bool,
     style: FloatingStyle,
-    _appearance: &str,
+    appearance: Appearance,
 ) -> Result<(), String> {
     let window = app
         .get_webview_window(FLOATING_LABEL)
         .ok_or_else(|| "用量悬浮窗尚未初始化".to_string())?;
     if !visible {
         state.floating.expanded.store(false, Ordering::SeqCst);
+        apply_window_material(&window, Appearance::Sky, 0.0);
         return window.hide().map_err(|error| error.to_string());
     }
 
-    let _ = window_vibrancy::clear_vibrancy(&window);
     let monitor = default_monitor(app)?;
     let scale = monitor.scale_factor();
-    let size = physical_size(collapsed_logical_size(style), scale);
+    let size = physical_size(collapsed_logical_size(style, appearance), scale);
     if let Ok(mut value) = state.floating.collapsed_style.lock() {
         *value = style;
+    }
+    if let Ok(mut value) = state.floating.appearance.lock() {
+        *value = appearance;
     }
     let anchor = state
         .floating
@@ -303,6 +332,7 @@ pub(in crate::usage_display) fn configure(
     window
         .set_position(Position::Physical(as_physical(anchor)))
         .map_err(|error| error.to_string())?;
+    apply_window_material(&window, appearance, collapsed_radius(style, appearance));
     window.show().map_err(|error| error.to_string())
 }
 
@@ -312,6 +342,9 @@ pub(in crate::usage_display) fn set_expanded(
     state: &UsageDisplayHost,
     expanded: bool,
 ) -> Result<(), String> {
+    if !expansion_transition_needed(state.floating.expanded.load(Ordering::SeqCst), expanded) {
+        return Ok(());
+    }
     let window = app
         .get_webview_window(FLOATING_LABEL)
         .ok_or_else(|| "用量悬浮窗尚未初始化".to_string())?;
@@ -322,8 +355,14 @@ pub(in crate::usage_display) fn set_expanded(
         .lock()
         .map(|value| *value)
         .unwrap_or_default();
-    let collapsed_size = physical_size(collapsed_logical_size(style), scale);
-    let expanded_size = physical_size(expanded_logical_size(), scale);
+    let appearance = state
+        .floating
+        .appearance
+        .lock()
+        .map(|value| *value)
+        .unwrap_or_default();
+    let collapsed_size = physical_size(collapsed_logical_size(style, appearance), scale);
+    let expanded_size = physical_size(expanded_logical_size(appearance), scale);
     let current = window.outer_position().map_err(|error| error.to_string())?;
 
     if expanded {
@@ -358,6 +397,7 @@ pub(in crate::usage_display) fn set_expanded(
                 expanded_size.height,
             )))
             .map_err(|error| error.to_string())?;
+        apply_window_material(&window, appearance, 23.0);
         return Ok(());
     }
 
@@ -379,6 +419,7 @@ pub(in crate::usage_display) fn set_expanded(
             collapsed_size.height,
         )))
         .map_err(|error| error.to_string())?;
+    apply_window_material(&window, appearance, collapsed_radius(style, appearance));
     state.floating.expanded.store(false, Ordering::SeqCst);
     window
         .set_position(Position::Physical(as_physical(anchor)))
@@ -429,13 +470,41 @@ pub(in crate::usage_display) fn moved(
 
 #[cfg(test)]
 mod tests {
+    use super::super::super::Appearance;
     use super::*;
 
     #[test]
-    fn floating_usage_hosts_include_shadow_gutters() {
-        assert_eq!(collapsed_logical_size(FloatingStyle::Orb), (88.0, 88.0));
-        assert_eq!(collapsed_logical_size(FloatingStyle::Bar), (176.0, 52.0));
-        assert_eq!(expanded_logical_size(), (352.0, 352.0));
+    fn themed_floating_usage_hosts_keep_shadow_gutters() {
+        assert_eq!(
+            collapsed_logical_size(FloatingStyle::Orb, Appearance::Sky),
+            (88.0, 88.0)
+        );
+        assert_eq!(
+            collapsed_logical_size(FloatingStyle::Bar, Appearance::Sky),
+            (176.0, 52.0)
+        );
+        assert_eq!(expanded_logical_size(Appearance::Sky), (352.0, 352.0));
+    }
+
+    #[test]
+    fn native_floating_usage_hosts_match_visible_surfaces() {
+        assert_eq!(
+            collapsed_logical_size(FloatingStyle::Orb, Appearance::Native),
+            (68.0, 68.0)
+        );
+        assert_eq!(
+            collapsed_logical_size(FloatingStyle::Bar, Appearance::Native),
+            (196.0, 44.0)
+        );
+        assert_eq!(expanded_logical_size(Appearance::Native), (468.0, 276.0));
+    }
+
+    #[test]
+    fn repeated_expansion_state_requests_are_idempotent() {
+        assert!(!expansion_transition_needed(false, false));
+        assert!(!expansion_transition_needed(true, true));
+        assert!(expansion_transition_needed(false, true));
+        assert!(expansion_transition_needed(true, false));
     }
 
     #[test]

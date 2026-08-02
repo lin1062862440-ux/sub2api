@@ -1,13 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { Check } from '@lucide/vue'
 
 import type { UsageDisplayAppearance } from '@/features/usage-display/core/storage'
 import { usageAppearances } from '@/features/usage-display/external/macos/shared/appearance'
+import type { Platform } from '@/lib/platform'
 
-defineProps<{ modelValue: UsageDisplayAppearance }>()
+const props = defineProps<{
+  modelValue: UsageDisplayAppearance
+  platform: Platform
+}>()
 defineEmits<{ 'update:modelValue': [value: UsageDisplayAppearance] }>()
 
-const choices = usageAppearances
+const choices = computed(() => props.platform === 'macos'
+  ? usageAppearances
+  : usageAppearances.filter((choice) => choice.id !== 'native'))
 </script>
 
 <template>
@@ -33,7 +40,7 @@ const choices = usageAppearances
 </template>
 
 <style scoped>
-.appearance-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.appearance-choices { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .appearance-choice {
   display: grid;
   min-width: 0;
@@ -74,4 +81,11 @@ const choices = usageAppearances
 .appearance-sunset .appearance-sample { background: #f4d6cd; color: #52302c; box-shadow: inset -18px -14px 28px rgba(206, 106, 87, 0.19); }
 .appearance-sunset .appearance-sample i { background: rgba(94, 47, 40, 0.13); }
 .appearance-sunset .appearance-sample i b { background: #cf7666; }
+.appearance-native .appearance-sample { background: rgba(231, 236, 241, 0.72); color: #29313a; box-shadow: inset 0 1px rgba(255, 255, 255, 0.72); }
+.appearance-native .appearance-sample i { background: rgba(42, 50, 59, 0.12); }
+.appearance-native .appearance-sample i b { background: rgba(83, 102, 120, 0.72); }
+
+@media (max-width: 560px) {
+  .appearance-choices { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 </style>

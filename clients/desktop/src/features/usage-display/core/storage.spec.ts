@@ -133,6 +133,24 @@ describe('usage display storage', () => {
     })
   })
 
+  it('preserves and saves the macOS native appearance', async () => {
+    const config = {
+      enabled: true,
+      source: 'balance' as const,
+      subscriptionId: null,
+      surface: 'floating-window' as const,
+      appearance: 'native' as const,
+      floatingStyle: 'bar' as const,
+    }
+    mocks.get.mockResolvedValue(config)
+
+    await expect(loadUsageDisplayConfig(42)).resolves.toEqual(config)
+    await saveUsageDisplayConfig(42, config)
+
+    expect(mocks.set).toHaveBeenCalledWith('usage_display:42', config)
+    expect(mocks.save).toHaveBeenCalledOnce()
+  })
+
   it.each([
     null,
     { enabled: 'yes', source: 'balance', subscriptionId: null },

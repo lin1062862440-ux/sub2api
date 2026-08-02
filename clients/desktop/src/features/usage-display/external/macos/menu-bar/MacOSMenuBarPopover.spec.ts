@@ -1,5 +1,6 @@
 import { mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { UsageDisplayAppearance } from '@/features/usage-display/core/storage'
 
 const mocks = vi.hoisted(() => ({
   state: {
@@ -10,7 +11,7 @@ const mocks = vi.hoisted(() => ({
       source: 'balance' as 'balance' | 'subscription',
       subscriptionId: null as number | null,
       surface: 'menu-bar' as 'menu-bar' | 'floating-window',
-      appearance: 'sky' as 'sky' | 'meadow' | 'sunset',
+      appearance: 'sky' as UsageDisplayAppearance,
       floatingStyle: 'orb' as 'orb' | 'bar',
     },
     balance: { available: 128.6, today: 2.18, last7Days: 12.42, thisMonth: 35.6 },
@@ -99,7 +100,16 @@ describe('MacOSMenuBarPopover', () => {
     expect(wrapper.text()).not.toContain('在菜单栏显示')
   })
 
-  it('shows the constrained subscription quota and reset information', () => {
+  it('uses the native landscape detail variant for the native appearance', () => {
+    mocks.state.config.appearance = 'native'
+    const wrapper = mount(MacOSMenuBarPopover)
+
+    const card = wrapper.get('[data-testid="external-usage-detail-card"]')
+    expect(card.attributes('data-appearance')).toBe('native')
+    expect(card.classes()).toContain('native-landscape')
+  })
+
+  it('shows equal subscription quota rows from the shortest period to the longest', () => {
     mocks.state.config = {
       enabled: true,
       source: 'subscription',
@@ -126,12 +136,12 @@ describe('MacOSMenuBarPopover', () => {
 
     expect(wrapper.get('[data-testid="external-usage-detail-card"]').attributes('data-appearance')).toBe('meadow')
     expect(wrapper.text()).toContain('Claude Pro')
-    expect(wrapper.text()).toContain('20%')
-    expect(wrapper.text()).toContain('日额度')
-    expect(wrapper.text()).toContain('周额度')
-    expect(wrapper.text()).toContain('$8.00 / $10.00')
-    expect(wrapper.get('[data-testid="floating-primary-label"]').text()).toBe('剩余额度')
-    expect(wrapper.findAll('.quota-track').length).toBeGreaterThan(0)
+    expect(wrapper.find('[data-testid="floating-primary-label"]').exists()).toBe(false)
+    const rows = wrapper.findAll('[data-testid="usage-quota-row"]')
+    expect(rows).toHaveLength(2)
+    expect(rows.map((row) => row.get('.quota-head strong').text())).toEqual(['日额度', '周额度'])
+    expect(rows.map((row) => row.get('.quota-track').text())).toEqual(['80%', '20%'])
+    expect(rows[1].text()).toContain('$8.00 / $10.00')
   })
 
 })

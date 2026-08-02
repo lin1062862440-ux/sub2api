@@ -428,17 +428,24 @@ pub(in crate::usage_display) fn configure(
     _state: &UsageDisplayHost,
     enabled: bool,
     title: &str,
-    appearance: &str,
+    appearance: super::super::Appearance,
 ) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(POPOVER_LABEL) {
+        let logical_size = super::super::popover_logical_size(appearance);
+        window
+            .set_size(tauri::Size::Logical(tauri::LogicalSize::new(
+                logical_size.0,
+                logical_size.1,
+            )))
+            .map_err(|error| error.to_string())?;
+        super::apply_window_material(&window, appearance, 23.0);
+    }
     if !enabled {
         let _ = app.remove_tray_by_id(TRAY_ID);
         if let Some(window) = app.get_webview_window(POPOVER_LABEL) {
             let _ = window.hide();
         }
         return Ok(());
-    }
-    if let Some(window) = app.get_webview_window(POPOVER_LABEL) {
-        super::floating_window::apply_appearance(&window, appearance);
     }
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
         apply_native_metric(app, &tray, title)?;

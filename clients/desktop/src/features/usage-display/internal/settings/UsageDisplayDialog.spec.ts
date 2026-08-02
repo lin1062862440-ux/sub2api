@@ -1,5 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { UsageDisplayAppearance } from '@/features/usage-display/core/storage'
 
 const mocks = vi.hoisted(() => ({
   state: {
@@ -9,7 +10,7 @@ const mocks = vi.hoisted(() => ({
       source: 'balance' as 'balance' | 'subscription',
       subscriptionId: null as number | null,
       surface: 'menu-bar' as 'menu-bar' | 'floating-window',
-      appearance: 'sky' as 'sky' | 'meadow' | 'sunset',
+      appearance: 'sky' as UsageDisplayAppearance,
       floatingStyle: 'orb' as 'orb' | 'bar',
     },
     subscriptions: [
@@ -163,6 +164,18 @@ describe('UsageDisplayDialog', () => {
       appearance: 'sky',
       floatingStyle: 'orb',
     })
+  })
+
+  it('renders the native capsule as an internal settings preview', async () => {
+    mocks.state.config.surface = 'floating-window'
+    mocks.state.config.floatingStyle = 'bar'
+    mocks.state.config.appearance = 'native'
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    const preview = wrapper.get('[data-testid="usage-floating-bar-preview"]')
+    expect(preview.attributes('data-appearance')).toBe('native')
+    expect(preview.text()).toContain('可用余额')
   })
 
   it('closes from the title action and completion action', async () => {

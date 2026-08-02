@@ -24,33 +24,41 @@ button { -webkit-app-region: no-drag; }
 
 .floating-usage-orb,
 .floating-usage-bar {
-  --pearl-bg: linear-gradient(145deg, #dcecf5 0%, #e7f1ed 58%, #f0ecd9 100%);
+  --pearl-bg: linear-gradient(145deg, rgba(219, 235, 246, 0.72) 0%, rgba(239, 245, 242, 0.68) 58%, rgba(247, 243, 229, 0.66) 100%);
   --pearl-text: #263743;
-  --pearl-muted: #70808a;
+  --pearl-muted: rgba(38, 55, 67, 0.74);
   position: relative;
   box-sizing: border-box;
   padding: 0;
   overflow: hidden;
   background: var(--pearl-bg);
-  border: 0;
-  box-shadow: 0 7px 17px -9px rgba(42, 63, 78, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  box-shadow: 0 5px 8px -7px rgba(42, 63, 78, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   color: var(--pearl-text);
   cursor: grab;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
 }
 .floating-usage-orb[data-appearance='meadow'],
 .floating-usage-bar[data-appearance='meadow'] {
-  --pearl-bg: linear-gradient(145deg, #f0f3d5 0%, #e9efc4 58%, #f4ebc8 100%);
+  --pearl-bg: linear-gradient(145deg, rgba(231, 238, 211, 0.72) 0%, rgba(238, 242, 222, 0.68) 58%, rgba(246, 239, 220, 0.66) 100%);
   --pearl-text: #354029;
-  --pearl-muted: #747b58;
-  box-shadow: 0 7px 17px -9px rgba(64, 72, 38, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  --pearl-muted: rgba(53, 64, 41, 0.74);
+  box-shadow: 0 5px 8px -7px rgba(64, 72, 38, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.48);
 }
 .floating-usage-orb[data-appearance='sunset'],
 .floating-usage-bar[data-appearance='sunset'] {
-  --pearl-bg: linear-gradient(145deg, #f6ded7 0%, #f2d2c9 58%, #f5e4cf 100%);
+  --pearl-bg: linear-gradient(145deg, rgba(245, 225, 219, 0.71) 0%, rgba(241, 232, 227, 0.66) 58%, rgba(246, 236, 223, 0.66) 100%);
   --pearl-text: #51332f;
-  --pearl-muted: #8b6962;
-  box-shadow: 0 7px 17px -9px rgba(91, 48, 42, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.62);
+  --pearl-muted: rgba(81, 51, 47, 0.74);
+  box-shadow: 0 5px 8px -7px rgba(91, 48, 42, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.48);
+}
+.floating-usage-orb[data-appearance='native'],
+.floating-usage-bar[data-appearance='native'] {
+  --pearl-text: rgba(25, 31, 38, 0.86);
+  --pearl-muted: rgba(25, 31, 38, 0.56);
+  background: rgba(246, 248, 250, 0.32);
+  border: 0;
+  box-shadow: none;
 }
 .floating-usage-orb:active,
 .floating-usage-bar:active { cursor: grabbing; }
@@ -64,6 +72,11 @@ button { -webkit-app-region: no-drag; }
   border-radius: 50%;
   place-content: center;
   text-align: center;
+}
+.floating-usage-orb[data-appearance='native'] {
+  width: 68px;
+  height: 68px;
+  border-radius: 50%;
 }
 .floating-usage-orb strong {
   display: inline-flex;
@@ -91,6 +104,12 @@ button { -webkit-app-region: no-drag; }
   padding: 0 15px;
   border-radius: 14px;
   text-align: left;
+}
+.floating-usage-bar[data-appearance='native'] {
+  width: 196px;
+  height: 44px;
+  padding: 0 16px;
+  border-radius: 22px;
 }
 .floating-usage-bar > span {
   overflow: hidden;

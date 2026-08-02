@@ -1,10 +1,8 @@
 import type {
   ResolvedUsageQuota,
-  UsageQuotaKey,
   UsageQuotaSummary,
 } from '@/features/usage-display/core/format'
-
-const quotaOrder: readonly UsageQuotaKey[] = ['monthly', 'weekly', 'daily']
+import { orderUsageQuotasShortestFirst } from '@/features/usage-display/core/format'
 
 export interface ExternalQuotaPresentation {
   primary: ResolvedUsageQuota | null
@@ -14,10 +12,6 @@ export interface ExternalQuotaPresentation {
 export function resolveExternalQuotaPresentation(
   summary: UsageQuotaSummary | null,
 ): ExternalQuotaPresentation {
-  const byKey = new Map(summary?.quotas.map((quota) => [quota.key, quota]) ?? [])
-  const ordered = quotaOrder.flatMap((key) => {
-    const quota = byKey.get(key)
-    return quota ? [quota] : []
-  })
+  const ordered = orderUsageQuotasShortestFirst(summary?.quotas ?? [])
   return { primary: ordered[0] ?? null, secondary: ordered.slice(1) }
 }

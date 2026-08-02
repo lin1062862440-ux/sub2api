@@ -3,7 +3,6 @@ import { computed } from 'vue'
 
 import type { UserSubscription } from '@/api'
 import type { UsageQuotaSummary } from '@/features/usage-display/core/format'
-import ExternalMetricValue from './ExternalMetricValue.vue'
 import QuotaRow from './QuotaRow.vue'
 import { resolveExternalQuotaPresentation } from './quota-presentation'
 
@@ -12,12 +11,12 @@ const props = defineProps<{
   quotaSummary: UsageQuotaSummary | null
 }>()
 
-const presentation = computed(() => resolveExternalQuotaPresentation(props.quotaSummary))
-const primaryQuota = computed(() => presentation.value.primary)
-const secondaryQuotas = computed(() => presentation.value.secondary)
-const primaryProgressStyle = computed(() => ({
-  width: `${primaryQuota.value?.remainingPercent ?? 0}%`,
-}))
+const quotas = computed(() => {
+  const presentation = resolveExternalQuotaPresentation(props.quotaSummary)
+  return presentation.primary
+    ? [presentation.primary, ...presentation.secondary]
+    : []
+})
 
 const expiryLabel = computed(() => {
   const value = props.subscription?.expires_at
@@ -27,13 +26,6 @@ const expiryLabel = computed(() => {
   return `有效期至 ${date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}`
 })
 
-function resetLabel(value: Date | null) {
-  if (!value) return '重置时间未知'
-  const remaining = value.getTime() - Date.now()
-  if (remaining <= 0) return '即将重置'
-  const hours = Math.ceil(remaining / 3_600_000)
-  return hours < 24 ? `${hours} 小时后重置` : `${Math.ceil(hours / 24)} 天后重置`
-}
 </script>
 
 <template>
@@ -41,36 +33,17 @@ function resetLabel(value: Date | null) {
     <div
       v-if="subscription && quotaSummary"
       class="subscription-content"
-      :data-quota-count="quotaSummary.quotas.length"
+      :data-quota-count="quotas.length"
     >
-      <div
-        v-if="primaryQuota"
-        class="subscription-primary"
-        :class="{ constrained: primaryQuota.remainingPercent <= 20 }"
-      >
-        <div class="external-primary">
-          <span data-testid="floating-primary-label">剩余额度</span>
-          <ExternalMetricValue :value="`${primaryQuota.remainingPercent}%`" />
-          <div class="floating-primary-track" data-testid="floating-primary-progress" aria-hidden="true">
-            <span :style="primaryProgressStyle" />
-          </div>
-          <div class="floating-primary-meta" data-testid="floating-primary-meta">
-            <span>{{ primaryQuota.label }} · ${{ primaryQuota.used.toFixed(2) }} / ${{ primaryQuota.limit.toFixed(2) }}</span>
-            <small>{{ resetLabel(primaryQuota.resetAt) }}</small>
-          </div>
-        </div>
-      </div>
-
-      <div v-if="secondaryQuotas.length" class="quota-list">
+      <div v-if="quotas.length" class="quota-list">
         <QuotaRow
-          v-for="quota in secondaryQuotas"
+          v-for="quota in quotas"
           :key="quota.key"
           :quota="quota"
-          :show-icon="false"
           fill-mode="remaining"
         />
       </div>
-      <div v-else-if="!primaryQuota" class="unlimited-state">
+      <div v-else class="unlimited-state">
         <span>当前订阅无周期额度限制</span>
       </div>
 

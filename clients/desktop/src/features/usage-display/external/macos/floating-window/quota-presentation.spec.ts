@@ -39,25 +39,25 @@ function summary(quotas: ResolvedUsageQuota[]): UsageQuotaSummary {
 }
 
 describe('resolveFloatingQuotaPresentation', () => {
-  it('promotes monthly and orders shorter periods from longest to shortest', () => {
+  it('promotes daily and orders remaining periods from shortest to longest', () => {
     const result = resolveFloatingQuotaPresentation(summary([
       quota('daily', 80),
       quota('weekly', 42),
       quota('monthly', 76),
     ]))
 
-    expect(result.primary?.key).toBe('monthly')
-    expect(result.secondary.map((item) => item.key)).toEqual(['weekly', 'daily'])
+    expect(result.primary?.key).toBe('daily')
+    expect(result.secondary.map((item) => item.key)).toEqual(['weekly', 'monthly'])
   })
 
-  it('falls back to weekly when monthly is not configured', () => {
+  it('falls back to weekly when daily is not configured', () => {
     const result = resolveFloatingQuotaPresentation(summary([
-      quota('daily', 80),
+      quota('monthly', 76),
       quota('weekly', 42),
     ]))
 
     expect(result.primary?.key).toBe('weekly')
-    expect(result.secondary.map((item) => item.key)).toEqual(['daily'])
+    expect(result.secondary.map((item) => item.key)).toEqual(['monthly'])
   })
 
   it('returns no quota presentation for unlimited subscriptions', () => {

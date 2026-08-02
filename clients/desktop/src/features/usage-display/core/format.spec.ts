@@ -8,8 +8,17 @@ import {
   resolveBalanceRanges,
   resolveQuotaSummary,
   truncateTraySource,
+  type ResolvedUsageQuota,
   type UsageQuotaInput,
 } from './format'
+import * as format from './format'
+
+type ShortestQuotaFormatters = {
+  orderUsageQuotasShortestFirst?: (quotas: readonly ResolvedUsageQuota[]) => ResolvedUsageQuota[]
+  resolveShortestUsageQuota?: (quotas: readonly ResolvedUsageQuota[]) => ResolvedUsageQuota | null
+}
+
+const shortestQuotaFormatters = format as typeof format & ShortestQuotaFormatters
 
 const quotas: UsageQuotaInput[] = [
   {
@@ -37,6 +46,47 @@ describe('usage display formatting', () => {
       constrainedKey: 'weekly',
       unlimited: false,
     })
+  })
+
+  it('orders configured quotas from the shortest window to the longest', () => {
+    const summary = resolveQuotaSummary([
+      {
+        key: 'monthly',
+        label: '月额度',
+        used: 24,
+        limit: 100,
+        windowStart: null,
+        windowHours: 720,
+      },
+      ...quotas,
+    ])
+    const order = shortestQuotaFormatters.orderUsageQuotasShortestFirst
+
+    expect(order).toBeTypeOf('function')
+    if (!order) return
+    expect(order(summary.quotas).map((item) => item.key)).toEqual(['daily', 'weekly', 'monthly'])
+  })
+
+  it('selects the shortest configured quota with deterministic fallbacks', () => {
+    const summary = resolveQuotaSummary([
+      ...quotas,
+      {
+        key: 'monthly',
+        label: '月额度',
+        used: 24,
+        limit: 100,
+        windowStart: null,
+        windowHours: 720,
+      },
+    ])
+    const select = shortestQuotaFormatters.resolveShortestUsageQuota
+
+    expect(select).toBeTypeOf('function')
+    if (!select) return
+    expect(select(summary.quotas)?.key).toBe('daily')
+    expect(select(summary.quotas.filter((item) => item.key !== 'daily'))?.key).toBe('weekly')
+    expect(select(summary.quotas.filter((item) => item.key === 'monthly'))?.key).toBe('monthly')
+    expect(select([])).toBeNull()
   })
 
   it('treats an empty finite quota list as unlimited', () => {

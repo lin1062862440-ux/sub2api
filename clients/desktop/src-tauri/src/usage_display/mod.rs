@@ -13,10 +13,8 @@ mod macos;
 
 const POPOVER_LABEL: &str = "usage-popover";
 const FLOATING_LABEL: &str = "usage-floating-window";
-#[cfg(target_os = "macos")]
-const POPOVER_WIDTH: f64 = 352.0;
-#[cfg(target_os = "macos")]
-const POPOVER_HEIGHT: f64 = 352.0;
+const THEMED_POPOVER_SIZE: (f64, f64) = (352.0, 352.0);
+const NATIVE_POPOVER_SIZE: (f64, f64) = (468.0, 276.0);
 
 #[derive(Clone, Copy)]
 pub(super) enum PopoverAnchor {
@@ -35,6 +33,34 @@ enum FloatingStyle {
     #[default]
     Orb,
     Bar,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(in crate::usage_display) enum Appearance {
+    #[default]
+    Sky,
+    Meadow,
+    Sunset,
+    Native,
+}
+
+impl Appearance {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "sky" => Ok(Self::Sky),
+            "meadow" => Ok(Self::Meadow),
+            "sunset" => Ok(Self::Sunset),
+            "native" => Ok(Self::Native),
+            _ => Err("未知的用量展示样式".to_string()),
+        }
+    }
+}
+
+const fn popover_logical_size(appearance: Appearance) -> (f64, f64) {
+    match appearance {
+        Appearance::Native => NATIVE_POPOVER_SIZE,
+        _ => THEMED_POPOVER_SIZE,
+    }
 }
 
 impl FloatingStyle {
@@ -84,13 +110,6 @@ fn surface_transition(enabled: bool, surface: UsageSurface) -> HostTransition {
     }
 }
 
-fn validate_appearance(value: &str) -> Result<(), String> {
-    match value {
-        "sky" | "meadow" | "sunset" => Ok(()),
-        _ => Err("未知的用量展示样式".to_string()),
-    }
-}
-
 #[derive(Default)]
 pub struct UsageDisplayHost {
     enabled: AtomicBool,
@@ -130,7 +149,7 @@ pub fn configure_usage_display(
     floating_style: String,
 ) -> Result<(), String> {
     let surface = UsageSurface::parse(&surface)?;
-    validate_appearance(&appearance)?;
+    let appearance = Appearance::parse(&appearance)?;
     let floating_style = FloatingStyle::parse(&floating_style)?;
 
     #[cfg(target_os = "macos")]
@@ -142,13 +161,13 @@ pub fn configure_usage_display(
                 let _ = window.hide();
             }
         }
-        macos::configure_menu_bar(&app, &state, transition.show_menu_bar, &title, &appearance)?;
+        macos::configure_menu_bar(&app, &state, transition.show_menu_bar, &title, appearance)?;
         macos::configure_floating(
             &app,
             &state,
             transition.show_floating,
             floating_style,
-            &appearance,
+            appearance,
         )?;
         if let Ok(mut active) = state.active_surface.lock() {
             *active = enabled.then_some(surface);
@@ -300,7 +319,7 @@ fn setup_macos(app: &mut tauri::App) -> tauri::Result<()> {
         WebviewUrl::App("usage-popover.html".into()),
     )
     .title("LinAI 用量显示")
-    .inner_size(POPOVER_WIDTH, POPOVER_HEIGHT)
+    .inner_size(THEMED_POPOVER_SIZE.0, THEMED_POPOVER_SIZE.1)
     .resizable(false)
     .maximizable(false)
     .minimizable(false)
@@ -406,10 +425,20 @@ mod surface_tests {
         assert!(FloatingStyle::parse("pill").is_err());
     }
 
+    #[test]
+    fn appearance_accepts_native_without_changing_existing_variants() {
+        assert_eq!(Appearance::parse("sky"), Ok(Appearance::Sky));
+        assert_eq!(Appearance::parse("meadow"), Ok(Appearance::Meadow));
+        assert_eq!(Appearance::parse("sunset"), Ok(Appearance::Sunset));
+        assert_eq!(Appearance::parse("native"), Ok(Appearance::Native));
+        assert!(Appearance::parse("blurred").is_err());
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
-    fn menu_bar_popover_matches_the_expanded_usage_card_host_size() {
-        assert_eq!((POPOVER_WIDTH, POPOVER_HEIGHT), (352.0, 352.0));
+    fn menu_bar_popover_uses_appearance_specific_host_sizes() {
+        assert_eq!(popover_logical_size(Appearance::Sky), (352.0, 352.0));
+        assert_eq!(popover_logical_size(Appearance::Native), (468.0, 276.0));
     }
 
     #[cfg(target_os = "macos")]

@@ -40,6 +40,24 @@ export interface BalanceUsageRanges {
   thisMonth: UsageFilters
 }
 
+const shortestQuotaOrder: readonly UsageQuotaKey[] = ['daily', 'weekly', 'monthly']
+
+export function orderUsageQuotasShortestFirst(
+  quotas: readonly ResolvedUsageQuota[],
+): ResolvedUsageQuota[] {
+  const byKey = new Map(quotas.map((quota) => [quota.key, quota]))
+  return shortestQuotaOrder.flatMap((key) => {
+    const quota = byKey.get(key)
+    return quota ? [quota] : []
+  })
+}
+
+export function resolveShortestUsageQuota(
+  quotas: readonly ResolvedUsageQuota[],
+): ResolvedUsageQuota | null {
+  return orderUsageQuotasShortestFirst(quotas)[0] ?? null
+}
+
 export function remainingPercent(used: number, limit: number): number {
   if (!Number.isFinite(limit) || limit <= 0) throw new Error('额度上限必须大于 0')
   const value = Math.round((1 - Math.max(0, used) / limit) * 100)

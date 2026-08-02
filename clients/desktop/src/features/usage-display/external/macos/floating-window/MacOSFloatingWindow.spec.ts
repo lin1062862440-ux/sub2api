@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { UsageDisplayAppearance } from '@/features/usage-display/core/storage'
 
 const mocks = vi.hoisted(() => ({
   state: {
@@ -9,7 +10,7 @@ const mocks = vi.hoisted(() => ({
       source: 'balance' as 'balance' | 'subscription',
       subscriptionId: null as number | null,
       surface: 'floating-window' as const,
-      appearance: 'sky' as 'sky' | 'meadow' | 'sunset',
+      appearance: 'sky' as UsageDisplayAppearance,
       floatingStyle: 'orb' as 'orb' | 'bar',
     },
     balance: { available: 128.6, today: 2.18, last7Days: 12.42, thisMonth: 35.6 },
@@ -66,7 +67,7 @@ describe('MacOSFloatingWindow', () => {
   })
 
   it.each(['sky', 'meadow', 'sunset'])('renders a stable collapsed orb for %s', async (appearance) => {
-    mocks.state.config.appearance = appearance as 'sky' | 'meadow' | 'sunset'
+    mocks.state.config.appearance = appearance as UsageDisplayAppearance
     const wrapper = mount(MacOSFloatingWindow)
 
     const orb = wrapper.get('[data-testid="floating-usage-orb"]')
@@ -170,7 +171,7 @@ describe('MacOSFloatingWindow', () => {
     expect(wrapper.get('[data-testid="floating-usage-orb"]').text()).toBe('--')
   })
 
-  it('uses the longest configured quota in the subscription orb', async () => {
+  it('uses the shortest configured quota in the subscription orb and bar', async () => {
     const wrapper = mount(MacOSFloatingWindow)
 
     mocks.state.config.source = 'subscription'
@@ -181,6 +182,7 @@ describe('MacOSFloatingWindow', () => {
       constrainedKey: 'weekly',
       unlimited: false,
       quotas: [
+        { key: 'daily', remainingPercent: 80 },
         { key: 'weekly', remainingPercent: 42 },
         { key: 'monthly', remainingPercent: 76 },
       ],
@@ -188,8 +190,14 @@ describe('MacOSFloatingWindow', () => {
     await nextTick()
 
     const orb = wrapper.get('[data-testid="floating-usage-orb"]')
-    expect(orb.get('[data-testid="floating-metric-number"]').text()).toBe('76')
+    expect(orb.get('[data-testid="floating-metric-number"]').text()).toBe('80')
     expect(orb.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
+
+    mocks.state.config.floatingStyle = 'bar'
+    await nextTick()
+    const bar = wrapper.get('[data-testid="floating-usage-bar"]')
+    expect(bar.get('[data-testid="floating-metric-number"]').text()).toBe('80')
+    expect(bar.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
   })
 
   it('collapses before an appearance change reconfigures the native host', async () => {
@@ -218,6 +226,32 @@ describe('MacOSFloatingWindow', () => {
     await flushPromises()
     expect(mocks.setExpanded).toHaveBeenCalledWith(true)
     expect(wrapper.find('[data-testid="external-usage-detail-card"]').exists()).toBe(true)
+  })
+
+  it('keeps balance and subscription metrics in the native orb and capsule', async () => {
+    mocks.state.config.appearance = 'native'
+    const wrapper = mount(MacOSFloatingWindow)
+
+    expect(wrapper.get('[data-testid="floating-usage-orb"]').attributes('data-appearance')).toBe('native')
+    expect(wrapper.get('[data-testid="floating-metric-number"]').text()).toBe('$129')
+
+    mocks.state.config.source = 'subscription'
+    mocks.state.config.subscriptionId = 9
+    mocks.state.config.floatingStyle = 'bar'
+    mocks.state.subscription = { id: 9, expires_at: null, group: { name: 'Claude Pro' } }
+    mocks.state.quotaSummary = {
+      remainingPercent: 42,
+      constrainedKey: 'weekly',
+      unlimited: false,
+      quotas: [{ key: 'weekly', remainingPercent: 42 }],
+    }
+    await nextTick()
+
+    const bar = wrapper.get('[data-testid="floating-usage-bar"]')
+    expect(bar.attributes('data-appearance')).toBe('native')
+    expect(bar.text()).toContain('剩余额度')
+    expect(bar.get('[data-testid="floating-metric-number"]').text()).toBe('42')
+    expect(bar.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
   })
 
   it('collapses before changing the native floating form', async () => {

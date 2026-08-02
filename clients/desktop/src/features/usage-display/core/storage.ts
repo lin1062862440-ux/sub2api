@@ -10,7 +10,7 @@ export interface UsageDisplayConfig {
 }
 
 export type UsageDisplaySurface = 'menu-bar' | 'floating-window'
-export type UsageDisplayAppearance = 'sky' | 'meadow' | 'sunset'
+export type UsageDisplayAppearance = 'sky' | 'meadow' | 'sunset' | 'native'
 export type FloatingUsageStyle = 'orb' | 'bar'
 
 const store = new LazyStore('linai.json', { autoSave: 100 })
@@ -57,13 +57,17 @@ function normalizeAppearance(value: unknown): UsageDisplayAppearance {
   if (value === 'sky' || value === 'default') return 'sky'
   if (value === 'meadow' || value === 'dark') return 'meadow'
   if (value === 'sunset' || value === 'blur') return 'sunset'
+  if (value === 'native') return 'native'
   return 'sky'
 }
 
 function isValidConfig(value: unknown): value is UsageDisplayConfig {
   if (!hasValidBaseFields(value)) return false
   return (value.surface === 'menu-bar' || value.surface === 'floating-window')
-    && (value.appearance === 'sky' || value.appearance === 'meadow' || value.appearance === 'sunset')
+    && (value.appearance === 'sky'
+      || value.appearance === 'meadow'
+      || value.appearance === 'sunset'
+      || value.appearance === 'native')
     && (value.floatingStyle === 'orb' || value.floatingStyle === 'bar')
 }
 
