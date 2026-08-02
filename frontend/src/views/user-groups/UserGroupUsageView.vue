@@ -153,6 +153,7 @@
 <script setup lang="ts">
 import { computed, defineComponent, h, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import Pagination from '@/components/common/Pagination.vue'
@@ -173,6 +174,8 @@ const MetricPair = defineComponent({
 })
 
 const { t, locale } = useI18n()
+const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const canManage = computed(() => authStore.canManageUserGroups)
 const groups = ref<UserGroup[]>([])
@@ -209,15 +212,34 @@ function errorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : t('common.loadFailed')
 }
 
+function routeGroupId(): number | null {
+  const value = Number(route.query.group_id)
+  return Number.isInteger(value) && value > 0 ? value : null
+}
+
+function resolveSelectedGroupId(): number | null {
+  const requested = routeGroupId()
+  return groups.value.some(group => group.id === requested)
+    ? requested
+    : groups.value[0]?.id ?? null
+}
+
+async function syncGroupQuery(groupId: number) {
+  await router.replace({
+    query: { ...route.query, group_id: String(groupId) },
+  })
+}
+
 async function loadGroups() {
   loadingGroups.value = true
   groupsError.value = ''
   try {
     groups.value = await userGroupAPI.list()
-    selectedGroupId.value = groups.value.some(group => group.id === selectedGroupId.value)
-      ? selectedGroupId.value
-      : groups.value[0]?.id ?? null
-    if (selectedGroupId.value) await loadGroupData()
+    selectedGroupId.value = resolveSelectedGroupId()
+    if (selectedGroupId.value) {
+      if (routeGroupId() !== selectedGroupId.value) await syncGroupQuery(selectedGroupId.value)
+      await loadGroupData()
+    }
   } catch (error) {
     groups.value = []
     selectedGroupId.value = null
@@ -278,10 +300,12 @@ async function loadUsage() {
   }
 }
 
-function handleGroupChange() {
+async function handleGroupChange(groupId: number) {
+  selectedGroupId.value = groupId
   memberFilter.value = ''
   page.value = 1
-  void loadGroupData()
+  await syncGroupQuery(groupId)
+  await loadGroupData()
 }
 
 function applyFilters() {

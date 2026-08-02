@@ -7,6 +7,13 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   getMembers: vi.fn(),
   getUsage: vi.fn(),
+  route: { query: { group_id: '7' } as Record<string, string> },
+  replace: vi.fn(),
+}))
+
+vi.mock('vue-router', () => ({
+  useRoute: () => mocks.route,
+  useRouter: () => ({ replace: mocks.replace }),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -24,6 +31,7 @@ vi.mock('@/stores/auth', () => ({
 
 const groups = [
   { id: 7, name: '研发一组', description: '', status: 'active', member_count: 2, viewer_count: 1, created_at: '', updated_at: '' },
+  { id: 8, name: '运营组', description: '', status: 'active', member_count: 1, viewer_count: 0, created_at: '', updated_at: '' },
 ]
 const members = [
   { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', balance: 30, joined_at: '' },
@@ -73,6 +81,7 @@ describe('UserGroupUsageView', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 7, 2, 12, 0, 0))
     vi.clearAllMocks()
+    mocks.route.query = { group_id: '7' }
     mocks.list.mockResolvedValue(groups)
     mocks.getMembers.mockResolvedValue(members)
     mocks.getUsage.mockResolvedValue(usageResult)
@@ -112,6 +121,18 @@ describe('UserGroupUsageView', () => {
     await wrapper.get('[data-test="next-page"]').trigger('click')
     await flushPromises()
     expect(mocks.getUsage).toHaveBeenLastCalledWith(7, expect.objectContaining({ page: 2 }))
+  })
+
+  it('uses the route group and updates the query when the group changes', async () => {
+    mocks.route.query = { group_id: '8' }
+    const wrapper = mountView()
+    await flushPromises()
+    expect(mocks.getUsage).toHaveBeenCalledWith(8, expect.any(Object))
+
+    await wrapper.get('[data-test="group-select"]').setValue('7')
+    await flushPromises()
+    expect(mocks.replace).toHaveBeenCalledWith({ query: { group_id: '7' } })
+    expect(mocks.getUsage).toHaveBeenLastCalledWith(7, expect.any(Object))
   })
 
   it('keeps filters visible when the usage result is empty', async () => {

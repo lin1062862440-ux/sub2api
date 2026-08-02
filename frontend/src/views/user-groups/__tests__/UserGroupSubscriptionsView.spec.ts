@@ -7,6 +7,13 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   getSubscriptions: vi.fn(),
   error: vi.fn(),
+  route: { query: { group_id: '7' } as Record<string, string> },
+  replace: vi.fn(),
+}))
+
+vi.mock('vue-router', () => ({
+  useRoute: () => mocks.route,
+  useRouter: () => ({ replace: mocks.replace }),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -96,6 +103,7 @@ function mountView() {
 describe('UserGroupSubscriptionsView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.route.query = { group_id: '7' }
     mocks.list.mockResolvedValue(groups)
     mocks.getSubscriptions.mockResolvedValue(result)
   })
@@ -145,11 +153,27 @@ describe('UserGroupSubscriptionsView', () => {
 
     await wrapper.get('[data-test="group-select"]').setValue('8')
     await flushPromises()
+    expect(mocks.replace).toHaveBeenCalledWith({ query: { group_id: '8' } })
     expect(mocks.getSubscriptions).toHaveBeenLastCalledWith(8, { status: undefined, page: 1, page_size: 20 })
 
     await wrapper.get('[data-test="next-page"]').trigger('click')
     await flushPromises()
     expect(mocks.getSubscriptions).toHaveBeenLastCalledWith(8, { status: undefined, page: 2, page_size: 20 })
+  })
+
+  it('initializes from a valid route group and repairs an inaccessible route group', async () => {
+    mocks.route.query = { group_id: '8' }
+    const selected = mountView()
+    await flushPromises()
+    expect(mocks.getSubscriptions).toHaveBeenCalledWith(8, { status: undefined, page: 1, page_size: 20 })
+    selected.unmount()
+
+    vi.clearAllMocks()
+    mocks.route.query = { group_id: '999' }
+    mountView()
+    await flushPromises()
+    expect(mocks.replace).toHaveBeenCalledWith({ query: { group_id: '7' } })
+    expect(mocks.getSubscriptions).toHaveBeenCalledWith(7, { status: undefined, page: 1, page_size: 20 })
   })
 
   it('retains the group selector and shows a focused error state', async () => {
