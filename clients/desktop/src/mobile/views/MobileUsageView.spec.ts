@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getUsageApiKeys: vi.fn(),
   getUsageSnapshot: vi.fn(),
   getUsageModels: vi.fn(),
+  resolveUsageRange: vi.fn(),
   session: {
     settings: { allow_user_view_error_requests: true },
   },
@@ -27,6 +28,20 @@ vi.mock('@/api', () => ({
 }))
 
 vi.mock('@/stores/session', () => ({ session: mocks.session }))
+
+vi.mock('@/lib/usage-range', () => ({
+  usageRangePresets: [
+    { value: 'today', label: '今天' },
+    { value: 'yesterday', label: '昨天' },
+    { value: 'last24h', label: '近 24 小时' },
+    { value: 'last7d', label: '近 7 天' },
+    { value: 'last14d', label: '近 14 天' },
+    { value: 'last30d', label: '近 30 天' },
+    { value: 'thisMonth', label: '本月' },
+    { value: 'lastMonth', label: '上月' },
+  ],
+  resolveUsageRange: mocks.resolveUsageRange,
+}))
 
 import MobileUsageView from './MobileUsageView.vue'
 
@@ -89,6 +104,17 @@ const errorRecord = {
   error_body: 'raw prompt and bearer secret must stay private',
 }
 
+const deterministicRanges = {
+  today: { label: '今天', startDate: '2026-08-01', endDate: '2026-08-01', granularity: 'hour' },
+  yesterday: { label: '昨天', startDate: '2026-07-31', endDate: '2026-07-31', granularity: 'hour' },
+  last24h: { label: '近 24 小时', startDate: '2026-07-31', endDate: '2026-08-01', granularity: 'hour' },
+  last7d: { label: '近 7 天', startDate: '2026-07-26', endDate: '2026-08-01', granularity: 'day' },
+  last14d: { label: '近 14 天', startDate: '2026-07-19', endDate: '2026-08-01', granularity: 'day' },
+  last30d: { label: '近 30 天', startDate: '2026-07-03', endDate: '2026-08-01', granularity: 'day' },
+  thisMonth: { label: '本月', startDate: '2026-08-01', endDate: '2026-08-01', granularity: 'hour' },
+  lastMonth: { label: '上月', startDate: '2026-07-01', endDate: '2026-07-31', granularity: 'day' },
+} as const
+
 function arrangeSuccess() {
   mocks.getUsageStats.mockResolvedValue(stats)
   mocks.getUsageRecords.mockResolvedValue({ items: [record, olderRecord], total: 2, page: 1, page_size: 20 })
@@ -118,16 +144,17 @@ function mountView() {
 
 describe('MobileUsageView', () => {
   beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(new Date('2026-08-01T14:00:00+08:00'))
     vi.clearAllMocks()
     mocks.session.settings.allow_user_view_error_requests = true
+    mocks.resolveUsageRange.mockImplementation((preset: keyof typeof deterministicRanges) => ({
+      preset,
+      ...deterministicRanges[preset],
+    }))
     arrangeSuccess()
   })
 
   afterEach(() => {
     for (const wrapper of wrappers.splice(0)) wrapper.unmount()
-    vi.useRealTimers()
   })
 
   it('keeps the MobilePage shell stable while the initial usage load is pending', () => {
@@ -148,6 +175,7 @@ describe('MobileUsageView', () => {
     await flushPromises()
 
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Shanghai'
+    expect(mocks.resolveUsageRange).toHaveBeenCalledWith('last24h')
     expect(mocks.getUsageStats).toHaveBeenCalledWith({
       start_date: '2026-07-31',
       end_date: '2026-08-01',
@@ -184,6 +212,7 @@ describe('MobileUsageView', () => {
     await range.setValue('last7d')
     await flushPromises()
 
+    expect(mocks.resolveUsageRange).toHaveBeenCalledWith('last7d')
     expect(mocks.getUsageStats).toHaveBeenLastCalledWith(expect.objectContaining({
       start_date: '2026-07-26',
       end_date: '2026-08-01',
