@@ -206,6 +206,31 @@ describe('MobileSubscriptionsView', () => {
     expect(wrapper.html()).not.toContain('#/redeem')
   })
 
+  it('disables the empty refresh action while pending and restores it afterward', async () => {
+    mocks.getSubscriptions.mockResolvedValueOnce([])
+    const wrapper = mountView()
+    await flushPromises()
+
+    const refresh = deferred<UserSubscription[]>()
+    mocks.getSubscriptions.mockReturnValueOnce(refresh.promise)
+    await wrapper.get('[data-testid="mobile-page-refresh"]').trigger('click')
+
+    const pendingAction = wrapper.get('[data-testid="mobile-page-refresh"]')
+    expect(pendingAction.attributes('disabled')).toBeDefined()
+    expect(pendingAction.attributes('aria-label')).toBe('正在刷新订阅')
+    expect(pendingAction.attributes('aria-busy')).toBe('true')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('true')
+
+    refresh.resolve([])
+    await flushPromises()
+
+    const restoredAction = wrapper.get('[data-testid="mobile-page-refresh"]')
+    expect(restoredAction.attributes('disabled')).toBeUndefined()
+    expect(restoredAction.attributes('aria-label')).toBe('刷新订阅')
+    expect(restoredAction.attributes('aria-busy')).toBe('false')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('false')
+  })
+
   it('surfaces a private retryable error when refreshing an empty result fails', async () => {
     mocks.getSubscriptions.mockResolvedValueOnce([])
     const wrapper = mountView()

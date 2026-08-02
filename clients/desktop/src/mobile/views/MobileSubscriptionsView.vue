@@ -103,8 +103,6 @@ onUnmounted(() => {
     :empty="loaded && subscriptions.length === 0"
     :aria-busy="busy"
     loading-label="正在加载订阅"
-    empty-title="暂无订阅"
-    empty-message="当前账户还没有可用订阅。"
     @refresh="refresh"
     @retry="refresh"
   >
@@ -127,6 +125,24 @@ onUnmounted(() => {
         <div class="summary-skeleton"><i v-for="index in 3" :key="index" /></div>
         <div v-for="index in 3" :key="index" class="card-skeleton"><i /><i /><i /><i /></div>
       </div>
+    </template>
+
+    <template #empty>
+      <strong>暂无订阅</strong>
+      <p>当前账户还没有可用订阅。</p>
+      <button
+        class="empty-refresh-button"
+        type="button"
+        data-testid="mobile-page-refresh"
+        :title="refreshing ? '正在刷新订阅' : '刷新订阅'"
+        :aria-label="refreshing ? '正在刷新订阅' : '刷新订阅'"
+        :aria-busy="busy"
+        :disabled="busy"
+        @click="refresh"
+      >
+        <RefreshCw :size="17" :class="{ spinning: refreshing }" />
+        {{ refreshing ? '刷新中' : '刷新' }}
+      </button>
     </template>
 
     <div v-if="inlineError" class="inline-error" data-testid="subscriptions-inline-error" role="alert">
@@ -236,9 +252,25 @@ onUnmounted(() => {
 }
 
 .refresh-button:disabled,
+.empty-refresh-button:disabled,
 .inline-error button:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+.empty-refresh-button {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font: inherit;
 }
 
 .inline-error {
