@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import {
   Building2,
   ChartNoAxesCombined,
@@ -57,7 +57,10 @@ const passwordDialogOpen = ref(false)
 const signingOut = ref(false)
 const adminAccessDenied = ref(false)
 const accountArea = ref<HTMLElement | null>(null)
+const accountTrigger = ref<HTMLButtonElement | null>(null)
 const moreArea = ref<HTMLElement | null>(null)
+const moreTrigger = ref<HTMLButtonElement | null>(null)
+const moreSheet = ref<HTMLElement | null>(null)
 let stopAdminAccessListener: (() => void) | null = null
 
 const isAdmin = computed(() => canUseAdminWorkspace(user.value) && !adminAccessDenied.value)
@@ -66,18 +69,44 @@ const currentTitle = computed(() => mobileRouteTitle(route.name) || String(route
 const overflowActive = computed(() => isMobileOverflowActive(route.name, workspaceMode.value))
 
 function closeLayers() {
+  const restoreMore = moreOpen.value
+  const restoreAccount = accountOpen.value
   accountOpen.value = false
   moreOpen.value = false
+  if (restoreMore) void nextTick(() => moreTrigger.value?.focus())
+  else if (restoreAccount) void nextTick(() => accountTrigger.value?.focus())
+}
+
+function closeAccount(restoreFocus = false) {
+  if (!accountOpen.value) return
+  accountOpen.value = false
+  if (restoreFocus) void nextTick(() => accountTrigger.value?.focus())
+}
+
+function closeMore(restoreFocus = false) {
+  if (!moreOpen.value) return
+  moreOpen.value = false
+  if (restoreFocus) void nextTick(() => moreTrigger.value?.focus())
 }
 
 function toggleAccount() {
-  moreOpen.value = false
-  accountOpen.value = !accountOpen.value
+  if (accountOpen.value) {
+    closeAccount(true)
+    return
+  }
+  closeMore(false)
+  accountOpen.value = true
 }
 
-function toggleMore() {
-  accountOpen.value = false
-  moreOpen.value = !moreOpen.value
+async function toggleMore() {
+  if (moreOpen.value) {
+    closeMore(true)
+    return
+  }
+  closeAccount(false)
+  moreOpen.value = true
+  await nextTick()
+  moreSheet.value?.querySelector<HTMLElement>('[data-testid="mobile-overflow-nav-item"]')?.focus()
 }
 
 function openPasswordDialog() {
@@ -118,13 +147,35 @@ function handleAdminAccessDenied() {
 }
 
 function handleDocumentKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') closeLayers()
+  if (event.key === 'Escape' && (accountOpen.value || moreOpen.value)) {
+    event.preventDefault()
+    closeLayers()
+    return
+  }
+  if (event.key !== 'Tab' || !moreOpen.value || !moreSheet.value) return
+
+  const destinations = Array.from(
+    moreSheet.value.querySelectorAll<HTMLElement>('[data-testid="mobile-overflow-nav-item"]'),
+  )
+  const first = destinations[0]
+  const last = destinations[destinations.length - 1]
+  if (!first || !last) return
+  const active = document.activeElement
+  const outsideSheet = !moreSheet.value.contains(active)
+  if (event.shiftKey ? active === first || outsideSheet : active === last || outsideSheet) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : first).focus()
+  }
 }
 
 function handleDocumentPointerDown(event: PointerEvent) {
   const target = event.target as Node
-  if (accountOpen.value && !accountArea.value?.contains(target)) accountOpen.value = false
-  if (moreOpen.value && !moreArea.value?.contains(target)) moreOpen.value = false
+  if (accountOpen.value && !accountArea.value?.contains(target)) closeAccount(false)
+  if (moreOpen.value && !moreArea.value?.contains(target)) closeMore(true)
+}
+
+function handlePopState() {
+  closeLayers()
 }
 
 watch(
@@ -161,7 +212,7 @@ onMounted(() => {
   stopAdminAccessListener = onAdminAccessDenied(handleAdminAccessDenied)
   document.addEventListener('keydown', handleDocumentKeydown)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
-  window.addEventListener('popstate', closeLayers)
+  window.addEventListener('popstate', handlePopState)
   if (
     isAdmin.value
     && workspaceMode.value === 'admin'
@@ -177,7 +228,7 @@ onBeforeUnmount(() => {
   stopAdminAccessListener = null
   document.removeEventListener('keydown', handleDocumentKeydown)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
-  window.removeEventListener('popstate', closeLayers)
+  window.removeEventListener('popstate', handlePopState)
 })
 </script>
 
@@ -188,11 +239,12 @@ onBeforeUnmount(() => {
       <strong data-testid="mobile-route-title">{{ currentTitle }}</strong>
       <div ref="accountArea" class="mobile-account-anchor">
         <button
+          ref="accountTrigger"
           class="mobile-account-trigger"
           type="button"
           data-testid="mobile-account-trigger"
           aria-label="账户"
-          aria-haspopup="menu"
+          aria-controls="mobile-account-popover"
           :aria-expanded="accountOpen"
           @click="toggleAccount"
         >
@@ -201,14 +253,16 @@ onBeforeUnmount(() => {
 
         <section
           v-if="accountOpen"
+          id="mobile-account-popover"
           class="mobile-account-popover"
           data-testid="mobile-account-popover"
-          role="menu"
+          role="region"
+          aria-labelledby="mobile-account-heading"
         >
           <div class="mobile-identity">
             <UserAvatar :name="user?.username" :src="user?.avatar_url" />
             <div>
-              <strong>{{ user?.username }}</strong>
+              <strong id="mobile-account-heading">{{ user?.username }}</strong>
               <span>{{ user?.email }}</span>
             </div>
           </div>
@@ -216,7 +270,6 @@ onBeforeUnmount(() => {
             class="mobile-menu-item"
             :to="{ name: 'profile' }"
             data-testid="profile-menu-item"
-            role="menuitem"
             @click="closeLayers"
           >
             <CircleUserRound :size="18" />
@@ -226,7 +279,6 @@ onBeforeUnmount(() => {
             class="mobile-menu-item"
             type="button"
             data-testid="password-menu-item"
-            role="menuitem"
             @click="openPasswordDialog"
           >
             <KeyRound :size="18" />
@@ -237,7 +289,6 @@ onBeforeUnmount(() => {
             class="mobile-menu-item"
             type="button"
             data-testid="mobile-workspace-switch"
-            role="menuitem"
             @click="switchWorkspace"
           >
             <ShieldCheck :size="18" />
@@ -247,7 +298,6 @@ onBeforeUnmount(() => {
             class="mobile-menu-item mobile-menu-logout"
             type="button"
             data-testid="logout"
-            role="menuitem"
             :disabled="signingOut"
             @click="handleSignOut"
           >
@@ -290,11 +340,13 @@ onBeforeUnmount(() => {
 
       <div v-if="navigation.overflow.length" ref="moreArea" class="mobile-more-anchor">
         <button
+          ref="moreTrigger"
           class="mobile-nav-item"
           :class="{ 'mobile-nav-active': overflowActive }"
           type="button"
           data-testid="mobile-more-trigger"
           aria-haspopup="dialog"
+          aria-controls="mobile-more-sheet"
           :aria-expanded="moreOpen"
           @click="toggleMore"
         >
@@ -302,13 +354,27 @@ onBeforeUnmount(() => {
           <span>更多</span>
         </button>
 
+        <button
+          v-if="moreOpen"
+          class="mobile-more-scrim"
+          type="button"
+          data-testid="mobile-more-scrim"
+          aria-label="关闭更多导航"
+          @click="closeMore(true)"
+        />
+
         <section
           v-if="moreOpen"
+          id="mobile-more-sheet"
+          ref="moreSheet"
           class="mobile-more-sheet"
           data-testid="mobile-more-sheet"
-          aria-label="更多导航"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="mobile-more-sheet-title"
         >
           <div class="mobile-sheet-handle" aria-hidden="true" />
+          <h2 id="mobile-more-sheet-title">更多</h2>
           <RouterLink
             v-for="item in navigation.overflow"
             :key="item.routeName"
@@ -317,7 +383,7 @@ onBeforeUnmount(() => {
             :to="{ name: item.routeName }"
             data-testid="mobile-overflow-nav-item"
             :data-route-name="item.routeName"
-            @click="closeLayers"
+            @click="closeMore(true)"
           >
             <component :is="mobileIcons[item.iconKey]" :size="20" />
             <span>{{ item.title }}</span>
@@ -472,7 +538,7 @@ onBeforeUnmount(() => {
 .mobile-admin-notice {
   display: grid;
   min-height: 48px;
-  grid-template-columns: 22px minmax(0, 1fr) 32px;
+  grid-template-columns: 22px minmax(0, 1fr) 44px;
   align-items: center;
   gap: 7px;
   margin: 10px 12px 0;
@@ -485,6 +551,7 @@ onBeforeUnmount(() => {
 }
 
 .mobile-admin-notice button {
+  min-width: 44px;
   min-height: 44px;
   padding: 0;
   background: transparent;
@@ -546,6 +613,15 @@ onBeforeUnmount(() => {
   min-width: 0;
 }
 
+.mobile-more-scrim {
+  position: fixed;
+  z-index: 70;
+  inset: 0;
+  padding: 0;
+  background: rgba(18, 29, 44, 0.24);
+  border: 0;
+}
+
 .mobile-more-sheet {
   position: fixed;
   z-index: 80;
@@ -557,6 +633,12 @@ onBeforeUnmount(() => {
   border-top: 1px solid var(--border-subtle);
   border-radius: 8px 8px 0 0;
   box-shadow: 0 -18px 44px rgba(30, 48, 74, 0.18);
+}
+
+.mobile-more-sheet h2 {
+  margin: 0 4px 6px;
+  font-size: 15px;
+  font-weight: 680;
 }
 
 .mobile-sheet-handle {

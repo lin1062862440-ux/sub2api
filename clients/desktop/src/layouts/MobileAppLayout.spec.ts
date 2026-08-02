@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, nextTick, reactive } from 'vue'
 import { createMemoryHistory, createRouter, type Router } from 'vue-router'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   adminDeniedListener: null as null | (() => void),
@@ -48,6 +48,7 @@ const routes = [
   { path: '/admin/subscriptions', name: 'admin-subscriptions', component: RouteView, meta: { requiresAdmin: true } },
   { path: '/login', name: 'login', component: RouteView },
 ]
+const mountedWrappers: Array<{ unmount: () => void }> = []
 
 async function mountLayout(initialRoute: string, role: 'user' | 'admin' = 'user') {
   mocks.session.user.role = role
@@ -55,6 +56,7 @@ async function mountLayout(initialRoute: string, role: 'user' | 'admin' = 'user'
   await router.push(initialRoute)
   await router.isReady()
   const wrapper = mount(MobileAppLayout, {
+    attachTo: document.body,
     global: {
       plugins: [router],
       stubs: {
@@ -66,6 +68,7 @@ async function mountLayout(initialRoute: string, role: 'user' | 'admin' = 'user'
       },
     },
   })
+  mountedWrappers.push(wrapper)
   await flushPromises()
   return { router, wrapper }
 }
@@ -86,6 +89,11 @@ describe('MobileAppLayout', () => {
   beforeEach(() => {
     localStorage.clear()
     mocks.session.user.role = 'user'
+  })
+
+  afterEach(() => {
+    for (const wrapper of mountedWrappers.splice(0)) wrapper.unmount()
+    document.body.innerHTML = ''
   })
 
   it('renders a centered route title and right avatar without a menu trigger', async () => {
@@ -187,9 +195,31 @@ describe('MobileAppLayout', () => {
     expect(popover.text()).not.toContain('用量显示')
     expect(popover.text()).not.toContain('网页管理后台')
     expect(popover.find('[data-testid="mobile-workspace-switch"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="mobile-account-trigger"]').attributes('aria-controls'))
+      .toBe('mobile-account-popover')
+    expect(wrapper.get('[data-testid="mobile-account-trigger"]').attributes('aria-haspopup')).toBeUndefined()
+    expect(popover.attributes('role')).toBe('region')
+    expect(popover.find('[role="menuitem"]').exists()).toBe(false)
 
     await clickAndExpectRoute(router, popover.get('[data-testid="profile-menu-item"]'), 'profile')
     expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
+  })
+
+  it('closes the account disclosure outside and restores avatar focus on Escape', async () => {
+    const { wrapper } = await mountLayout('/dashboard')
+    const trigger = wrapper.get<HTMLButtonElement>('[data-testid="mobile-account-trigger"]')
+
+    await trigger.trigger('click')
+    document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    await nextTick()
+    expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
+
+    await trigger.trigger('click')
+    wrapper.get<HTMLButtonElement>('[data-testid="password-menu-item"]').element.focus()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
   })
 
   it('opens the password dialog and signs out to login', async () => {
@@ -237,6 +267,19 @@ describe('MobileAppLayout', () => {
     expect(reload).not.toHaveBeenCalled()
   })
 
+  it('signs an administrator out, closes the account layer, and routes to login', async () => {
+    localStorage.setItem(ADMIN_WORKSPACE_STORAGE_KEY, 'admin')
+    const { router, wrapper } = await mountLayout('/admin/dashboard', 'admin')
+    await wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+
+    await wrapper.get('[data-testid="logout"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.signOut).toHaveBeenCalledOnce()
+    expect(router.currentRoute.value.name).toBe('login')
+    expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
+  })
+
   it('restores an administrator saved workspace on mount', async () => {
     localStorage.setItem(ADMIN_WORKSPACE_STORAGE_KEY, 'admin')
     const { router } = await mountLayout('/dashboard', 'admin')
@@ -258,6 +301,92 @@ describe('MobileAppLayout', () => {
     await nextTick()
     expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
     expect(router.currentRoute.value.name).toBe('admin-dashboard')
+  })
+
+  it('opens More as a labelled modal, focuses its first destination, and restores focus on Escape', async () => {
+    localStorage.setItem(ADMIN_WORKSPACE_STORAGE_KEY, 'admin')
+    const { wrapper } = await mountLayout('/admin/dashboard', 'admin')
+    const trigger = wrapper.get<HTMLButtonElement>('[data-testid="mobile-more-trigger"]')
+    await trigger.trigger('click')
+    await nextTick()
+
+    const sheet = wrapper.get('[data-testid="mobile-more-sheet"]')
+    const first = wrapper.get<HTMLAnchorElement>(
+      '[data-testid="mobile-overflow-nav-item"][data-route-name="user-groups"]',
+    )
+    expect(sheet.attributes('role')).toBe('dialog')
+    expect(sheet.attributes('aria-modal')).toBe('true')
+    expect(sheet.attributes('aria-labelledby')).toBe('mobile-more-sheet-title')
+    expect(document.activeElement).toBe(first.element)
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+    expect(wrapper.find('[data-testid="mobile-more-sheet"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+  })
+
+  it('keeps Tab and Shift+Tab focus inside the More modal', async () => {
+    localStorage.setItem(ADMIN_WORKSPACE_STORAGE_KEY, 'admin')
+    const { wrapper } = await mountLayout('/admin/dashboard', 'admin')
+    await wrapper.get('[data-testid="mobile-more-trigger"]').trigger('click')
+    await nextTick()
+    const destinations = wrapper.findAll<HTMLAnchorElement>('[data-testid="mobile-overflow-nav-item"]')
+    const first = destinations[0]!.element
+    const last = destinations[destinations.length - 1]!.element
+
+    last.focus()
+    const forwards = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    document.dispatchEvent(forwards)
+    expect(forwards.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+
+    first.focus()
+    const backwards = new KeyboardEvent('keydown', {
+      key: 'Tab',
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    })
+    document.dispatchEvent(backwards)
+    expect(backwards.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
+  })
+
+  it('restores More trigger focus after scrim, selection, and popstate closes', async () => {
+    localStorage.setItem(ADMIN_WORKSPACE_STORAGE_KEY, 'admin')
+    const { router, wrapper } = await mountLayout('/admin/dashboard', 'admin')
+    const trigger = wrapper.get<HTMLButtonElement>('[data-testid="mobile-more-trigger"]')
+
+    await trigger.trigger('click')
+    await wrapper.get('[data-testid="mobile-more-scrim"]').trigger('click')
+    await nextTick()
+    expect(document.activeElement).toBe(trigger.element)
+
+    await trigger.trigger('click')
+    await wrapper.get('[data-testid="mobile-overflow-nav-item"][data-route-name="user-groups"]')
+      .trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('user-groups')
+    expect(document.activeElement).toBe(trigger.element)
+
+    await trigger.trigger('click')
+    window.dispatchEvent(new PopStateEvent('popstate'))
+    await nextTick()
+    expect(wrapper.find('[data-testid="mobile-more-sheet"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+  })
+
+  it('removes account and layer listeners after unmount', async () => {
+    const removeDocument = vi.spyOn(document, 'removeEventListener')
+    const removeWindow = vi.spyOn(window, 'removeEventListener')
+    const { wrapper } = await mountLayout('/dashboard')
+
+    wrapper.unmount()
+
+    expect(removeDocument).toHaveBeenCalledWith('keydown', expect.any(Function))
+    expect(removeDocument).toHaveBeenCalledWith('pointerdown', expect.any(Function))
+    expect(removeWindow).toHaveBeenCalledWith('popstate', expect.any(Function))
+    expect(mocks.adminDeniedListener).toBeNull()
   })
 
   it('returns to personal navigation when administrator access is denied or role is lost', async () => {
