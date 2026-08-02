@@ -275,8 +275,7 @@ describe('AppLayout', () => {
     mocks.session.user.role = 'user'
   })
 
-  it('uses a mobile drawer without desktop-only destinations', async () => {
-    mocks.mobile = true
+  it('renders the unchanged desktop shell without mobile chrome', () => {
     const wrapper = mount(AppLayout, {
       global: {
         stubs: {
@@ -288,36 +287,11 @@ describe('AppLayout', () => {
       },
     })
 
-    expect(wrapper.get('[data-testid="mobile-app-bar"]').text()).toContain('仪表盘')
-    expect(wrapper.find('[data-testid="mobile-drawer"]').exists()).toBe(false)
-
-    await wrapper.get('[data-testid="mobile-menu-trigger"]').trigger('click')
-    const drawer = wrapper.get('[data-testid="mobile-drawer"]')
-    expect(drawer.text()).not.toContain('API 密钥')
-    expect(drawer.text()).not.toContain('用量显示')
-    expect(drawer.text()).toContain('使用记录')
-  })
-
-  it('closes the mobile drawer from the visible control and browser back', async () => {
-    mocks.mobile = true
-    const wrapper = mount(AppLayout, {
-      global: {
-        stubs: {
-          Teleport: true,
-          UsageDisplayDialog: true,
-          RouterLink: { template: '<a><slot /></a>' },
-          RouterView: { template: '<div />' },
-        },
-      },
-    })
-
-    await wrapper.get('[data-testid="mobile-menu-trigger"]').trigger('click')
-    await wrapper.get('[data-testid="mobile-drawer-close"]').trigger('click')
-    expect(wrapper.find('[data-testid="mobile-drawer"]').exists()).toBe(false)
-
-    await wrapper.get('[data-testid="mobile-menu-trigger"]').trigger('click')
-    window.dispatchEvent(new PopStateEvent('popstate'))
-    await wrapper.vm.$nextTick()
-    expect(wrapper.find('[data-testid="mobile-drawer"]').exists()).toBe(false)
+    expect(wrapper.get('.app-rail').classes()).toContain('app-rail')
+    expect(wrapper.text()).toContain('API 密钥')
+    expect(wrapper.text()).toContain('渠道状态')
+    expect(wrapper.text()).toContain('兑换')
+    expect(wrapper.find('[data-testid="mobile-app-bar"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="mobile-bottom-nav"]').exists()).toBe(false)
   })
 })
