@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LinAI 外部用量最终组合</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 32px; background: #f4f6f8; color: #243441; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif; }
+    h1 { margin: 0 0 8px; font-size: 25px; letter-spacing: 0; }
+    .lead { margin: 0 0 26px; color: #687985; font-size: 14px; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(330px, 1fr)); gap: 24px; max-width: 900px; }
+    .panel { padding: 18px; background: #fff; border-radius: 8px; box-shadow: 0 8px 22px rgba(37,55,68,.08); }
+    .panel h2 { margin: 0 0 13px; font-size: 15px; letter-spacing: 0; }
+    .surface { width: 326px; height: 352px; margin: 0 auto; padding: 25px 24px 18px; overflow: hidden; background: linear-gradient(145deg,#dcecf5 0%,#e8f2ee 56%,#f1edda 100%); border: 1px solid rgba(255,255,255,.85); border-radius: 22px; box-shadow: 0 14px 28px -18px rgba(36,55,68,.5), inset 0 1px 0 rgba(255,255,255,.8); }
+    .brand { margin: 0 0 7px; font-size: 10px; font-weight: 760; letter-spacing: .8px; }
+    .name { margin: 0 0 7px; overflow: hidden; font-size: 21px; font-weight: 720; letter-spacing: 0; text-overflow: ellipsis; white-space: nowrap; }
+    .updated { display: flex; align-items: center; gap: 7px; margin-bottom: 18px; color: #71818c; font-size: 10px; }
+    .dot { width: 7px; height: 7px; background: #43a277; border-radius: 50%; }
+    .quota { padding: 10px 0; }
+    .quota + .quota { border-top: 1px solid rgba(55,79,94,.12); }
+    .quota strong { display: block; margin-bottom: 7px; font-size: 12px; }
+    .track { height: 18px; overflow: hidden; background: rgba(255,255,255,.42); border-radius: 7px; }
+    .fill { display: flex; height: 100%; align-items: center; justify-content: flex-end; padding-right: 7px; background: linear-gradient(90deg,#71b2dc,#4f98c8); border-radius: inherit; color: #fff; font-size: 10px; font-weight: 700; }
+    .meta { display: flex; justify-content: space-between; margin-top: 6px; color: #60717d; font-size: 9px; }
+    .expiry { margin-top: 6px; color: #60717d; font-size: 9px; text-align: right; }
+    .balance-main { display: grid; min-height: 138px; align-content: center; border-bottom: 1px solid rgba(55,79,94,.12); }
+    .balance-main span { color: #71818c; font-size: 11px; font-weight: 620; }
+    .balance-main strong { margin-top: 10px; font-size: 43px; font-weight: 520; line-height: 1; }
+    .periods { display: grid; grid-template-columns: repeat(3,1fr); min-height: 92px; align-items: center; }
+    .periods div { display: grid; gap: 6px; text-align: center; }
+    .periods div + div { border-left: 1px solid rgba(55,79,94,.12); }
+    .periods span { color: #71818c; font-size: 9px; }
+    .periods strong { font-size: 12px; }
+    .compact { display: flex; max-width: 900px; align-items: center; gap: 18px; margin-top: 24px; padding: 18px 22px; background: #fff; border-radius: 8px; box-shadow: 0 8px 22px rgba(37,55,68,.08); }
+    .orb { display: grid; width: 62px; height: 62px; flex: 0 0 auto; place-items: center; background: linear-gradient(145deg,#dcecf5,#e8f2ee 58%,#f1edda); border-radius: 50%; box-shadow: 0 7px 17px -9px rgba(42,63,78,.5); }
+    .orb b { font-size: 18px; font-weight: 540; }
+    .orb small { margin-left: 1px; font-size: 8px; }
+    .tray { display: flex; height: 24px; align-items: center; gap: 5px; padding: 0 7px; background: #e8e8e8; border-radius: 4px; color: #1f2b33; font-size: 12px; font-weight: 620; }
+    .compact-copy strong { display: block; margin-bottom: 4px; font-size: 13px; }
+    .compact-copy span { color: #687985; font-size: 11px; line-height: 1.5; }
+    .approve { display: flex; max-width: 900px; align-items: center; justify-content: space-between; gap: 16px; margin-top: 24px; padding: 18px 20px; background: #fff; border: 2px solid transparent; border-radius: 8px; box-shadow: 0 8px 22px rgba(37,55,68,.08); cursor: pointer; }
+    .approve.selected { border-color: #5d9fc6; }
+    .approve strong { font-size: 14px; }
+    .approve span { color: #687985; font-size: 12px; }
+    .check { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; background: #243441; border-radius: 50%; color: #fff; font-weight: 700; }
+    @media (max-width: 780px) { body { padding: 20px; } .grid { grid-template-columns: 1fr; } .compact { align-items: flex-start; flex-wrap: wrap; } }
+  </style>
+</head>
+<body>
+  <h1>最终组合预览</h1>
+  <p class="lead">状态栏弹窗与展开悬浮窗共用同一张 352 × 352 外部展示卡；客户端内设置弹窗保持不变。</p>
+  <div class="grid">
+    <section class="panel">
+      <h2>订阅组模式</h2>
+      <div class="surface">
+        <p class="brand">LINAI · PRO</p>
+        <h3 class="name">ChatGPT-PRO</h3>
+        <div class="updated"><i class="dot"></i>更新于 12:51</div>
+        <div class="quota"><strong>日额度</strong><div class="track"><div class="fill" style="width:100%">100%</div></div><div class="meta"><span>$0.14 / $400.00</span><span>12 小时后重置</span></div></div>
+        <div class="quota"><strong>周额度</strong><div class="track"><div class="fill" style="width:63%">63%</div></div><div class="meta"><span>$184.95 / $500.00</span><span>2 天后重置</span></div></div>
+        <div class="quota"><strong>月额度</strong><div class="track"><div class="fill" style="width:82%">82%</div></div><div class="meta"><span>$90.00 / $500.00</span><span>18 天后重置</span></div></div>
+        <div class="expiry">有效期至 8月19日</div>
+      </div>
+    </section>
+    <section class="panel">
+      <h2>余额模式</h2>
+      <div class="surface">
+        <p class="brand">LINAI · PRO</p>
+        <h3 class="name">账户余额</h3>
+        <div class="updated"><i class="dot"></i>更新于 12:51</div>
+        <div class="balance-main"><span>可用余额</span><strong>$128.60</strong></div>
+        <div class="periods"><div><span>今日消费</span><strong>$2.18</strong></div><div><span>近 7 天</span><strong>$12.42</strong></div><div><span>本月消费</span><strong>$35.60</strong></div></div>
+      </div>
+    </section>
+  </div>
+  <section class="compact">
+    <div class="orb"><b>100<small>%</small></b></div>
+    <div class="tray">◯&nbsp;100%</div>
+    <div class="compact-copy"><strong>收起状态统一取最短周期</strong><span>有日额度显示日额度；否则回退周额度，再回退月额度。余额模式继续显示余额。</span></div>
+  </section>
+  <section class="approve" data-choice="approve-final-combination" onclick="toggleSelect(this)">
+    <div><strong>确认采用这套最终组合</strong><br><span>选择后回到终端告诉我“确认”。</span></div>
+    <div class="check">✓</div>
+  </section>
+</body>
+</html>

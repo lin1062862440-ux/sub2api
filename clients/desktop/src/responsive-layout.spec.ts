@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 const sourceModules = import.meta.glob([
   './layouts/AppLayout.vue',
   './views/*.vue',
+  './views/admin/*.vue',
 ], { eager: true, query: '?raw', import: 'default' }) as Record<string, string>
 
 const readSource = (relativePath: string) => sourceModules[relativePath] ?? ''
@@ -15,6 +16,19 @@ const responsiveViews = [
   './views/SubscriptionsView.vue',
   './views/RedeemView.vue',
   './views/ProfileView.vue',
+  './views/UserGroupsView.vue',
+  './views/UserGroupSubscriptionsView.vue',
+  './views/UserGroupUsageView.vue',
+  './views/admin/AdminDashboardView.vue',
+  './views/admin/AdminAccountsView.vue',
+  './views/admin/AdminUsersView.vue',
+  './views/admin/AdminGroupsView.vue',
+  './views/admin/AdminUsageView.vue',
+  './views/admin/AdminChannelMonitorsView.vue',
+  './views/admin/AdminAuditLogsView.vue',
+  './views/admin/AdminSubscriptionsView.vue',
+  './views/admin/AdminRedeemCodesView.vue',
+  './views/admin/AdminAnnouncementsView.vue',
 ]
 
 describe('desktop responsive layout contract', () => {
@@ -29,5 +43,9 @@ describe('desktop responsive layout contract', () => {
 
   it.each(responsiveViews)('%s responds to available content width', (viewPath) => {
     expect(readSource(viewPath)).toContain('@container app-content')
+  })
+
+  it.each(responsiveViews)('%s uses valid named container query syntax', (viewPath) => {
+    expect(readSource(viewPath)).not.toMatch(/@container\s+app-content\(/)
   })
 })

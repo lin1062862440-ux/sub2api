@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>苹果原生风：长方形比例</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+      color: #18212b;
+    }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background: #eef2f6;
+    }
+    .page {
+      width: min(1180px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 34px 0 48px;
+    }
+    header { margin-bottom: 24px; }
+    h1 { margin: 0; font-size: 25px; font-weight: 720; letter-spacing: 0; }
+    header p { max-width: 720px; margin: 8px 0 0; color: #596573; font-size: 14px; line-height: 1.6; }
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .option {
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #d8dee6;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .option:hover { border-color: #9aabc0; }
+    .option.selected { border-color: #3276d2; box-shadow: 0 0 0 2px rgba(50, 118, 210, 0.16); }
+    .scene {
+      position: relative;
+      display: grid;
+      min-height: 430px;
+      place-items: center;
+      overflow: hidden;
+      background:
+        linear-gradient(155deg, rgba(42, 92, 122, 0.12), rgba(20, 57, 86, 0.52)),
+        linear-gradient(35deg, #7398aa 0%, #b4c6ce 45%, #5f8497 100%);
+    }
+    .scene::before,
+    .scene::after {
+      position: absolute;
+      content: "";
+      background: rgba(27, 57, 78, 0.34);
+      transform: rotate(-12deg);
+    }
+    .scene::before { right: -30px; bottom: 62px; width: 260px; height: 120px; }
+    .scene::after { bottom: -28px; left: -20px; width: 300px; height: 135px; }
+    .preview-stack { position: relative; z-index: 1; display: grid; justify-items: center; gap: 24px; padding: 22px; }
+    .native-bar,
+    .native-panel {
+      color: rgba(22, 28, 34, 0.88);
+      -webkit-backdrop-filter: blur(24px) saturate(1.22);
+      backdrop-filter: blur(24px) saturate(1.22);
+      background: rgba(245, 247, 249, 0.52);
+      border: 1px solid rgba(255, 255, 255, 0.5);
+      box-shadow: 0 7px 18px rgba(20, 36, 48, 0.2), inset 0 1px rgba(255, 255, 255, 0.5);
+    }
+    .native-bar { display: flex; align-items: center; justify-content: space-between; }
+    .native-bar span { color: rgba(22, 28, 34, 0.6); font-size: 11px; font-weight: 560; }
+    .native-bar strong { display: flex; align-items: baseline; font-size: 18px; font-weight: 580; }
+    .native-bar small { margin-left: 2px; font-size: 9px; font-weight: 520; }
+    .option-a .native-bar { width: 176px; height: 48px; padding: 0 15px; border-radius: 14px; }
+    .option-b .native-bar { width: 196px; height: 44px; padding: 0 16px; border-radius: 22px; }
+    .option-c .native-bar { width: 224px; height: 58px; padding: 0 18px; border-radius: 16px; }
+    .option-c .native-bar span { font-size: 12px; }
+    .option-c .native-bar strong { font-size: 20px; }
+    .native-panel {
+      width: 286px;
+      height: 250px;
+      padding: 20px;
+      border-radius: 18px;
+    }
+    .panel-head { display: grid; gap: 4px; }
+    .panel-head small { font-size: 10px; font-weight: 680; }
+    .panel-head strong { font-size: 21px; font-weight: 680; }
+    .panel-head span { color: rgba(22, 28, 34, 0.58); font-size: 10px; }
+    .quota { margin-top: 30px; }
+    .quota + .quota { margin-top: 22px; }
+    .quota > div { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; }
+    .quota > div strong { font-size: 12px; }
+    .track { height: 7px; margin-top: 8px; overflow: hidden; background: rgba(30, 38, 46, 0.12); border-radius: 4px; }
+    .track i { display: block; width: 68%; height: 100%; background: rgba(40, 112, 205, 0.78); border-radius: inherit; }
+    .meta { display: flex; justify-content: space-between; margin-top: 7px; color: rgba(22, 28, 34, 0.54); font-size: 9px; }
+    .body { padding: 16px 16px 18px; }
+    .title-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .letter { display: grid; width: 26px; height: 26px; background: #eef3f8; border-radius: 6px; color: #315d8d; font-size: 12px; font-weight: 750; place-items: center; }
+    h2 { margin: 0; font-size: 15px; font-weight: 700; }
+    .body p { min-height: 42px; margin: 8px 0 0; color: #697583; font-size: 12px; line-height: 1.55; }
+    .tag { display: inline-flex; margin-top: 12px; padding: 4px 7px; background: #eef5ff; border-radius: 5px; color: #2f65aa; font-size: 10px; font-weight: 650; }
+    .note { margin: 18px 0 0; color: #6a7480; font-size: 12px; text-align: center; }
+    @media (max-width: 900px) {
+      .options { grid-template-columns: 1fr; }
+      .scene { min-height: 390px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>苹果原生风：选择长方形比例</h1>
+      <p>三种方案都使用 macOS Vibrancy 作为唯一表面材质，不使用现有主题渐变。上方是收起态横条，下方是点击或悬停后的详情面板。</p>
+    </header>
+
+    <section class="options">
+      <article class="option option-a" data-choice="a" onclick="toggleSelect(this)">
+        <div class="scene">
+          <div class="preview-stack">
+            <div class="native-bar"><span>剩余额度</span><strong>100<small>%</small></strong></div>
+            <div class="native-panel">
+              <div class="panel-head"><small>LINAI · PRO</small><strong>45 订阅</strong><span>更新于 14:40</span></div>
+              <div class="quota"><div><strong>周额度</strong><span>100%</span></div><div class="track"><i /></div><div class="meta"><span>$0.00 / $50.00</span><span>7 天后重置</span></div></div>
+              <div class="quota"><div><strong>月额度</strong><span>100%</span></div><div class="track"><i /></div><div class="meta"><span>$0.00 / $220.00</span><span>30 天后重置</span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>紧凑矩形</h2><span class="letter">A</span></div>
+          <p>176 × 48，圆角 14。保留现有横条的信息效率，轮廓明确，不做胶囊。</p>
+          <span class="tag">推荐</span>
+        </div>
+      </article>
+
+      <article class="option option-b" data-choice="b" onclick="toggleSelect(this)">
+        <div class="scene">
+          <div class="preview-stack">
+            <div class="native-bar"><span>剩余额度</span><strong>100<small>%</small></strong></div>
+            <div class="native-panel">
+              <div class="panel-head"><small>LINAI · PRO</small><strong>45 订阅</strong><span>更新于 14:40</span></div>
+              <div class="quota"><div><strong>周额度</strong><span>100%</span></div><div class="track"><i /></div><div class="meta"><span>$0.00 / $50.00</span><span>7 天后重置</span></div></div>
+              <div class="quota"><div><strong>月额度</strong><span>100%</span></div><div class="track"><i /></div><div class="meta"><span>$0.00 / $220.00</span><span>30 天后重置</span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>系统胶囊</h2><span class="letter">B</span></div>
+          <p>196 × 44，满圆角。更接近菜单栏控件，但长方形特征偏弱。</p>
+        </div>
+      </article>
+
+      <article class="option option-c" data-choice="c" onclick="toggleSelect(this)">
+        <div class="scene">
+          <div class="preview-stack">
+            <div class="native-bar"><span>剩余额度</span><strong>100<small>%</small></strong></div>
+            <div class="native-panel">
+              <div class="panel-head"><small>LINAI · PRO</small><strong>45 订阅</strong><span>更新于 14:40</span></div>
+              <div class="quota"><div><strong>周额度</strong><span>100%</span></div><div class="track"><i /></div><div class="meta"><span>$0.00 / $50.00</span><span>7 天后重置</span></div></div>
+              <div class="quota"><div><strong>月额度</strong><span>100%</span></div><div class="track"><i /></div><div class="meta"><span>$0.00 / $220.00</span><span>30 天后重置</span></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="body">
+          <div class="title-row"><h2>宽幅信息条</h2><span class="letter">C</span></div>
+          <p>224 × 58，圆角 16。可读性最好，但桌面占位明显，视觉更接近小组件。</p>
+        </div>
+      </article>
+    </section>
+    <p class="note">点击一个方案选中，也可以直接在对话中回复 A、B 或 C。</p>
+  </main>
+</body>
+</html>

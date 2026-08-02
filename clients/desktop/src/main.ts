@@ -6,6 +6,7 @@ import { router } from './router'
 import { parseResetDeepLink, setResetHandoff } from '@/lib/deep-link'
 import { bootstrap } from '@/stores/session'
 import './style.css'
+import './components/user-groups/user-groups.css'
 
 async function handleDeepLinks(urls: string[]) {
   const handoff = urls.map(parseResetDeepLink).find((value) => value !== null)

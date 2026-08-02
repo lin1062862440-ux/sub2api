@@ -11,6 +11,7 @@ const {
   getUsageSummary,
   getCapacitySummary,
   getCodexQuotaSummary,
+  getLiveCapability,
   listAccounts,
   showError,
   showSuccess,
@@ -23,6 +24,7 @@ const {
   getUsageSummary: vi.fn(),
   getCapacitySummary: vi.fn(),
   getCodexQuotaSummary: vi.fn(),
+  getLiveCapability: vi.fn(),
   listAccounts: vi.fn(),
   showError: vi.fn(),
   showSuccess: vi.fn(),
@@ -55,6 +57,7 @@ vi.mock('@/api/admin', () => ({
       getUsageSummary,
       getCapacitySummary,
       getCodexQuotaSummary,
+      getLiveCapability,
       create: vi.fn(),
       update: vi.fn(),
       delete: vi.fn(),
@@ -233,6 +236,7 @@ describe('admin GroupsView column settings', () => {
     getUsageSummary.mockReset()
     getCapacitySummary.mockReset()
     getCodexQuotaSummary.mockReset()
+    getLiveCapability.mockReset()
     listAccounts.mockReset()
     showError.mockReset()
     showSuccess.mockReset()
@@ -251,6 +255,7 @@ describe('admin GroupsView column settings', () => {
     getUsageSummary.mockResolvedValue([])
     getCapacitySummary.mockResolvedValue([])
     getCodexQuotaSummary.mockResolvedValue([])
+    getLiveCapability.mockResolvedValue({ supported: false })
     listAccounts.mockResolvedValue({ items: [], total: 0, page: 1, page_size: 20, pages: 0 })
     isCurrentStep.mockReturnValue(false)
   })
@@ -296,6 +301,7 @@ describe('admin GroupsView column settings', () => {
       'rate_multiplier',
       'is_exclusive',
       'account_count',
+      'codex_quota',
       'status',
       'actions',
     ])
@@ -363,6 +369,7 @@ describe('admin GroupsView column settings', () => {
       'is_exclusive',
       'account_count',
       'capacity',
+      'codex_quota',
       'usage',
       'status',
       'actions',

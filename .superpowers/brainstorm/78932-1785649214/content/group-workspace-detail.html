@@ -1,0 +1,106 @@
+<style>
+  .design-shell { border:1px solid #dce4e8; border-radius:12px; overflow:hidden; background:#f5f7f8; margin:20px 0; }
+  .design-top { height:42px; display:flex; align-items:center; justify-content:space-between; padding:0 18px; background:#fff; border-bottom:1px solid #e5eaed; color:#33434f; font-size:11px; }
+  .design-brand { font-weight:750; color:#14232d; }
+  .design-app { display:grid; grid-template-columns:132px minmax(0,1fr); min-height:430px; }
+  .design-sidebar { background:#fff; border-right:1px solid #e3e9ec; padding:15px 10px; font-size:10px; color:#64737e; }
+  .design-sidebar .nav { display:flex; align-items:center; gap:7px; padding:8px 9px; border-radius:7px; margin-bottom:3px; }
+  .design-sidebar .nav.active { background:#e8f7f5; color:#087d73; font-weight:700; }
+  .nav-icon { width:13px; height:13px; border:1.5px solid currentColor; border-radius:4px; }
+  .design-content { min-width:0; padding:22px 26px 28px; }
+  .page-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+  .page-heading h3 { margin:0; color:#14232d; font-size:19px; }
+  .page-heading p { margin:4px 0 0; font-size:10px; color:#71808b; }
+  .primary-action { height:28px; padding:0 12px; border:0; border-radius:6px; background:#0f9d90; color:#fff; font-size:10px; font-weight:700; }
+  .workspace-tabs { display:flex; gap:24px; margin-top:18px; border-bottom:1px solid #dfe6e9; height:34px; }
+  .workspace-tab { padding:8px 1px 9px; color:#65747f; font-size:10px; }
+  .workspace-tab.active { color:#087d73; border-bottom:2px solid #0f9d90; font-weight:700; }
+  .command-row { min-height:48px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; border-bottom:1px solid #e1e7ea; }
+  .control-group { display:flex; gap:7px; align-items:center; }
+  .select-control,.search-control { height:27px; border:1px solid #ccd6dc; border-radius:6px; background:#fff; color:#43535f; padding:0 9px; font-size:9px; }
+  .select-control { min-width:132px; }
+  .search-control { min-width:155px; color:#8a969e; }
+  .small-action { height:27px; padding:0 9px; border:1px solid #ccd6dc; border-radius:6px; background:#fff; color:#42525e; font-size:9px; }
+  .context-name { display:flex; align-items:center; gap:8px; color:#1f303b; font-size:10px; font-weight:700; }
+  .context-mark { width:22px; height:22px; display:grid; place-items:center; border-radius:6px; background:#e8f7f5; color:#087d73; }
+  .metric-strip { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); border-bottom:1px solid #dfe6e9; margin-top:2px; }
+  .metric { padding:13px 12px; border-left:1px solid #e3e9ec; }
+  .metric:first-child { border-left:0; }
+  .metric span { display:block; color:#71808b; font-size:9px; }
+  .metric strong { display:block; margin-top:5px; color:#20313c; font-size:16px; font-variant-numeric:tabular-nums; }
+  .metric strong.teal { color:#087d73; }
+  .data-table { margin-top:14px; border:1px solid #dfe6e9; border-radius:8px; overflow:hidden; background:#fff; }
+  .data-row { min-height:37px; display:grid; grid-template-columns:1.45fr .65fr .65fr .85fr .5fr; align-items:center; gap:10px; padding:0 12px; border-top:1px solid #edf1f3; font-size:9px; color:#53636e; }
+  .data-row:first-child { min-height:31px; border-top:0; background:#f8fafb; color:#74828c; font-weight:700; }
+  .data-row .name { color:#20313c; font-weight:700; }
+  .data-row.selected { background:#f0faf8; }
+  .badge { display:inline-flex; width:max-content; padding:3px 7px; border-radius:999px; background:#eaf7ef; color:#287148; font-weight:700; }
+  .row-actions { color:#087d73; text-align:right; font-weight:700; }
+  .view-switch { display:flex; background:#edf2f4; border-radius:7px; padding:2px; }
+  .view-switch span { padding:5px 9px; border-radius:5px; color:#64737e; font-size:9px; }
+  .view-switch span.active { background:#fff; color:#20313c; font-weight:700; }
+  .usage-bars { margin-top:14px; border-top:1px solid #e0e7ea; }
+  .usage-item { display:grid; grid-template-columns:1fr 70px 110px 110px; gap:10px; align-items:center; padding:10px 4px; border-bottom:1px solid #e8edef; font-size:9px; color:#53636e; }
+  .usage-person { display:flex; align-items:center; gap:8px; color:#20313c; font-weight:700; }
+  .avatar { width:21px; height:21px; border-radius:50%; background:#d6e5e7; }
+  .bar { height:4px; border-radius:999px; background:#e4eaed; overflow:hidden; margin-top:4px; }
+  .bar > i { display:block; height:100%; border-radius:inherit; background:#0f9d90; }
+  .design-notes { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; margin-top:14px; }
+  .design-note { padding:12px 14px; border-top:2px solid #dfe6e9; color:#596975; font-size:12px; line-height:1.6; }
+  .design-note strong { display:block; color:#20313c; margin-bottom:3px; }
+  .decision-row { display:flex; gap:12px; margin-top:18px; }
+  .decision { flex:1; border:1px solid #d8e1e5; border-radius:10px; padding:14px 16px; cursor:pointer; background:#fff; }
+  .decision:hover { border-color:#0f9d90; }
+  .decision h3 { margin:0 0 5px; font-size:14px; }
+  .decision p { margin:0; font-size:12px; color:#667681; }
+  @media(max-width:800px){.design-app{grid-template-columns:1fr}.design-sidebar{display:none}.design-content{padding:16px}.metric-strip{grid-template-columns:repeat(2,1fr)}.data-row{grid-template-columns:1.3fr .6fr .6fr}.data-row>*:nth-child(4),.data-row>*:nth-child(5){display:none}.usage-item{grid-template-columns:1fr 70px}.usage-item>*:nth-child(3),.usage-item>*:nth-child(4){display:none}.decision-row{flex-direction:column}}
+</style>
+
+<h2>A 方案细化：用户组工作区</h2>
+<p class="subtitle">一个侧边栏入口，一套稳定页头，三个任务视图。下面展示组列表、成员订阅和组用量的统一结构。</p>
+
+<div class="design-shell">
+  <div class="design-top"><span class="design-brand">LinAI</span><span>通知　ZH　余额　林 / Admin</span></div>
+  <div class="design-app">
+    <aside class="design-sidebar"><div class="nav"><i class="nav-icon"></i>仪表盘</div><div class="nav"><i class="nav-icon"></i>运维监控</div><div class="nav"><i class="nav-icon"></i>用户管理</div><div class="nav active"><i class="nav-icon"></i>用户组</div><div class="nav"><i class="nav-icon"></i>分组管理</div><div class="nav"><i class="nav-icon"></i>渠道管理</div><div class="nav"><i class="nav-icon"></i>订单管理</div></aside>
+    <main class="design-content">
+      <div class="page-heading"><div><h3>用户组工作区</h3><p>维护业务组、成员订阅和用量记录</p></div><button class="primary-action">＋ 新建用户组</button></div>
+      <nav class="workspace-tabs"><span class="workspace-tab active">组列表</span><span class="workspace-tab">成员订阅</span><span class="workspace-tab">组用量</span></nav>
+      <div class="command-row"><div class="control-group"><div class="search-control">搜索组名称</div><button class="small-action">全部状态</button></div><span style="font-size:9px;color:#71808b">共 3 个用户组</span></div>
+      <div class="data-table"><div class="data-row"><span>组名称</span><span>成员</span><span>查看权限</span><span>最近更新</span><span></span></div><div class="data-row selected"><span class="name">友财研发组<br><small style="font-weight:400;color:#84919a">核心研发与测试成员</small></span><span>14</span><span>0</span><span>2026年8月2日</span><span class="row-actions">管理</span></div><div class="data-row"><span class="name">产品运营组<br><small style="font-weight:400;color:#84919a">产品和增长协作</small></span><span>8</span><span>2</span><span>2026年8月1日</span><span class="row-actions">管理</span></div><div class="data-row"><span class="name">外部合作组</span><span>5</span><span>1</span><span>2026年7月29日</span><span class="row-actions">管理</span></div></div>
+    </main>
+  </div>
+</div>
+
+<div class="design-shell">
+  <div class="design-top"><span class="design-brand">成员订阅</span><span>同一工作区，标签切换</span></div>
+  <div class="design-app">
+    <aside class="design-sidebar"><div class="nav"><i class="nav-icon"></i>仪表盘</div><div class="nav"><i class="nav-icon"></i>用户管理</div><div class="nav active"><i class="nav-icon"></i>用户组</div><div class="nav"><i class="nav-icon"></i>分组管理</div></aside>
+    <main class="design-content">
+      <div class="page-heading"><div><h3>用户组工作区</h3><p>维护业务组、成员订阅和用量记录</p></div></div>
+      <nav class="workspace-tabs"><span class="workspace-tab">组列表</span><span class="workspace-tab active">成员订阅</span><span class="workspace-tab">组用量</span></nav>
+      <div class="command-row"><div class="context-name"><span class="context-mark">友</span><span>友财研发组</span><div class="select-control" style="min-width:88px">切换用户组⌄</div></div><div class="control-group"><div class="select-control">全部订阅状态⌄</div><button class="small-action">刷新</button></div></div>
+      <div class="metric-strip"><div class="metric"><span>成员</span><strong>14</strong></div><div class="metric"><span>活跃订阅</span><strong class="teal">11</strong></div><div class="metric"><span>总余额</span><strong>$840.54</strong></div><div class="metric"><span>订阅已用</span><strong>$126.30</strong></div></div>
+      <div class="data-table"><div class="data-row"><span>成员</span><span>订阅状态</span><span>计划</span><span>额度使用</span><span>余额</span></div><div class="data-row"><span class="name">Lin<br><small style="font-weight:400;color:#84919a">lin@example.com</small></span><span><i class="badge">活跃</i></span><span>OpenAI Team</span><span>周 42%<div class="bar"><i style="width:42%"></i></div></span><span>$84.54</span></div><div class="data-row"><span class="name">Chen</span><span><i class="badge">活跃</i></span><span>Claude Max</span><span>周 68%<div class="bar"><i style="width:68%"></i></div></span><span>$32.00</span></div></div>
+    </main>
+  </div>
+</div>
+
+<div class="design-shell">
+  <div class="design-top"><span class="design-brand">组用量</span><span>筛选与结果保持同一阅读轴</span></div>
+  <div class="design-app">
+    <aside class="design-sidebar"><div class="nav"><i class="nav-icon"></i>仪表盘</div><div class="nav"><i class="nav-icon"></i>用户管理</div><div class="nav active"><i class="nav-icon"></i>用户组</div><div class="nav"><i class="nav-icon"></i>分组管理</div></aside>
+    <main class="design-content">
+      <div class="page-heading"><div><h3>用户组工作区</h3><p>维护业务组、成员订阅和用量记录</p></div></div>
+      <nav class="workspace-tabs"><span class="workspace-tab">组列表</span><span class="workspace-tab">成员订阅</span><span class="workspace-tab active">组用量</span></nav>
+      <div class="command-row"><div class="context-name"><span class="context-mark">友</span><span>友财研发组</span><div class="select-control" style="min-width:88px">切换用户组⌄</div></div><div class="control-group"><button class="small-action">近 7 天</button><button class="small-action">更多筛选</button><button class="primary-action">查询用量</button></div></div>
+      <div class="metric-strip"><div class="metric"><span>请求数</span><strong>1,284</strong></div><div class="metric"><span>Token</span><strong>8.42M</strong></div><div class="metric"><span>余额消费</span><strong>$64.20</strong></div><div class="metric"><span>订阅消费</span><strong class="teal">$126.30</strong></div></div>
+      <div class="command-row" style="min-height:42px"><strong style="font-size:11px;color:#20313c">使用情况</strong><div class="view-switch"><span class="active">成员汇总</span><span>请求明细</span></div></div>
+      <div class="usage-bars"><div class="usage-item"><div class="usage-person"><i class="avatar"></i>Lin</div><span>528 次</span><span>3.8M Token<div class="bar"><i style="width:72%"></i></div></span><span>$81.40</span></div><div class="usage-item"><div class="usage-person"><i class="avatar"></i>Chen</div><span>396 次</span><span>2.7M Token<div class="bar"><i style="width:54%"></i></div></span><span>$56.20</span></div><div class="usage-item"><div class="usage-person"><i class="avatar"></i>Zhao</div><span>214 次</span><span>1.2M Token<div class="bar"><i style="width:28%"></i></div></span><span>$31.60</span></div></div>
+    </main>
+  </div>
+</div>
+
+<div class="design-notes"><div class="design-note"><strong>视觉策略</strong>沿用 LinAI 的青绿色主色，只用于当前标签、主操作和选中状态；其余保持中性灰白，不引入新主题。</div><div class="design-note"><strong>比例策略</strong>主内容全宽，指标使用连续分隔带，表格占据主要阅读面积；不再出现窄侧栏和大片空白。</div><div class="design-note"><strong>交互策略</strong>路由仍可保留，侧边栏合并为一个入口；页面标签负责三个任务切换，老链接继续可访问。</div></div>
+
+<div class="decision-row"><div class="decision" data-choice="approve" onclick="toggleSelect(this)"><h3>确认这套设计</h3><p>按此结构进入规格与实施阶段。</p></div><div class="decision" data-choice="revise" onclick="toggleSelect(this)"><h3>还需要调整</h3><p>告诉我具体想改导航、密度、配色或交互。</p></div></div>

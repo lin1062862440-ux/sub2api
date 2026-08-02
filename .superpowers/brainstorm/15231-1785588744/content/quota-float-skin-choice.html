@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>选择外部用量展示风格</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 38px;
+      background: #f3f5f8;
+      color: #18202a;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    }
+    .page { max-width: 1120px; margin: 0 auto; }
+    .eyebrow { margin: 0 0 8px; color: #647386; font-size: 12px; font-weight: 700; }
+    h1 { margin: 0; font-size: 26px; letter-spacing: 0; }
+    .intro { max-width: 760px; margin: 10px 0 28px; color: #6f7b89; font-size: 14px; line-height: 1.65; }
+    .choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+    .choice {
+      padding: 18px;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 8px 24px rgba(40, 52, 68, .08);
+      cursor: pointer;
+      transition: border-color .16s ease, transform .16s ease;
+    }
+    .choice:hover { transform: translateY(-2px); }
+    .choice.selected { border-color: #2876e8; }
+    .choice-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .choice-head strong { font-size: 14px; }
+    .choice-head span { color: #7a8695; font-size: 11px; }
+    .quota-card {
+      position: relative;
+      display: flex;
+      width: 100%;
+      aspect-ratio: 1;
+      flex-direction: column;
+      overflow: hidden;
+      padding: 25px 25px 22px;
+      border: 1px solid rgba(79, 103, 134, .12);
+      border-radius: 36px;
+      color: #17191f;
+      background: #e8f1f6;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.58), inset 0 0 0 1px rgba(255,255,255,.28);
+    }
+    .quota-card::before {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 84% 86%, rgba(123, 221, 188, .22), transparent 38%);
+      content: "";
+      pointer-events: none;
+    }
+    .top, .metric, .track, .reset, .details { position: relative; z-index: 1; }
+    .top { display: flex; align-items: flex-start; justify-content: space-between; }
+    .identity { display: grid; gap: 5px; }
+    .identity strong { font-size: 12px; font-weight: 760; letter-spacing: 2px; }
+    .identity span { color: rgba(30,42,53,.66); font-size: 11px; }
+    .actions { display: flex; gap: 5px; }
+    .actions i {
+      display: grid;
+      width: 25px;
+      height: 25px;
+      border: 1px solid rgba(255,255,255,.72);
+      border-radius: 50%;
+      background: rgba(255,255,255,.46);
+      color: #668092;
+      font-size: 11px;
+      font-style: normal;
+      place-items: center;
+    }
+    .actions i:first-child::after { width: 8px; height: 8px; border-radius: 50%; background: #55e48a; content: ""; box-shadow: 0 0 8px #55e48a; }
+    .metric { display: flex; align-items: baseline; margin-top: 22px; line-height: .9; }
+    .metric b { font-size: 60px; font-weight: 420; }
+    .metric small { margin-left: 4px; font-size: 20px; font-weight: 650; }
+    .track { height: 6px; margin-top: 16px; overflow: hidden; border-radius: 10px; background: rgba(255,255,255,.5); }
+    .track span { display: block; width: 26%; height: 100%; border-radius: inherit; background: #3c80e8; box-shadow: 0 0 12px rgba(60,128,232,.35); }
+    .reset { margin-top: 9px; color: rgba(48,65,78,.58); font-size: 10px; }
+    .details { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: auto; }
+    .detail { display: grid; gap: 3px; }
+    .detail span { color: rgba(48,65,78,.58); font-size: 9px; }
+    .detail strong { font-size: 21px; font-weight: 450; }
+    .dark { color: #f5f7ff; background: #252951; border-color: rgba(255,255,255,.14); }
+    .dark::before { background: radial-gradient(circle at 24% 82%, rgba(63, 41, 168, .45), transparent 42%); }
+    .dark .identity span, .dark .reset, .dark .detail span { color: rgba(235,240,255,.64); }
+    .dark .actions i { border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.08); color: #dce4ff; }
+    .dark .track { background: rgba(255,255,255,.18); }
+    .dark .track span { background: #4aa6dc; }
+    .blur { border: 0; background: #e7fbf8; box-shadow: none; }
+    .blur::before {
+      background:
+        radial-gradient(circle at 78% 78%, rgba(93, 231, 235, .72), transparent 38%),
+        radial-gradient(circle at 20% 18%, rgba(223, 255, 248, .92), transparent 42%);
+    }
+    .blur .metric b, .blur .metric small { font-family: "Arial Rounded MT Bold", "SF Pro Rounded", sans-serif; }
+    .blur .track { display: grid; grid-template-columns: repeat(20, 1fr); gap: 5px; height: 8px; overflow: visible; background: transparent; }
+    .blur .track span { width: 8px; height: 8px; border-radius: 2px; background: #76e79a; box-shadow: 0 2px 4px #c9ffe0; }
+    .blur .track i { width: 4px; height: 4px; align-self: center; justify-self: center; border-radius: 50%; background: rgba(54,110,105,.28); }
+    .blur .provider-mark { position: absolute; right: 18px; bottom: 17px; width: 70px; height: 70px; border: 2px solid rgba(255,255,255,.35); border-radius: 20px; opacity: .22; transform: rotate(45deg); }
+    .note { margin: 13px 2px 0; color: #697585; font-size: 12px; line-height: 1.55; }
+    .source { margin-top: 24px; color: #8a94a2; font-size: 11px; text-align: center; }
+    @media (max-width: 900px) { .choices { grid-template-columns: 1fr; } .choice { max-width: 380px; margin: 0 auto; width: 100%; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <p class="eyebrow">仅调整 macOS 外部展示</p>
+    <h1>选择要借鉴的 quota-float 皮肤</h1>
+    <p class="intro">三种方案都采用它的核心结构：大号主指标、状态圆点、轻量工具按钮、进度表达与次级额度。点击一张卡片选择。</p>
+    <section class="choices">
+      <article class="choice" data-choice="a" onclick="toggleSelect(this)">
+        <div class="choice-head"><strong>A · 默认浅色</strong><span>推荐</span></div>
+        <div class="quota-card">
+          <div class="top"><div class="identity"><strong>CLAUDE · PRO</strong><span>订阅组剩余</span></div><div class="actions"><i></i><i>↗</i><i>×</i></div></div>
+          <div class="metric"><b>26</b><small>%</small></div>
+          <div class="track"><span></span></div>
+          <div class="reset">周额度最紧张 · 3 天后重置</div>
+          <div class="details"><div class="detail"><span>日额度剩余</span><strong>28%</strong></div><div class="detail"><span>月额度剩余</span><strong>26%</strong></div></div>
+        </div>
+        <p class="note">最接近项目首页的默认状态图。浅蓝灰底、38px 大圆角、克制的彩色状态变化。</p>
+      </article>
+      <article class="choice" data-choice="b" onclick="toggleSelect(this)">
+        <div class="choice-head"><strong>B · 深色</strong><span>高对比</span></div>
+        <div class="quota-card dark">
+          <div class="top"><div class="identity"><strong>CLAUDE · PRO</strong><span>订阅组剩余</span></div><div class="actions"><i></i><i>↗</i><i>×</i></div></div>
+          <div class="metric"><b>26</b><small>%</small></div>
+          <div class="track"><span></span></div>
+          <div class="reset">周额度最紧张 · 3 天后重置</div>
+          <div class="details"><div class="detail"><span>日额度剩余</span><strong>28%</strong></div><div class="detail"><span>月额度剩余</span><strong>26%</strong></div></div>
+        </div>
+        <p class="note">参考 quota-float 深色健康态。更像独立桌面悬浮组件，但与当前 LinAI 浅色客户端反差更强。</p>
+      </article>
+      <article class="choice" data-choice="c" onclick="toggleSelect(this)">
+        <div class="choice-head"><strong>C · Blur 皮肤</strong><span>表现力最强</span></div>
+        <div class="quota-card blur">
+          <div class="top"><div class="identity"><strong>CLAUDE · PRO</strong><span>订阅组剩余</span></div><div class="actions"><i></i><i>↗</i><i>×</i></div></div>
+          <div class="metric"><b>26</b><small>%</small></div>
+          <div class="track"><span></span><span></span><span></span><span></span><span></span><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="reset">周额度最紧张 · 3 天后重置</div>
+          <div class="details"><div class="detail"><span>日额度剩余</span><strong>28%</strong></div><div class="detail"><span>月额度剩余</span><strong>26%</strong></div></div>
+          <div class="provider-mark"></div>
+        </div>
+        <p class="note">参考它的 Blur 支持者皮肤。圆润字体、点阵进度和青绿色光感最明显，辨识度也最高。</p>
+      </article>
+    </section>
+    <p class="source">视觉依据：change-42-yhmm/quota-float（MIT）</p>
+  </main>
+</body>
+</html>

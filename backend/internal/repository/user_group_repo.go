@@ -179,9 +179,10 @@ func (r *userGroupRepository) Archive(ctx context.Context, groupID int64) error 
 
 func (r *userGroupRepository) ListMembers(ctx context.Context, groupID int64) ([]service.UserGroupMember, error) {
 	const query = `
-		SELECT u.id, u.email, u.username, COALESCE(u.avatar_url, ''), u.status, u.balance, ugm.created_at
+		SELECT u.id, u.email, u.username, COALESCE(ua.url, ''), u.status, u.balance, ugm.created_at
 		FROM user_group_members ugm
 		JOIN users u ON u.id = ugm.user_id AND u.deleted_at IS NULL
+		LEFT JOIN user_avatars ua ON ua.user_id = u.id
 		WHERE ugm.user_group_id = $1
 		ORDER BY LOWER(COALESCE(NULLIF(u.username, ''), u.email)), u.id`
 	rows, err := r.db.QueryContext(ctx, query, groupID)
@@ -206,9 +207,10 @@ func (r *userGroupRepository) ReplaceMembers(ctx context.Context, groupID int64,
 
 func (r *userGroupRepository) ListViewers(ctx context.Context, groupID int64) ([]service.UserGroupViewer, error) {
 	const query = `
-		SELECT u.id, u.email, u.username, COALESCE(u.avatar_url, ''), u.status, ugvg.created_at
+		SELECT u.id, u.email, u.username, COALESCE(ua.url, ''), u.status, ugvg.created_at
 		FROM user_group_viewer_grants ugvg
 		JOIN users u ON u.id = ugvg.viewer_user_id AND u.deleted_at IS NULL
+		LEFT JOIN user_avatars ua ON ua.user_id = u.id
 		WHERE ugvg.user_group_id = $1
 		ORDER BY LOWER(COALESCE(NULLIF(u.username, ''), u.email)), u.id`
 	rows, err := r.db.QueryContext(ctx, query, groupID)
@@ -304,13 +306,14 @@ func (r *userGroupRepository) ListSubscriptions(ctx context.Context, groupID int
 	limitPos := len(args) + 1
 	offsetPos := limitPos + 1
 	rowsSQL := fmt.Sprintf(`
-		SELECT u.id, u.email, u.username, COALESCE(u.avatar_url, ''), u.status, u.balance, ugm.created_at,
+		SELECT u.id, u.email, u.username, COALESCE(ua.url, ''), u.status, u.balance, ugm.created_at,
 		       us.id, us.group_id, COALESCE(g.name, ''), COALESCE(g.platform, ''), COALESCE(us.status, ''), us.starts_at, us.expires_at,
 		       COALESCE(us.daily_usage_usd, 0), g.daily_limit_usd,
 		       COALESCE(us.weekly_usage_usd, 0), g.weekly_limit_usd,
 		       COALESCE(us.monthly_usage_usd, 0), g.monthly_limit_usd
 		FROM user_group_members ugm
 		JOIN users u ON u.id = ugm.user_id AND u.deleted_at IS NULL
+		LEFT JOIN user_avatars ua ON ua.user_id = u.id
 		LEFT JOIN user_subscriptions us ON us.user_id = ugm.user_id AND us.deleted_at IS NULL
 		LEFT JOIN groups g ON g.id = us.group_id AND g.deleted_at IS NULL
 		WHERE ugm.user_group_id = $1%s

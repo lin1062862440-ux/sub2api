@@ -27,11 +27,18 @@ const state = reactive({
     allow_user_view_error_requests: true,
   },
   runMode: 'standard' as const,
+  userGroupCapabilities: { can_access: true, can_manage: true, group_count: 3 },
   offline: false,
 })
 
 export const session = readonly(state)
 export const isAuthenticated = () => state.user !== null
+export const hasUserGroupAccess = () => state.user?.role === 'admin' || state.userGroupCapabilities.can_access
+export const canManageUserGroups = () => state.user?.role === 'admin' || state.userGroupCapabilities.can_manage
+export function revokeUserGroupAccess() {
+  state.userGroupCapabilities = { can_access: false, can_manage: false, group_count: 0 }
+}
+export async function loadUserGroupCapabilities() { return state.userGroupCapabilities }
 export async function bootstrap() {}
 export async function refreshUser() {}
 export function setCurrentUser(user: User) {

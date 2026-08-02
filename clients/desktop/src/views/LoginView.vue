@@ -22,6 +22,7 @@ import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { webUrl } from '@/config'
 import { normalizeBrand } from '@/lib/brand'
 import { ApiError } from '@/lib/http'
+import { appCapabilities } from '@/lib/platform-capabilities'
 import { completeLogin, reloadSettings, session } from '@/stores/session'
 
 const router = useRouter()
@@ -60,6 +61,7 @@ interface OAuthProvider {
 }
 
 const oauthProviders = computed<OAuthProvider[]>(() => {
+  if (appCapabilities.mobile) return []
   const value = settings.value
   if (!value) return []
 

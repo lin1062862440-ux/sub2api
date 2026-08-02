@@ -35,6 +35,8 @@ export class ApiError extends Error {
 
 type Listener = () => void
 const unauthorizedListeners = new Set<Listener>()
+const adminAccessDeniedListeners = new Set<Listener>()
+const userGroupAccessDeniedListeners = new Set<Listener>()
 
 /** Notified when the session is gone for good and the UI must return to login. */
 export function onUnauthorized(listener: Listener): () => void {
@@ -42,8 +44,28 @@ export function onUnauthorized(listener: Listener): () => void {
   return () => unauthorizedListeners.delete(listener)
 }
 
+/** Notified when the backend no longer accepts the current user as an administrator. */
+export function onAdminAccessDenied(listener: Listener): () => void {
+  adminAccessDeniedListeners.add(listener)
+  return () => adminAccessDeniedListeners.delete(listener)
+}
+
+/** Notified when the current user can no longer access the user group workspace. */
+export function onUserGroupAccessDenied(listener: Listener): () => void {
+  userGroupAccessDeniedListeners.add(listener)
+  return () => userGroupAccessDeniedListeners.delete(listener)
+}
+
 function emitUnauthorized(): void {
   unauthorizedListeners.forEach((listener) => listener())
+}
+
+function emitAdminAccessDenied(): void {
+  adminAccessDeniedListeners.forEach((listener) => listener())
+}
+
+function emitUserGroupAccessDenied(): void {
+  userGroupAccessDeniedListeners.forEach((listener) => listener())
 }
 
 export interface RequestOptions {
@@ -123,7 +145,7 @@ async function refreshAccessToken(): Promise<string | null> {
   return refreshInFlight
 }
 
-async function send<T>(path: string, options: RequestOptions, retrying = false): Promise<T> {
+async function request(path: string, options: RequestOptions, retrying = false): Promise<Response> {
   const method = options.method ?? 'GET'
   const query = { ...options.query }
   // The backend uses the timezone to pick default date ranges on GET endpoints.
@@ -162,12 +184,26 @@ async function send<T>(path: string, options: RequestOptions, retrying = false):
   if (response.status === 401 && !options.anonymous && !retrying) {
     const token = await refreshAccessToken()
     if (token) {
-      return send<T>(path, options, true)
+      return request(path, options, true)
     }
     await clearSession()
     emitUnauthorized()
     throw new ApiError({ status: 401, code: 'UNAUTHORIZED', message: '登录已过期，请重新登录' })
   }
+
+  if (response.status === 403 && path.startsWith('/admin/')) {
+    emitAdminAccessDenied()
+  }
+
+  if (response.status === 403 && (path === '/user-groups' || path.startsWith('/user-groups/'))) {
+    emitUserGroupAccessDenied()
+  }
+
+  return response
+}
+
+async function send<T>(path: string, options: RequestOptions): Promise<T> {
+  const response = await request(path, options)
 
   // Any non-JSON body (an HTML error page from a proxy, for example) surfaces
   // as a plain status error rather than a parse crash.
@@ -207,6 +243,21 @@ async function send<T>(path: string, options: RequestOptions, retrying = false):
   return payload as T
 }
 
+async function sendText(path: string, options: RequestOptions): Promise<string> {
+  const response = await request(path, options)
+  if (!response.ok) {
+    let message = `请求失败 (HTTP ${response.status})`
+    try {
+      const payload = JSON.parse(await response.text()) as Partial<ApiEnvelope<unknown>>
+      if (payload?.message) message = payload.message
+    } catch {
+      // Preserve the status fallback for non-JSON proxy and server errors.
+    }
+    throw new ApiError({ status: response.status, code: response.status, message })
+  }
+  return response.text()
+}
+
 export const http = {
   get: <T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     send<T>(path, { ...options, method: 'GET' }),
@@ -216,4 +267,8 @@ export const http = {
     send<T>(path, { ...options, method: 'PUT', body }),
   delete: <T>(path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
     send<T>(path, { ...options, method: 'DELETE' }),
+  getText: (path: string, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
+    sendText(path, { ...options, method: 'GET' }),
+  postText: (path: string, body?: unknown, options: Omit<RequestOptions, 'method' | 'body'> = {}) =>
+    sendText(path, { ...options, method: 'POST', body }),
 }

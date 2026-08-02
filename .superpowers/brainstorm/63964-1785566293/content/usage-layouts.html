@@ -1,0 +1,99 @@
+<style>
+  .layout-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:22px; }
+  .layout-card { overflow:hidden; cursor:pointer; border:1px solid #dfe5ee; border-radius:12px; background:#fff; transition:180ms ease; }
+  .layout-card:hover { transform:translateY(-2px); border-color:#9bb9f6; }
+  .layout-card.selected { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.14); }
+  .preview { height:390px; padding:12px; overflow:hidden; background:#f4f7fb; color:#171b24; font-family:ui-sans-serif,system-ui,-apple-system,sans-serif; }
+  .app { display:grid; grid-template-columns:54px 1fr; height:100%; overflow:hidden; border:1px solid #dce4ef; border-radius:8px; background:#f4f7fb; }
+  .side { padding:12px 8px; background:#edf2f7; border-right:1px solid #dfe5ee; }
+  .logo { width:18px; height:18px; margin:0 auto 22px; border-radius:5px; background:#2563eb; }
+  .nav { height:20px; margin:7px 0; border-radius:4px; background:#dfe7f2; }
+  .nav.on { background:#fff; box-shadow:0 1px 3px rgba(25,45,75,.08); }
+  .main { display:flex; min-width:0; flex-direction:column; gap:8px; padding:12px; }
+  .top { display:flex; align-items:center; justify-content:space-between; }
+  .title { font-size:12px; font-weight:700; }
+  .range { display:flex; gap:3px; padding:3px; border:1px solid #d5deea; border-radius:5px; background:#e9eef5; }
+  .range i { width:23px; height:9px; border-radius:3px; background:#fff; }
+  .metrics { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .metric { height:38px; padding:6px 7px; border:1px solid #dfe5ee; border-radius:6px; background:#fff; }
+  .metric span { display:block; width:62%; height:5px; margin-bottom:6px; border-radius:3px; background:#b9c5d6; }
+  .metric b { display:block; width:45%; height:8px; border-radius:3px; background:#2563eb; }
+  .panel { min-width:0; padding:9px; border:1px solid #dfe5ee; border-radius:7px; background:#fff; }
+  .panel-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+  .panel-head b { width:62px; height:7px; border-radius:3px; background:#46556a; }
+  .panel-head i { width:34px; height:6px; border-radius:3px; background:#c3cddd; }
+  .chart { position:relative; height:92px; overflow:hidden; background:repeating-linear-gradient(to bottom,transparent 0,transparent 29px,#e5eaf2 30px); }
+  .chart::before { position:absolute; right:4px; bottom:14px; left:4px; height:48px; background:linear-gradient(155deg,transparent 0 18%,rgba(37,99,235,.13) 19% 100%); clip-path:polygon(0 85%,18% 50%,38% 64%,58% 18%,78% 38%,100% 5%,100% 100%,0 100%); content:''; }
+  .chart::after { position:absolute; right:4px; bottom:14px; left:4px; height:48px; border-top:2px solid #2563eb; clip-path:polygon(0 85%,18% 50%,38% 64%,58% 18%,78% 38%,100% 5%,100% 11%,78% 44%,58% 24%,38% 70%,18% 56%,0 91%); content:''; }
+  .workspace { display:grid; min-height:0; flex:1; grid-template-columns:1.5fr .75fr; gap:7px; }
+  .stack { display:grid; min-height:0; grid-template-rows:1fr 1fr; gap:7px; }
+  .bars { display:flex; height:100%; flex-direction:column; justify-content:center; gap:8px; }
+  .bars i { display:block; height:6px; border-radius:3px; background:#dce4ef; }
+  .bars i::after { display:block; width:var(--w); height:100%; border-radius:inherit; background:#2563eb; content:''; }
+  .table { display:grid; gap:5px; }
+  .row { display:grid; height:12px; grid-template-columns:1.2fr 1fr .6fr .5fr; gap:6px; align-items:center; border-bottom:1px solid #edf1f6; }
+  .row i { height:4px; border-radius:2px; background:#c5cfdd; }
+  .matrix { display:grid; min-height:0; flex:1; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; gap:7px; }
+  .donut { width:54px; height:54px; margin:13px auto 0; border:10px solid #2563eb; border-right-color:#17a398; border-bottom-color:#ff7a63; border-radius:50%; }
+  .filter { display:flex; gap:5px; padding:7px; border:1px solid #dfe5ee; border-radius:7px; background:#fff; }
+  .filter i { width:62px; height:18px; border:1px solid #d5deea; border-radius:4px; background:#fafcff; }
+  .record-main { display:grid; min-height:0; flex:1; grid-template-rows:72px 1fr; gap:7px; }
+  .spark { display:grid; grid-template-columns:1fr 1.2fr; gap:7px; }
+  .big-table { padding:9px; }
+  .big-table .row { height:19px; grid-template-columns:.7fr 1.2fr .8fr .65fr .55fr; }
+  .choice-copy { padding:14px 15px 16px; }
+  .choice-copy h3 { margin:0 0 5px; font-size:15px; }
+  .choice-copy p { margin:0; color:#667085; font-size:12px; line-height:1.55; }
+  .badge { display:inline-flex; margin-bottom:8px; padding:3px 7px; border-radius:4px; background:#e5edff; color:#1d4ed8; font-size:10px; font-weight:700; }
+  @media (max-width:1000px) { .layout-grid { grid-template-columns:1fr; } }
+</style>
+
+<h2>使用记录：选择信息结构</h2>
+<p class="subtitle">三种方案都调用现有真实接口。点击你更喜欢的一种，重点看图表占比和明细记录的位置。</p>
+
+<div class="layout-grid">
+  <div class="layout-card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="app">
+        <div class="side"><div class="logo"></div><div class="nav"></div><div class="nav on"></div><div class="nav"></div></div>
+        <div class="main">
+          <div class="top"><div class="title">使用记录</div><div class="range"><i></i><i></i><i></i></div></div>
+          <div class="metrics"><div class="metric"><span></span><b></b></div><div class="metric"><span></span><b></b></div><div class="metric"><span></span><b></b></div><div class="metric"><span></span><b></b></div></div>
+          <div class="workspace">
+            <div class="panel"><div class="panel-head"><b></b><i></i></div><div class="chart"></div><div class="table" style="margin-top:8px"><div class="row"><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i></div></div></div>
+            <div class="stack"><div class="panel"><div class="panel-head"><b></b><i></i></div><div class="bars"><i style="--w:78%"></i><i style="--w:52%"></i><i style="--w:31%"></i></div></div><div class="panel"><div class="panel-head"><b></b><i></i></div><div class="bars"><i style="--w:66%"></i><i style="--w:44%"></i><i style="--w:24%"></i></div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="choice-copy"><span class="badge">推荐</span><h3>A. 分析工作台</h3><p>趋势图为主，模型与分组排行在右侧，最近记录融入主面板下方。一屏信息完整，密度最接近当前仪表盘。</p></div>
+  </div>
+
+  <div class="layout-card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="app">
+        <div class="side"><div class="logo"></div><div class="nav"></div><div class="nav on"></div><div class="nav"></div></div>
+        <div class="main">
+          <div class="top"><div class="title">使用记录</div><div class="range"><i></i><i></i><i></i></div></div>
+          <div class="metrics"><div class="metric"><span></span><b></b></div><div class="metric"><span></span><b></b></div><div class="metric"><span></span><b></b></div><div class="metric"><span></span><b></b></div></div>
+          <div class="matrix"><div class="panel"><div class="panel-head"><b></b><i></i></div><div class="donut"></div></div><div class="panel"><div class="panel-head"><b></b><i></i></div><div class="bars"><i style="--w:80%"></i><i style="--w:55%"></i><i style="--w:34%"></i></div></div><div class="panel"><div class="panel-head"><b></b><i></i></div><div class="bars"><i style="--w:72%"></i><i style="--w:46%"></i><i style="--w:28%"></i></div></div><div class="panel"><div class="panel-head"><b></b><i></i></div><div class="chart" style="height:74px"></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="choice-copy"><h3>B. 图表矩阵</h3><p>延续 H5 的模型、分组、端点、趋势四块结构，图表覆盖最全，但明细记录需要继续向下滚动。</p></div>
+  </div>
+
+  <div class="layout-card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="app">
+        <div class="side"><div class="logo"></div><div class="nav"></div><div class="nav on"></div><div class="nav"></div></div>
+        <div class="main">
+          <div class="top"><div class="title">使用记录</div><div class="range"><i></i><i></i><i></i></div></div>
+          <div class="filter"><i></i><i></i><i></i><i></i></div>
+          <div class="record-main"><div class="spark"><div class="panel"><div class="panel-head"><b></b><i></i></div><div class="bars"><i style="--w:70%"></i><i style="--w:42%"></i></div></div><div class="panel"><div class="chart" style="height:50px"></div></div></div><div class="panel big-table"><div class="panel-head"><b></b><i></i></div><div class="table"><div class="row"><i></i><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i><i></i></div><div class="row"><i></i><i></i><i></i><i></i><i></i></div></div></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="choice-copy"><h3>C. 记录优先</h3><p>筛选器和明细表占据核心区域，只保留小型趋势与摘要。查询具体请求最快，但分析感和视觉表现较弱。</p></div>
+  </div>
+</div>

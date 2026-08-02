@@ -34,6 +34,25 @@ export default defineConfig(({ mode }) => {
                 find: /^@\/features\/usage-display\/core\/host$/,
                 replacement: fileURLToPath(new URL('./src/test/visual/usage-display-host.ts', import.meta.url)),
               },
+              {
+                find: /^@\/api\/user-groups$/,
+                replacement: fileURLToPath(new URL('./src/test/visual/user-groups.ts', import.meta.url)),
+              },
+              ...[
+                'dashboard',
+                'accounts',
+                'users',
+                'groups',
+                'usage',
+                'channel-monitors',
+                'audit',
+                'subscriptions',
+                'redeem',
+                'announcements',
+              ].map((module) => ({
+                find: new RegExp(`^@/api/admin/${module}$`),
+                replacement: fileURLToPath(new URL('./src/test/visual/admin-api.ts', import.meta.url)),
+              })),
             ]
           : []),
         { find: '@', replacement: sourceDirectory },

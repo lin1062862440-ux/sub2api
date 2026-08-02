@@ -2,6 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions for the LinAI desktop client",
+  "platforms": ["macOS", "windows", "linux"],
   "windows": [
     "main",
     "usage-popover",
@@ -14,6 +15,7 @@
     "store:default",
     "os:default",
     "opener:allow-open-url",
+    "opener:allow-default-urls",
     {
       "identifier": "http:default",
       "allow": [

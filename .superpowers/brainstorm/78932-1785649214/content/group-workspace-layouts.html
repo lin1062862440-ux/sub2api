@@ -1,0 +1,90 @@
+<style>
+  .layout-grid { display:grid; gap:20px; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); }
+  .layout-card { border:1px solid #d9e1e7; border-radius:12px; overflow:hidden; background:#fff; cursor:pointer; transition:border-color .18s ease, box-shadow .18s ease; }
+  .layout-card:hover { border-color:#0f9d90; }
+  .layout-card.selected { border-color:#0f9d90; box-shadow:0 0 0 2px rgba(15,157,144,.14); }
+  .layout-card-header { padding:16px 18px 14px; border-bottom:1px solid #e8edf1; display:flex; gap:12px; align-items:flex-start; }
+  .layout-letter { width:28px; height:28px; flex:0 0 auto; display:grid; place-items:center; border-radius:7px; background:#e8f7f5; color:#087d73; font-weight:700; }
+  .layout-card h3 { margin:0; font-size:16px; color:#17212b; }
+  .layout-card p { margin:5px 0 0; color:#5f6f7d; font-size:13px; line-height:1.55; }
+  .wire { height:305px; display:grid; grid-template-columns:72px 1fr; background:#f4f7f8; color:#53616d; font-size:10px; }
+  .wire-sidebar { padding:12px 8px; border-right:1px solid #dde5e9; background:#fff; }
+  .wire-logo { height:21px; border-radius:5px; background:#eef2f4; margin-bottom:14px; }
+  .wire-nav { padding:6px 7px; border-radius:5px; margin-bottom:5px; white-space:nowrap; }
+  .wire-nav.active { color:#087d73; background:#e8f7f5; font-weight:650; }
+  .wire-main { min-width:0; padding:14px; }
+  .wire-title { width:95px; height:13px; border-radius:3px; background:#24323e; margin-bottom:6px; }
+  .wire-subtitle { width:155px; height:7px; border-radius:3px; background:#b4c0c8; }
+  .wire-toolbar { display:flex; justify-content:space-between; align-items:center; margin:13px 0 10px; }
+  .wire-select { width:120px; height:25px; border:1px solid #cbd5dc; background:#fff; border-radius:5px; }
+  .wire-button { width:64px; height:25px; background:#0f9d90; border-radius:5px; }
+  .wire-tabs { display:flex; gap:18px; height:28px; border-bottom:1px solid #dbe3e7; margin-bottom:10px; }
+  .wire-tab { padding:5px 1px 7px; }
+  .wire-tab.active { color:#087d73; border-bottom:2px solid #0f9d90; font-weight:650; }
+  .wire-table { border:1px solid #dce4e8; border-radius:7px; overflow:hidden; background:#fff; }
+  .wire-row { height:31px; display:grid; grid-template-columns:1.4fr .55fr .55fr .7fr; align-items:center; padding:0 10px; border-top:1px solid #edf1f3; }
+  .wire-row:first-child { border-top:0; background:#f8fafb; color:#778590; }
+  .wire-row.selected-row { background:#eefaf8; }
+  .wire-section { border:1px solid #dce4e8; border-radius:7px; background:#fff; padding:10px; margin-top:10px; }
+  .wire-section-title { width:84px; height:9px; background:#475966; border-radius:3px; margin-bottom:9px; }
+  .wire-member { display:flex; gap:8px; align-items:center; padding:6px 0; border-top:1px solid #eef2f4; }
+  .wire-avatar { width:18px; height:18px; border-radius:50%; background:#d4e2e6; }
+  .wire-line { height:6px; width:74px; border-radius:3px; background:#aebbc3; }
+  .wire-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:7px; margin-bottom:10px; }
+  .wire-stat { height:48px; padding:8px; background:#fff; border-bottom:2px solid #dce5e8; }
+  .wire-stat strong { display:block; margin-top:6px; color:#263743; font-size:14px; }
+  @media (max-width:760px) { .layout-grid{grid-template-columns:1fr}.wire{height:285px}.layout-card{min-width:0} }
+</style>
+
+<h2>用户组功能应该怎样组织？</h2>
+<p class="subtitle">三种方案都取消当前失衡的左右栏。重点比较侧边导航、组选择和三个页面之间的连续性。</p>
+
+<div class="layout-grid">
+  <div class="layout-card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="layout-card-header">
+      <div class="layout-letter">A</div>
+      <div><h3>单入口组工作区（推荐）</h3><p>侧边栏只保留“用户组”。页面内用“组列表 / 成员订阅 / 用量”标签切换，组上下文始终可见。</p></div>
+    </div>
+    <div class="wire">
+      <div class="wire-sidebar"><div class="wire-logo"></div><div class="wire-nav">仪表盘</div><div class="wire-nav">用户管理</div><div class="wire-nav active">用户组</div><div class="wire-nav">分组管理</div><div class="wire-nav">订单管理</div></div>
+      <div class="wire-main">
+        <div class="wire-title"></div><div class="wire-subtitle"></div>
+        <div class="wire-toolbar"><div class="wire-select"></div><div class="wire-button"></div></div>
+        <div class="wire-tabs"><div class="wire-tab active">组列表</div><div class="wire-tab">成员订阅</div><div class="wire-tab">组用量</div></div>
+        <div class="wire-table"><div class="wire-row"><span>组名称</span><span>成员</span><span>权限</span><span>更新</span></div><div class="wire-row selected-row"><b>友财研发组</b><span>14</span><span>0</span><span>今天</span></div><div class="wire-row"><b>产品运营组</b><span>8</span><span>2</span><span>昨天</span></div></div>
+        <div class="wire-section"><div class="wire-section-title"></div><div class="wire-member"><div class="wire-avatar"></div><div class="wire-line"></div></div><div class="wire-member"><div class="wire-avatar"></div><div class="wire-line"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout-card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="layout-card-header">
+      <div class="layout-letter">B</div>
+      <div><h3>保留三菜单，统一页面骨架</h3><p>改动最小。三个菜单继续存在，但共享同一组选择器、页头、统计区与表格密度。</p></div>
+    </div>
+    <div class="wire">
+      <div class="wire-sidebar"><div class="wire-logo"></div><div class="wire-nav">用户管理</div><div class="wire-nav active">用户组</div><div class="wire-nav">组成员订阅</div><div class="wire-nav">组用量</div><div class="wire-nav">分组管理</div></div>
+      <div class="wire-main">
+        <div class="wire-title"></div><div class="wire-subtitle"></div>
+        <div class="wire-toolbar"><div class="wire-select"></div><div class="wire-button"></div></div>
+        <div class="wire-stats"><div class="wire-stat">成员<strong>14</strong></div><div class="wire-stat">查看者<strong>0</strong></div><div class="wire-stat">活跃订阅<strong>11</strong></div></div>
+        <div class="wire-table"><div class="wire-row"><span>成员</span><span>状态</span><span>余额</span><span>加入</span></div><div class="wire-row"><b>Lin</b><span>正常</span><span>$84</span><span>今天</span></div><div class="wire-row"><b>Chen</b><span>正常</span><span>$32</span><span>昨天</span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="layout-card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="layout-card-header">
+      <div class="layout-letter">C</div>
+      <div><h3>纵向主从管理台</h3><p>保留当前路由，在用户组页把全宽组表放上方，选中组的成员和权限在下方展开。</p></div>
+    </div>
+    <div class="wire">
+      <div class="wire-sidebar"><div class="wire-logo"></div><div class="wire-nav">用户管理</div><div class="wire-nav active">用户组</div><div class="wire-nav">组成员订阅</div><div class="wire-nav">组用量</div><div class="wire-nav">分组管理</div></div>
+      <div class="wire-main">
+        <div class="wire-toolbar"><div><div class="wire-title"></div><div class="wire-subtitle"></div></div><div class="wire-button"></div></div>
+        <div class="wire-table"><div class="wire-row"><span>组名称</span><span>成员</span><span>权限</span><span>更新</span></div><div class="wire-row selected-row"><b>友财研发组</b><span>14</span><span>0</span><span>今天</span></div></div>
+        <div class="wire-section"><div style="display:flex;justify-content:space-between"><div class="wire-section-title"></div><div class="wire-select" style="width:90px;height:20px"></div></div><div class="wire-member"><div class="wire-avatar"></div><div class="wire-line"></div></div><div class="wire-member"><div class="wire-avatar"></div><div class="wire-line"></div></div><div class="wire-member"><div class="wire-avatar"></div><div class="wire-line"></div></div></div>
+      </div>
+    </div>
+  </div>
+</div>

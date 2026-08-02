@@ -51,6 +51,44 @@ func TestUserGroupRepositoryGetByIDExcludesDeletedPeopleFromCounts(t *testing.T)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
+func TestUserGroupRepositoryListMembersReadsAvatarFromUserAvatars(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	now := time.Now().UTC()
+	mock.ExpectQuery(`(?s)FROM user_group_members ugm.*LEFT JOIN user_avatars ua ON ua\.user_id = u\.id`).
+		WithArgs(int64(5)).
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "email", "username", "avatar_url", "status", "balance", "joined_at"}).
+			AddRow(7, "member@example.com", "Member", "https://cdn.example.com/member.png", "active", 12.5, now))
+
+	repo := NewUserGroupRepository(db)
+	members, err := repo.ListMembers(context.Background(), 5)
+	require.NoError(t, err)
+	require.Len(t, members, 1)
+	require.Equal(t, "https://cdn.example.com/member.png", members[0].AvatarURL)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserGroupRepositoryListViewersReadsAvatarFromUserAvatars(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	now := time.Now().UTC()
+	mock.ExpectQuery(`(?s)FROM user_group_viewer_grants ugvg.*LEFT JOIN user_avatars ua ON ua\.user_id = u\.id`).
+		WithArgs(int64(5)).
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "email", "username", "avatar_url", "status", "granted_at"}).
+			AddRow(8, "viewer@example.com", "Viewer", "https://cdn.example.com/viewer.png", "active", now))
+
+	repo := NewUserGroupRepository(db)
+	viewers, err := repo.ListViewers(context.Background(), 5)
+	require.NoError(t, err)
+	require.Len(t, viewers, 1)
+	require.Equal(t, "https://cdn.example.com/viewer.png", viewers[0].AvatarURL)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestUserGroupRepositoryReplaceMembersIsAtomic(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -89,7 +127,7 @@ func TestUserGroupRepositorySubscriptionsKeepMembersWithoutSubscription(t *testi
 	mock.ExpectQuery("COUNT\\(\\*\\).*FROM user_group_members ugm").
 		WithArgs(int64(5)).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
-	mock.ExpectQuery("LEFT JOIN user_subscriptions us").
+	mock.ExpectQuery(`(?s)LEFT JOIN user_avatars ua ON ua\.user_id = u\.id.*LEFT JOIN user_subscriptions us`).
 		WithArgs(int64(5), 20, 0).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"user_id", "email", "username", "avatar_url", "user_status", "balance", "joined_at",

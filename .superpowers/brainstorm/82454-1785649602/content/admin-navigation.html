@@ -1,0 +1,92 @@
+<style>
+  .nav-cards { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:22px; }
+  .nav-choice { overflow:hidden; border:1px solid #dce4ef; border-radius:12px; background:#fff; cursor:pointer; transition:.18s ease; }
+  .nav-choice:hover { border-color:#8aa9db; transform:translateY(-2px); box-shadow:0 12px 28px rgba(39,63,96,.1); }
+  .nav-choice.selected { border-color:#3975d5; box-shadow:0 0 0 3px rgba(57,117,213,.13); }
+  .choice-head { display:flex; align-items:center; gap:10px; padding:15px 16px; border-bottom:1px solid #e7edf5; }
+  .choice-letter { display:grid; width:28px; height:28px; border-radius:7px; background:#eaf1ff; color:#245eb8; font-weight:800; place-items:center; }
+  .choice-head h3 { margin:0; font-size:15px; }
+  .recommended { margin-left:auto; padding:3px 7px; border-radius:999px; background:#eaf8f3; color:#087f5b; font-size:11px; font-weight:700; }
+  .app-frame { display:grid; height:390px; grid-template-columns:112px 1fr; background:#f4f7fb; }
+  .mini-rail { display:flex; min-width:0; flex-direction:column; gap:5px; padding:12px 8px; background:#eef3f9; border-right:1px solid #dce4ef; }
+  .brand { padding:4px 7px 10px; font-size:12px; font-weight:800; color:#1d3557; }
+  .switch { display:grid; grid-template-columns:1fr 1fr; gap:2px; margin-bottom:8px; padding:3px; background:#dde6f2; border-radius:7px; font-size:9px; text-align:center; }
+  .switch span { padding:5px 2px; border-radius:5px; color:#718096; }
+  .switch .active { background:white; color:#2563b8; box-shadow:0 1px 4px rgba(34,56,84,.1); font-weight:700; }
+  .label { margin:8px 7px 3px; color:#94a0b1; font-size:8px; font-weight:800; letter-spacing:.08em; }
+  .nav-row { display:flex; min-height:27px; align-items:center; gap:6px; padding:0 7px; border-radius:6px; color:#627188; font-size:9px; white-space:nowrap; }
+  .nav-row::before { width:6px; height:6px; background:#9cabc0; border-radius:2px; content:''; }
+  .nav-row.active { background:#fff; color:#245eb8; box-shadow:0 2px 7px rgba(42,66,99,.08); font-weight:700; }
+  .nav-row.active::before { background:#3975d5; }
+  .mini-content { min-width:0; padding:18px; }
+  .topline { display:flex; align-items:center; justify-content:space-between; }
+  .topline strong { color:#26364d; font-size:15px; }
+  .topline span { padding:5px 8px; border:1px solid #d8e1ec; border-radius:6px; background:#fff; color:#65748a; font-size:9px; }
+  .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:14px; }
+  .metric { height:54px; padding:9px; background:#fff; border:1px solid #e0e7f0; border-radius:8px; }
+  .metric i { display:block; width:45%; height:6px; background:#d9e2ef; border-radius:3px; }
+  .metric b { display:block; width:65%; height:10px; margin-top:9px; background:#8299b7; border-radius:4px; }
+  .workspace { display:grid; grid-template-columns:1.4fr .8fr; gap:8px; margin-top:8px; }
+  .panel { min-height:212px; padding:10px; background:#fff; border:1px solid #e0e7f0; border-radius:8px; }
+  .panel-title { width:42%; height:7px; background:#8193aa; border-radius:4px; }
+  .line { height:28px; margin-top:9px; background:#f0f3f7; border-radius:5px; }
+  .hub-frame { grid-template-columns:82px 1fr; }
+  .hub-layout { display:grid; grid-template-columns:104px 1fr; gap:10px; margin-top:14px; }
+  .subnav { padding:8px; background:#fff; border:1px solid #e0e7f0; border-radius:8px; }
+  .subnav .nav-row { min-height:25px; }
+  .choice-copy { min-height:94px; padding:14px 16px 16px; }
+  .choice-copy p { margin:0; color:#66768c; font-size:12px; line-height:1.55; }
+  .choice-copy strong { display:block; margin-top:8px; color:#34445b; font-size:12px; }
+  @media (max-width:1000px) { .nav-cards { grid-template-columns:1fr; } .app-frame { height:350px; } }
+</style>
+
+<h2>管理员菜单如何进入桌面客户端？</h2>
+<p class="subtitle">三种方案都包含：管理概览、账号、用户、全站用量、渠道监控、审计、订阅、兑换码、公告。</p>
+
+<div class="nav-cards">
+  <div class="nav-choice" data-choice="a" onclick="toggleSelect(this)">
+    <div class="choice-head"><span class="choice-letter">A</span><h3>个人 / 管理模式切换</h3><span class="recommended">推荐</span></div>
+    <div class="app-frame">
+      <aside class="mini-rail">
+        <div class="brand">LinAI</div>
+        <div class="switch"><span>个人</span><span class="active">管理</span></div>
+        <div class="nav-row active">管理概览</div><div class="nav-row">账号管理</div><div class="nav-row">用户管理</div><div class="nav-row">全站用量</div><div class="nav-row">渠道监控</div><div class="nav-row">审计日志</div>
+        <div class="label">运营</div><div class="nav-row">订阅管理</div><div class="nav-row">兑换码</div><div class="nav-row">公告管理</div>
+      </aside>
+      <main class="mini-content">
+        <div class="topline"><strong>管理概览</strong><span>刷新</span></div>
+        <div class="metrics"><div class="metric"><i/><b/></div><div class="metric"><i/><b/></div><div class="metric"><i/><b/></div></div>
+        <div class="workspace"><div class="panel"><div class="panel-title"/><div class="line"/><div class="line"/><div class="line"/></div><div class="panel"><div class="panel-title"/><div class="line"/><div class="line"/></div></div>
+      </main>
+    </div>
+    <div class="choice-copy"><p>侧栏顶部切换个人与管理空间，各自只显示相关菜单。窄窗口最清楚，也不会让普通用户功能被管理员菜单淹没。</p><strong>代价：管理员偶尔需要多点一次切换。</strong></div>
+  </div>
+
+  <div class="nav-choice" data-choice="b" onclick="toggleSelect(this)">
+    <div class="choice-head"><span class="choice-letter">B</span><h3>统一分组长侧栏</h3></div>
+    <div class="app-frame">
+      <aside class="mini-rail">
+        <div class="brand">LinAI</div><div class="label">个人</div><div class="nav-row">仪表盘</div><div class="nav-row">API 密钥</div><div class="nav-row">使用记录</div><div class="nav-row">我的订阅</div>
+        <div class="label">管理</div><div class="nav-row active">管理概览</div><div class="nav-row">账号管理</div><div class="nav-row">用户管理</div><div class="nav-row">全站用量</div><div class="nav-row">渠道监控</div><div class="nav-row">审计日志</div>
+        <div class="label">运营</div><div class="nav-row">订阅管理</div><div class="nav-row">兑换码</div><div class="nav-row">公告管理</div>
+      </aside>
+      <main class="mini-content"><div class="topline"><strong>管理概览</strong><span>刷新</span></div><div class="metrics"><div class="metric"><i/><b/></div><div class="metric"><i/><b/></div><div class="metric"><i/><b/></div></div><div class="workspace"><div class="panel"><div class="panel-title"/><div class="line"/><div class="line"/><div class="line"/></div><div class="panel"><div class="panel-title"/><div class="line"/><div class="line"/></div></div></main>
+    </div>
+    <div class="choice-copy"><p>所有功能一次展开，切换路径最短，但菜单会明显变长，小窗口必须滚动，个人与管理员语境容易混在一起。</p><strong>代价：侧栏密度最高，后续每加功能都会继续膨胀。</strong></div>
+  </div>
+
+  <div class="nav-choice" data-choice="c" onclick="toggleSelect(this)">
+    <div class="choice-head"><span class="choice-letter">C</span><h3>管理中心二级导航</h3></div>
+    <div class="app-frame hub-frame">
+      <aside class="mini-rail"><div class="brand">LinAI</div><div class="nav-row">仪表盘</div><div class="nav-row">API 密钥</div><div class="nav-row">使用记录</div><div class="nav-row active">管理中心</div></aside>
+      <main class="mini-content">
+        <div class="topline"><strong>管理中心</strong><span>返回个人空间</span></div>
+        <div class="hub-layout">
+          <div class="subnav"><div class="nav-row active">管理概览</div><div class="nav-row">账号</div><div class="nav-row">用户</div><div class="nav-row">用量</div><div class="nav-row">渠道</div><div class="nav-row">审计</div><div class="nav-row">订阅</div><div class="nav-row">兑换码</div><div class="nav-row">公告</div></div>
+          <div><div class="metrics"><div class="metric"><i/><b/></div><div class="metric"><i/><b/></div><div class="metric"><i/><b/></div></div><div class="panel" style="min-height:190px;margin-top:8px"><div class="panel-title"/><div class="line"/><div class="line"/><div class="line"/></div></div>
+        </div>
+      </main>
+    </div>
+    <div class="choice-copy"><p>主侧栏只保留一个“管理中心”，进入后使用二级侧栏。隔离彻底，但会占用更多横向空间，并形成两层导航。</p><strong>代价：结构最重，900px 最小窗口下内容区更窄。</strong></div>
+  </div>
+</div>

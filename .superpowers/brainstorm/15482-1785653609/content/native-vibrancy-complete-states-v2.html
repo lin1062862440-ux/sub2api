@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>苹果原生风：完整形态修正版</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+      color: #1f2530;
+    }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background: #e8edf3;
+    }
+    .page {
+      width: min(1160px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 30px 0 44px;
+    }
+    header { margin-bottom: 20px; }
+    h1 { margin: 0; font-size: 25px; font-weight: 720; letter-spacing: 0; }
+    header p { max-width: 820px; margin: 8px 0 0; color: #5d6875; font-size: 14px; line-height: 1.65; }
+    .option {
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid #d2dae4;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: border-color 160ms ease, box-shadow 160ms ease;
+    }
+    .option:hover { border-color: #94a7bd; }
+    .option.selected { border-color: #3477cf; box-shadow: 0 0 0 2px rgba(52, 119, 207, 0.16); }
+    .desktop {
+      position: relative;
+      min-height: 600px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(231, 240, 248, 0.12), rgba(16, 45, 69, 0.24)),
+        linear-gradient(136deg, #9bb8c6 0%, #d5dee0 47%, #769cad 100%);
+    }
+    .desktop::before {
+      position: absolute;
+      right: -80px;
+      bottom: -82px;
+      width: 600px;
+      height: 310px;
+      background: rgba(25, 61, 83, 0.25);
+      border-radius: 54% 0 0;
+      content: "";
+      transform: rotate(-7deg);
+    }
+    .desktop::after {
+      position: absolute;
+      bottom: -160px;
+      left: -50px;
+      width: 600px;
+      height: 400px;
+      background: rgba(236, 241, 241, 0.3);
+      border-radius: 50%;
+      content: "";
+    }
+    .menu-bar {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      height: 29px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      color: rgba(17, 23, 30, 0.88);
+      background: rgba(244, 247, 249, 0.56);
+      box-shadow: inset 0 -1px rgba(255, 255, 255, 0.38);
+      -webkit-backdrop-filter: blur(26px) saturate(1.22);
+      backdrop-filter: blur(26px) saturate(1.22);
+      font-size: 11px;
+      font-weight: 590;
+    }
+    .menu-left, .menu-right { display: flex; align-items: center; gap: 16px; }
+    .menu-left strong { font-size: 12px; }
+    .status-usage { display: inline-flex; align-items: center; gap: 5px; }
+    .status-ring {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(30, 38, 48, 0.22);
+      border-top-color: rgba(30, 38, 48, 0.8);
+      border-right-color: rgba(30, 38, 48, 0.8);
+      border-radius: 50%;
+      transform: rotate(25deg);
+    }
+    .status-usage span { transform: translateY(.2px); }
+    .stage-label {
+      position: absolute;
+      z-index: 5;
+      color: rgba(22, 29, 37, 0.56);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: 0;
+    }
+    .label-collapsed { top: 66px; left: 38px; }
+    .label-expanded { top: 168px; left: 38px; }
+    .label-popover { top: 66px; right: 38px; }
+    .native {
+      color: rgba(28, 34, 42, 0.9);
+      background: rgba(246, 248, 250, 0.52);
+      border: 1px solid rgba(255, 255, 255, 0.62);
+      box-shadow:
+        0 14px 34px rgba(30, 52, 69, 0.2),
+        inset 0 1px rgba(255, 255, 255, 0.52);
+      -webkit-backdrop-filter: blur(30px) saturate(1.28);
+      backdrop-filter: blur(30px) saturate(1.28);
+    }
+    .collapsed-row {
+      position: absolute;
+      z-index: 4;
+      top: 88px;
+      left: 38px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .orb {
+      display: grid;
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      place-items: center;
+    }
+    .orb strong, .capsule strong { display: flex; align-items: baseline; font-weight: 590; }
+    .orb strong { font-size: 17px; }
+    .orb small, .capsule small { margin-left: 1px; font-size: .48em; font-weight: 520; opacity: .7; }
+    .capsule {
+      display: flex;
+      width: 196px;
+      height: 44px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-radius: 22px;
+    }
+    .capsule span { color: rgba(28, 34, 42, 0.58); font-size: 11px; font-weight: 560; }
+    .capsule strong { font-size: 18px; }
+    .detail-card {
+      position: absolute;
+      z-index: 4;
+      width: 468px;
+      height: 276px;
+      padding: 22px 26px 18px;
+      border-radius: 23px;
+    }
+    .floating-detail { bottom: 42px; left: 38px; }
+    .popover-detail { top: 52px; right: 38px; }
+    .popover-detail::before {
+      position: absolute;
+      top: -8px;
+      right: 66px;
+      width: 16px;
+      height: 16px;
+      background: rgba(246, 248, 250, 0.68);
+      border-top: 1px solid rgba(255, 255, 255, 0.72);
+      border-left: 1px solid rgba(255, 255, 255, 0.72);
+      content: "";
+      transform: rotate(45deg);
+    }
+    .card-head { display: flex; align-items: flex-start; justify-content: space-between; }
+    .identity { display: grid; gap: 4px; }
+    .identity small { color: rgba(28, 34, 42, 0.58); font-size: 10px; font-weight: 700; }
+    .identity strong { font-size: 23px; font-weight: 650; }
+    .update { display: inline-flex; align-items: center; gap: 6px; margin-top: 3px; color: rgba(28, 34, 42, 0.5); font-size: 10px; }
+    .update i { width: 6px; height: 6px; background: #87984b; border-radius: 50%; }
+    .remaining { display: grid; justify-items: end; gap: 1px; }
+    .remaining span { color: rgba(28, 34, 42, 0.5); font-size: 10px; }
+    .remaining strong { display: flex; align-items: baseline; font-size: 27px; font-weight: 600; }
+    .remaining small { margin-left: 1px; font-size: 12px; font-weight: 520; opacity: .66; }
+    .quota-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 28px;
+      margin-top: 30px;
+    }
+    .quota { min-width: 0; }
+    .quota-title { display: flex; align-items: baseline; justify-content: space-between; font-size: 11px; }
+    .quota-title strong { font-weight: 650; }
+    .quota-title span { color: rgba(28, 34, 42, 0.66); font-size: 10px; }
+    .track { height: 7px; margin-top: 10px; overflow: hidden; background: rgba(36, 43, 51, 0.11); border-radius: 4px; }
+    .track i { display: block; height: 100%; background: rgba(207, 105, 94, 0.72); border-radius: inherit; }
+    .week i { width: 78%; }
+    .month i { width: 62%; }
+    .quota-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 7px; color: rgba(28, 34, 42, 0.48); font-size: 9px; white-space: nowrap; }
+    .card-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 31px;
+      padding-top: 12px;
+      border-top: 1px solid rgba(35, 42, 50, 0.08);
+      color: rgba(28, 34, 42, 0.48);
+      font-size: 9px;
+    }
+    .source { display: inline-flex; align-items: center; gap: 6px; }
+    .source i { width: 5px; height: 5px; background: rgba(28, 34, 42, 0.35); border-radius: 50%; }
+    .explain {
+      position: absolute;
+      z-index: 5;
+      right: 48px;
+      bottom: 46px;
+      width: 426px;
+      padding: 15px 17px;
+      background: rgba(25, 34, 42, 0.68);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      color: rgba(255, 255, 255, 0.86);
+      -webkit-backdrop-filter: blur(18px);
+      backdrop-filter: blur(18px);
+      font-size: 11px;
+      line-height: 1.65;
+    }
+    .body { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 18px 18px; }
+    .body h2 { margin: 0; font-size: 15px; font-weight: 700; }
+    .body p { margin: 5px 0 0; color: #687482; font-size: 12px; line-height: 1.5; }
+    .confirm { flex: 0 0 auto; padding: 7px 11px; color: #2c639f; background: #edf5ff; border-radius: 6px; font-size: 11px; font-weight: 680; }
+    @media (max-width: 980px) {
+      .desktop { min-height: 930px; }
+      .popover-detail { top: 190px; right: 50%; transform: translateX(50%); }
+      .floating-detail { bottom: 190px; left: 50%; transform: translateX(-50%); }
+      .label-popover { top: 170px; right: auto; left: 50%; transform: translateX(-50%); }
+      .label-expanded { top: auto; bottom: 475px; left: 50%; transform: translateX(-50%); }
+      .collapsed-row { left: 50%; transform: translateX(-50%); }
+      .label-collapsed { left: 50%; transform: translateX(-50%); }
+      .explain { right: 50%; bottom: 32px; transform: translateX(50%); }
+    }
+    @media (max-width: 560px) {
+      .page { width: min(100% - 20px, 1160px); padding-top: 18px; }
+      .desktop { min-height: 850px; }
+      .detail-card { width: calc(100% - 24px); height: auto; min-height: 276px; padding: 20px; }
+      .quota-grid { gap: 16px; }
+      .explain { width: calc(100% - 28px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header>
+      <h1>苹果原生风：完整形态修正版</h1>
+      <p>这是一套新增外观，不改变原有三套主题。菜单栏状态、悬浮球、系统胶囊继续存在；点击后改为示例图那种横向长卡片。</p>
+    </header>
+
+    <article class="option" data-choice="confirmed-native-complete" onclick="toggleSelect(this)">
+      <section class="desktop">
+        <div class="menu-bar">
+          <div class="menu-left"><strong>●</strong><span>LinAI</span></div>
+          <div class="menu-right"><span class="status-usage"><i class="status-ring"></i><span>78%</span></span><span>⌁</span><span>14:40</span></div>
+        </div>
+
+        <span class="stage-label label-collapsed">悬浮窗收起态（二选一）</span>
+        <div class="collapsed-row">
+          <div class="native orb"><strong>78<small>%</small></strong></div>
+          <div class="native capsule"><span>剩余额度</span><strong>78<small>%</small></strong></div>
+        </div>
+
+        <span class="stage-label label-popover">点击状态栏后的横向弹窗</span>
+        <section class="native detail-card popover-detail">
+          <div class="card-head">
+            <div class="identity"><small>LINAI · PRO</small><strong>45 订阅</strong><span class="update"><i></i>更新于 14:40</span></div>
+            <div class="remaining"><span>剩余额度</span><strong>78<small>%</small></strong></div>
+          </div>
+          <div class="quota-grid">
+            <div class="quota week"><div class="quota-title"><strong>周额度</strong><span>78%</span></div><div class="track"><i></i></div><div class="quota-meta"><span>$11.00 / $50.00</span><span>7 天后重置</span></div></div>
+            <div class="quota month"><div class="quota-title"><strong>月额度</strong><span>62%</span></div><div class="track"><i></i></div><div class="quota-meta"><span>$83.60 / $220.00</span><span>30 天后重置</span></div></div>
+          </div>
+          <div class="card-foot"><span class="source"><i></i>订阅组 · 45 订阅</span><span>有效期至 8 月 31 日</span></div>
+        </section>
+
+        <span class="stage-label label-expanded">悬浮球 / 胶囊点击后的横向展开态</span>
+        <section class="native detail-card floating-detail">
+          <div class="card-head">
+            <div class="identity"><small>LINAI · PRO</small><strong>45 订阅</strong><span class="update"><i></i>更新于 14:40</span></div>
+            <div class="remaining"><span>剩余额度</span><strong>78<small>%</small></strong></div>
+          </div>
+          <div class="quota-grid">
+            <div class="quota week"><div class="quota-title"><strong>周额度</strong><span>78%</span></div><div class="track"><i></i></div><div class="quota-meta"><span>$11.00 / $50.00</span><span>7 天后重置</span></div></div>
+            <div class="quota month"><div class="quota-title"><strong>月额度</strong><span>62%</span></div><div class="track"><i></i></div><div class="quota-meta"><span>$83.60 / $220.00</span><span>30 天后重置</span></div></div>
+          </div>
+          <div class="card-foot"><span class="source"><i></i>订阅组 · 45 订阅</span><span>有效期至 8 月 31 日</span></div>
+        </section>
+
+        <div class="explain">状态栏本身保持轻量的圆环 + 数值；点击状态栏，以及点击悬浮球或胶囊后，都展示横向详情。两者共享内容结构，但由各自独立的 macOS 窗口承载。</div>
+      </section>
+      <div class="body">
+        <div><h2>修正后的完整苹果原生风</h2><p>新增外观，不替代旧主题；展开态不再是正方形。</p></div>
+        <span class="confirm">点击确认这套形态</span>
+      </div>
+    </article>
+  </main>
+</body>
+</html>

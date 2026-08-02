@@ -73,15 +73,35 @@ async function run() {
     .png()
     .toBuffer()
 
+  const iconTileSize = 824
+  const iconTileRadius = 185
+  const iconTile = Buffer.from(`
+    <svg width="${iconTileSize}" height="${iconTileSize}" xmlns="http://www.w3.org/2000/svg">
+      <rect
+        x="1"
+        y="1"
+        width="${iconTileSize - 2}"
+        height="${iconTileSize - 2}"
+        rx="${iconTileRadius}"
+        fill="#FFFFFF"
+        stroke="#DCE5F3"
+        stroke-width="2"
+      />
+    </svg>
+  `)
+
   const appIcon = await sharp({
     create: {
       width: 1024,
       height: 1024,
       channels: 4,
-      background: '#FFFFFF',
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
     },
   })
-    .composite([{ input: compactMark, gravity: 'center' }])
+    .composite([
+      { input: iconTile, gravity: 'center' },
+      { input: compactMark, gravity: 'center' },
+    ])
     .png()
     .toBuffer()
 

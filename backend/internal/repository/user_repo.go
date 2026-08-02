@@ -576,6 +576,9 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 		outUsers = append(outUsers, *u)
 		userMap[u.ID] = &outUsers[len(outUsers)-1]
 	}
+	if err := r.loadUserAvatarURLs(ctx, userIDs, userMap); err != nil {
+		return nil, nil, err
+	}
 
 	shouldLoadSubscriptions := filters.IncludeSubscriptions == nil || *filters.IncludeSubscriptions
 	if shouldLoadSubscriptions {
@@ -609,6 +612,37 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 	}
 
 	return outUsers, paginationResultFromTotal(int64(total), params), nil
+}
+
+func (r *userRepository) loadUserAvatarURLs(ctx context.Context, userIDs []int64, users map[int64]*service.User) error {
+	if len(userIDs) == 0 {
+		return nil
+	}
+
+	exec, err := r.userProfileIdentitySQL(ctx)
+	if err != nil {
+		return err
+	}
+	rows, err := exec.QueryContext(ctx, `
+SELECT user_id, url
+FROM user_avatars
+WHERE user_id = ANY($1)`, pq.Array(userIDs))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+
+	for rows.Next() {
+		var userID int64
+		var avatarURL string
+		if err := rows.Scan(&userID, &avatarURL); err != nil {
+			return err
+		}
+		if user := users[userID]; user != nil {
+			user.AvatarURL = strings.TrimSpace(avatarURL)
+		}
+	}
+	return rows.Err()
 }
 
 func userListOrder(params pagination.PaginationParams) []func(*entsql.Selector) {

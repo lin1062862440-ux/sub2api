@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  mobile: false,
   login: vi.fn(),
   loginWith2FA: vi.fn(),
   completeLogin: vi.fn(),
@@ -41,6 +42,12 @@ vi.mock('@/lib/http', () => ({
   },
 }))
 
+vi.mock('@/lib/platform-capabilities', () => ({
+  appCapabilities: {
+    get mobile() { return mocks.mobile },
+  },
+}))
+
 import LoginView from './LoginView.vue'
 
 const settings = {
@@ -74,6 +81,7 @@ function mountLogin(options = {}) {
 describe('LoginView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.mobile = false
     mocks.session.offline = false
     mocks.session.settings = { ...settings }
   })
@@ -186,5 +194,25 @@ describe('LoginView', () => {
 
     expect(wrapper.find('.connection-status').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('暂时无法连接')
+  })
+
+  it('keeps credential login and hides OAuth providers on mobile', () => {
+    mocks.mobile = true
+    mocks.session.settings = {
+      ...settings,
+      linuxdo_oauth_enabled: true,
+      oidc_oauth_enabled: true,
+      oidc_oauth_provider_name: '企业 SSO',
+      github_oauth_enabled: true,
+      google_oauth_enabled: true,
+      wechat_oauth_enabled: true,
+      dingtalk_oauth_enabled: true,
+    }
+
+    const wrapper = mountLogin()
+
+    expect(wrapper.find('[data-testid="email-input"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="password-input"]').exists()).toBe(true)
+    expect(wrapper.find('.oauth-actions').exists()).toBe(false)
   })
 })

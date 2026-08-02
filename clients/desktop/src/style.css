@@ -242,6 +242,55 @@ button:disabled {
   .auth-shell__form-pane { min-height: 100%; padding: 58px 28px 36px; }
 }
 
+.page > .page-state {
+  display: grid;
+  min-height: 240px;
+  margin-top: 12px;
+  align-content: center;
+  justify-items: center;
+  gap: 7px;
+  background: white;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  color: var(--text-tertiary);
+}
+
+.page > .page-state strong { color: var(--text-primary); font-size: 14px; }
+.page > .page-state span { font-size: 12px; }
+.page > .page-state button {
+  margin-top: 5px;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: white;
+}
+
+.quota-panel .quota-head,
+.quota-panel .quota-row {
+  grid-template-columns: 82px repeat(3, minmax(58px, 1fr)) minmax(152px, 1.35fr);
+}
+
+.quota-panel .quota-usage {
+  display: grid;
+  gap: 3px;
+}
+
+.quota-panel .quota-usage > span {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.quota-panel .quota-usage small {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

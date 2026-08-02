@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinAI API 密钥</title>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.js"></script>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f4f7fb;
+      --rail: #edf3f9;
+      --surface: #ffffff;
+      --surface-soft: #f7f9fc;
+      --line: #dce5ef;
+      --line-strong: #cad7e5;
+      --text: #172033;
+      --muted: #6d7b8f;
+      --faint: #95a2b3;
+      --blue: #2468dd;
+      --blue-strong: #174fae;
+      --blue-soft: #e7efff;
+      --green: #087f5b;
+      --green-soft: #e5f5ef;
+      --amber: #a96900;
+      --amber-soft: #fff3d7;
+      --red: #c23a48;
+      --red-soft: #fff0f1;
+      --shadow: 0 10px 30px rgba(43, 66, 99, .07);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #dfe7f1; color: var(--text); }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+
+    .stage { min-height: 100vh; padding: 24px; }
+    .window {
+      display: grid;
+      width: min(1360px, calc(100vw - 48px));
+      height: min(860px, calc(100vh - 48px));
+      min-height: 720px;
+      grid-template-columns: 214px minmax(0, 1fr);
+      margin: 0 auto;
+      overflow: hidden;
+      background: var(--bg);
+      border: 1px solid rgba(174, 190, 209, .8);
+      border-radius: 14px;
+      box-shadow: 0 28px 70px rgba(38, 54, 77, .18);
+    }
+
+    .rail { display: flex; min-width: 0; flex-direction: column; background: var(--rail); border-right: 1px solid var(--line); }
+    .brand { display: flex; min-height: 94px; align-items: center; gap: 11px; padding: 28px 18px 18px; }
+    .brand-mark { position: relative; width: 34px; height: 34px; flex: 0 0 auto; }
+    .brand-mark::before, .brand-mark::after { position: absolute; background: #2167ec; border-radius: 4px; content: ""; }
+    .brand-mark::before { top: 4px; bottom: 4px; left: 7px; width: 8px; }
+    .brand-mark::after { right: 4px; bottom: 4px; left: 7px; height: 8px; }
+    .brand-copy { display: flex; flex-direction: column; line-height: 1.2; }
+    .brand-copy strong { font-size: 14px; }
+    .brand-copy span { margin-top: 2px; color: var(--faint); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; }
+    .nav { display: flex; flex-direction: column; gap: 4px; padding: 18px 12px; }
+    .nav-item { display: flex; min-height: 38px; align-items: center; gap: 10px; padding: 0 11px; border-radius: 7px; color: #607086; font-size: 13px; font-weight: 580; text-decoration: none; }
+    .nav-item svg { width: 17px; height: 17px; stroke-width: 1.8; }
+    .nav-item.active { background: var(--surface); box-shadow: 0 1px 5px rgba(25, 45, 75, .08); color: var(--blue); }
+    .account { margin-top: auto; padding: 14px 12px 16px; border-top: 1px solid var(--line); }
+    .account-main { display: flex; align-items: center; gap: 9px; padding: 3px; }
+    .avatar { display: grid; width: 32px; height: 32px; flex: 0 0 auto; background: #f6d6d6; border-radius: 7px; color: #8a3940; font-size: 13px; font-weight: 750; place-items: center; }
+    .account-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; }
+    .account-copy strong { font-size: 12px; }
+    .account-copy span { margin-top: 2px; color: var(--faint); font-size: 10px; }
+    .secure { display: flex; align-items: center; gap: 6px; margin: 8px 0 0 40px; color: var(--faint); font-size: 9px; }
+    .secure i { width: 5px; height: 5px; background: var(--green); border-radius: 50%; }
+
+    .content { min-width: 0; overflow-y: auto; }
+    .page { width: 100%; max-width: 1500px; margin: 0 auto; padding: 34px 30px 38px; }
+    .page-head { display: flex; min-height: 56px; align-items: flex-start; justify-content: space-between; gap: 24px; }
+    .page-head h1 { margin: 0; font-size: 27px; font-weight: 760; letter-spacing: 0; line-height: 1.16; }
+    .page-head p { margin: 8px 0 0; color: var(--muted); font-size: 13px; }
+    .primary-btn, .secondary-btn, .icon-btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; }
+    .primary-btn { min-height: 40px; gap: 8px; padding: 0 15px; background: var(--blue); border: 1px solid var(--blue); color: white; font-size: 13px; font-weight: 700; box-shadow: 0 7px 16px rgba(36, 104, 221, .18); }
+    .primary-btn:hover { background: var(--blue-strong); transform: translateY(-1px); }
+    .primary-btn:active { transform: scale(.98); }
+    .primary-btn svg, .secondary-btn svg, .icon-btn svg { width: 16px; height: 16px; stroke-width: 1.9; }
+
+    .overview {
+      display: grid;
+      min-height: 76px;
+      grid-template-columns: 1.15fr repeat(3, 1fr);
+      align-items: stretch;
+      margin-top: 20px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      animation: rise .55s cubic-bezier(.2, .8, .2, 1) both;
+    }
+    .overview-item { display: grid; grid-template-columns: 38px minmax(0, 1fr); grid-template-rows: 20px 26px; align-content: center; padding: 10px 18px; border-left: 1px solid var(--line); }
+    .overview-item:first-child { border-left: 0; }
+    .overview-icon { display: grid; width: 32px; height: 32px; grid-row: 1 / 3; align-self: center; background: var(--blue-soft); border-radius: 8px; color: var(--blue); place-items: center; }
+    .overview-icon.green { background: var(--green-soft); color: var(--green); }
+    .overview-icon.amber { background: var(--amber-soft); color: var(--amber); }
+    .overview-icon svg { width: 16px; height: 16px; }
+    .overview-item span { align-self: end; color: var(--muted); font-size: 10px; }
+    .overview-item strong { align-self: start; margin-top: 2px; overflow: hidden; font-size: 18px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+
+    .toolbar { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+    .search { position: relative; flex: 1; min-width: 220px; }
+    .search svg { position: absolute; top: 50%; left: 13px; width: 16px; height: 16px; color: var(--faint); transform: translateY(-50%); }
+    .search input, .select { width: 100%; height: 40px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; outline: 0; color: var(--text); font-size: 12px; }
+    .search input { padding: 0 13px 0 39px; }
+    .search input:focus, .select:focus { border-color: #8db0ee; box-shadow: 0 0 0 3px rgba(36, 104, 221, .1); }
+    .select-wrap { width: 132px; }
+    .select { padding: 0 30px 0 11px; }
+    .secondary-btn { height: 40px; gap: 7px; padding: 0 12px; background: var(--surface); border: 1px solid var(--line); color: var(--muted); font-size: 11px; font-weight: 650; white-space: nowrap; }
+    .secondary-btn:hover, .icon-btn:hover { border-color: #a9bdd7; color: var(--blue); }
+    .icon-btn { width: 40px; height: 40px; padding: 0; background: var(--surface); border: 1px solid var(--line); color: var(--muted); }
+
+    .key-panel { margin-top: 14px; overflow: hidden; background: var(--surface); border: 1px solid var(--line); border-radius: 11px; animation: rise .6s .06s cubic-bezier(.2, .8, .2, 1) both; }
+    .list-head { display: grid; min-height: 38px; grid-template-columns: minmax(260px, 1.45fr) minmax(160px, .85fr) minmax(185px, 1fr) minmax(150px, .8fr) 112px; align-items: center; gap: 14px; padding: 0 18px; background: #f8fafc; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 10px; }
+    .list-head span:last-child { text-align: right; }
+    .key-row { border-bottom: 1px solid var(--line); }
+    .key-row:last-child { border-bottom: 0; }
+    .row-main { display: grid; min-height: 96px; grid-template-columns: minmax(260px, 1.45fr) minmax(160px, .85fr) minmax(185px, 1fr) minmax(150px, .8fr) 112px; align-items: center; gap: 14px; padding: 13px 18px; transition: background .18s ease; }
+    .key-row:hover .row-main { background: #fbfcfe; }
+    .identity { display: grid; min-width: 0; grid-template-columns: 42px minmax(0, 1fr); grid-template-rows: 25px 28px; column-gap: 11px; align-content: center; }
+    .key-symbol { display: grid; width: 40px; height: 40px; grid-row: 1 / 3; align-self: center; background: var(--blue-soft); border-radius: 9px; color: var(--blue); place-items: center; }
+    .key-symbol svg { width: 19px; height: 19px; stroke-width: 1.8; }
+    .name-line { display: flex; min-width: 0; align-items: center; gap: 8px; }
+    .name-line strong { overflow: hidden; font-size: 13px; font-weight: 720; text-overflow: ellipsis; white-space: nowrap; }
+    .status { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 5px; padding: 3px 7px; background: var(--green-soft); border-radius: 999px; color: var(--green); font-size: 9px; font-weight: 700; }
+    .status::before { width: 5px; height: 5px; background: currentColor; border-radius: 50%; content: ""; }
+    .status.paused { background: #edf0f4; color: #758397; }
+    .secret-line { display: flex; min-width: 0; align-items: center; gap: 7px; }
+    .secret-line code { overflow: hidden; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .copy-btn { display: grid; width: 24px; height: 24px; flex: 0 0 auto; padding: 0; background: transparent; border: 0; border-radius: 5px; color: var(--faint); place-items: center; }
+    .copy-btn:hover { background: var(--blue-soft); color: var(--blue); }
+    .copy-btn svg { width: 14px; height: 14px; }
+    .group-cell { min-width: 0; }
+    .group-badge { display: inline-flex; max-width: 100%; align-items: center; gap: 7px; padding: 5px 8px; background: #f1f4f8; border-radius: 7px; color: #49586d; font-size: 10px; font-weight: 650; }
+    .provider-dot { display: grid; width: 18px; height: 18px; flex: 0 0 auto; background: #ffefe0; border-radius: 5px; color: #d95d0b; font-size: 9px; place-items: center; }
+    .provider-dot.openai { background: #dff6ec; color: var(--green); }
+    .group-meta { margin-top: 7px; color: var(--faint); font-size: 9px; }
+    .group-meta strong { color: var(--text); font-size: 11px; }
+
+    .usage-cell { min-width: 0; }
+    .usage-values { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .usage-values span { display: block; color: var(--faint); font-size: 9px; }
+    .usage-values strong { display: block; margin-top: 3px; font-size: 12px; }
+    .quota { margin-top: 8px; }
+    .quota-copy { display: flex; justify-content: space-between; color: var(--faint); font-size: 8px; }
+    .quota-line { height: 2px; margin-top: 5px; overflow: hidden; background: #e8edf3; border-radius: 2px; }
+    .quota-line i { display: block; width: var(--used); height: 100%; background: var(--blue); border-radius: inherit; }
+    .quota.unlimited .quota-line { display: none; }
+
+    .lifecycle { min-width: 0; }
+    .lifecycle div { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 10px; }
+    .lifecycle div + div { margin-top: 7px; color: var(--faint); }
+    .lifecycle svg { width: 13px; height: 13px; flex: 0 0 auto; }
+    .actions { display: flex; justify-content: flex-end; gap: 5px; }
+    .action-btn { display: grid; width: 30px; height: 30px; padding: 0; background: transparent; border: 1px solid transparent; border-radius: 7px; color: var(--muted); place-items: center; }
+    .action-btn:hover { background: var(--blue-soft); color: var(--blue); }
+    .action-btn.danger:hover { background: var(--red-soft); color: var(--red); }
+    .action-btn svg { width: 15px; height: 15px; }
+
+    .row-detail { display: none; grid-template-columns: 1.1fr 1fr 1fr; gap: 22px; padding: 15px 72px 18px; background: #f8fafc; border-top: 1px solid var(--line); }
+    .key-row.expanded .row-detail { display: grid; animation: detail-in .25s ease both; }
+    .detail-block h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 10px; color: var(--muted); font-size: 10px; font-weight: 700; }
+    .detail-block h4 svg { width: 13px; height: 13px; }
+    .detail-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+    .detail-metric { padding: 8px; background: white; border: 1px solid var(--line); border-radius: 7px; }
+    .detail-metric span { display: block; color: var(--faint); font-size: 8px; }
+    .detail-metric strong { display: block; margin-top: 4px; font-size: 10px; }
+    .security-line { display: flex; align-items: center; justify-content: space-between; min-height: 27px; color: var(--muted); font-size: 10px; }
+    .security-line strong { color: var(--text); font-size: 10px; }
+    .detail-action { display: flex; align-items: flex-start; justify-content: flex-end; }
+    .detail-action button { height: 32px; padding: 0 10px; background: white; border: 1px solid var(--line); border-radius: 7px; color: var(--muted); font-size: 10px; font-weight: 650; }
+
+    .pager { display: flex; align-items: center; justify-content: space-between; padding: 11px 18px; background: #fbfcfe; border-top: 1px solid var(--line); color: var(--faint); font-size: 10px; }
+    .pager-buttons { display: flex; gap: 5px; }
+    .page-btn { display: grid; width: 27px; height: 27px; padding: 0; background: white; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); font-size: 10px; place-items: center; }
+    .page-btn.active { background: var(--blue); border-color: var(--blue); color: white; }
+
+    .backdrop { position: fixed; z-index: 20; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; background: rgba(29, 42, 61, .26); backdrop-filter: blur(4px); }
+    .backdrop.open { display: flex; }
+    .dialog { width: min(610px, 100%); max-height: min(760px, calc(100vh - 48px)); overflow: hidden; background: rgba(255, 255, 255, .97); border: 1px solid rgba(255, 255, 255, .9); border-radius: 12px; box-shadow: 0 28px 70px rgba(25, 39, 59, .24); animation: dialog-in .28s cubic-bezier(.2, .8, .2, 1) both; }
+    .dialog-head { display: flex; min-height: 68px; align-items: center; justify-content: space-between; padding: 0 22px; border-bottom: 1px solid var(--line); }
+    .dialog-head h2 { margin: 0; font-size: 17px; }
+    .dialog-head p { margin: 4px 0 0; color: var(--faint); font-size: 10px; }
+    .dialog-close { display: grid; width: 32px; height: 32px; padding: 0; background: var(--surface-soft); border: 0; border-radius: 7px; color: var(--muted); place-items: center; }
+    .dialog-body { max-height: 590px; padding: 20px 22px; overflow-y: auto; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .field { display: grid; gap: 6px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: var(--muted); font-size: 10px; font-weight: 680; }
+    .field input, .field select { width: 100%; height: 42px; padding: 0 11px; background: var(--surface-soft); border: 1px solid var(--line); border-radius: 8px; outline: 0; color: var(--text); font-size: 12px; }
+    .field input:focus, .field select:focus { border-color: #8db0ee; box-shadow: 0 0 0 3px rgba(36, 104, 221, .1); }
+    .custom-expiry { display: none; padding: 12px; background: #f7faff; border: 1px solid #d9e6f8; border-radius: 9px; }
+    .custom-expiry.show { display: grid; animation: detail-in .2s ease both; }
+    .field-hint { color: var(--faint); font-size: 9px; line-height: 1.45; }
+    .advanced { margin-top: 18px; border: 1px solid var(--line); border-radius: 9px; }
+    .advanced summary { display: flex; min-height: 46px; align-items: center; justify-content: space-between; padding: 0 13px; color: var(--text); font-size: 11px; font-weight: 700; cursor: pointer; list-style: none; }
+    .advanced summary span { color: var(--faint); font-size: 9px; font-weight: 500; }
+    .advanced-content { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; padding: 0 13px 14px; }
+    .dialog-foot { display: flex; min-height: 66px; align-items: center; justify-content: flex-end; gap: 9px; padding: 0 22px; border-top: 1px solid var(--line); }
+
+    .toast { position: fixed; z-index: 30; right: 28px; bottom: 28px; display: flex; align-items: center; gap: 9px; padding: 10px 13px; background: #18334f; border-radius: 8px; box-shadow: var(--shadow); color: white; font-size: 11px; opacity: 0; pointer-events: none; transform: translateY(8px); transition: opacity .2s, transform .2s; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast svg { width: 15px; height: 15px; color: #7fe3bd; }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes detail-in { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes dialog-in { from { opacity: 0; transform: translateY(10px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+    @media (max-width: 1100px) {
+      .window { grid-template-columns: 190px minmax(0, 1fr); }
+      .list-head, .row-main { grid-template-columns: minmax(230px, 1.3fr) minmax(140px, .8fr) minmax(170px, 1fr) 110px; }
+      .list-head span:nth-child(4), .row-main > .lifecycle { display: none; }
+      .page { padding-right: 22px; padding-left: 22px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="window">
+      <aside class="rail">
+        <div class="brand"><span class="brand-mark"></span><div class="brand-copy"><strong>LinAI</strong><span>Desktop</span></div></div>
+        <nav class="nav">
+          <a class="nav-item" href="#"><i data-lucide="layout-dashboard"></i><span>仪表盘</span></a>
+          <a class="nav-item active" href="#"><i data-lucide="key-round"></i><span>API 密钥</span></a>
+          <a class="nav-item" href="#"><i data-lucide="chart-no-axes-combined"></i><span>使用记录</span></a>
+          <a class="nav-item" href="#"><i data-lucide="activity"></i><span>渠道状态</span></a>
+          <a class="nav-item" href="#"><i data-lucide="layers-3"></i><span>我的订阅</span></a>
+          <a class="nav-item" href="#"><i data-lucide="gift"></i><span>兑换</span></a>
+        </nav>
+        <div class="account"><div class="account-main"><span class="avatar">Lin</span><div class="account-copy"><strong>Lin</strong><span>管理员</span></div><i data-lucide="chevron-up" style="width:14px"></i></div><div class="secure"><i></i><span>已安全登录</span></div></div>
+      </aside>
+
+      <main class="content">
+        <div class="page">
+          <header class="page-head">
+            <div><h1>API 密钥</h1><p>管理应用访问凭证、调用范围和消费限制</p></div>
+            <button class="primary-btn" onclick="openDialog()"><i data-lucide="plus"></i><span>创建密钥</span></button>
+          </header>
+
+          <section class="overview">
+            <div class="overview-item"><span class="overview-icon"><i data-lucide="key-round"></i></span><span>全部密钥</span><strong>4</strong></div>
+            <div class="overview-item"><span class="overview-icon green"><i data-lucide="circle-check-big"></i></span><span>正在使用</span><strong>3</strong></div>
+            <div class="overview-item"><span class="overview-icon"><i data-lucide="wallet-cards"></i></span><span>今日消费</span><strong>$24.86</strong></div>
+            <div class="overview-item"><span class="overview-icon amber"><i data-lucide="gauge"></i></span><span>设置限制</span><strong>2</strong></div>
+          </section>
+
+          <div class="toolbar">
+            <label class="search"><i data-lucide="search"></i><input id="search" placeholder="搜索密钥名称或前缀" oninput="filterRows()" /></label>
+            <div class="select-wrap"><select class="select" id="groupFilter" onchange="filterRows()"><option value="">全部分组</option><option>Claude 通用</option><option>OpenAI 高速</option><option>Gemini 长文本</option></select></div>
+            <div class="select-wrap"><select class="select" id="statusFilter" onchange="filterRows()"><option value="">全部状态</option><option value="active">正在使用</option><option value="paused">已停用</option></select></div>
+            <button class="secondary-btn" onclick="showToast('API 地址已复制')"><i data-lucide="braces"></i><span>API 地址</span></button>
+            <button class="icon-btn" title="刷新" onclick="refreshMock()"><i data-lucide="refresh-cw" id="refreshIcon"></i></button>
+          </div>
+
+          <section class="key-panel">
+            <div class="list-head"><span>密钥</span><span>分组与并发</span><span>消费与配额</span><span>生命周期</span><span>操作</span></div>
+
+            <div class="key-row" data-name="production gateway sk-lin-a8f4" data-group="Claude 通用" data-status="active">
+              <div class="row-main">
+                <div class="identity"><span class="key-symbol"><i data-lucide="key-round"></i></span><div class="name-line"><strong>Production Gateway</strong><span class="status">正在使用</span></div><div class="secret-line"><code>sk-lin-a8f4••••••••7c21</code><button class="copy-btn" title="复制密钥" onclick="copyKey(event, this)"><i data-lucide="copy"></i></button></div></div>
+                <div class="group-cell"><span class="group-badge"><span class="provider-dot">A</span><span>Claude 通用</span></span><div class="group-meta">当前并发 <strong>3</strong></div></div>
+                <div class="usage-cell"><div class="usage-values"><div><span>今日</span><strong>$12.48</strong></div><div><span>累计</span><strong>$284.62</strong></div></div><div class="quota" style="--used:57%"><div class="quota-copy"><span>配额 $284.62 / $500</span><span>57%</span></div><div class="quota-line"><i></i></div></div></div>
+                <div class="lifecycle"><div><i data-lucide="calendar-clock"></i><span>2026-10-30 到期</span></div><div><i data-lucide="history"></i><span>4 分钟前使用</span></div></div>
+                <div class="actions"><button class="action-btn" title="展开详情" onclick="toggleDetail(this)"><i data-lucide="sliders-horizontal"></i></button><button class="action-btn" title="停用" onclick="toggleStatus(this)"><i data-lucide="circle-pause"></i></button><button class="action-btn" title="编辑" onclick="openDialog('edit')"><i data-lucide="square-pen"></i></button><button class="action-btn danger" title="删除" onclick="showToast('这是视觉样稿，未执行删除')"><i data-lucide="trash-2"></i></button></div>
+              </div>
+              <div class="row-detail"><div class="detail-block"><h4><i data-lucide="gauge"></i>周期限制</h4><div class="detail-grid"><div class="detail-metric"><span>5 小时</span><strong>$8.42 / $20</strong></div><div class="detail-metric"><span>1 天</span><strong>$12.48 / $60</strong></div><div class="detail-metric"><span>7 天</span><strong>$84.20 / $300</strong></div></div></div><div class="detail-block"><h4><i data-lucide="shield-check"></i>访问控制</h4><div class="security-line"><span>IP 白名单</span><strong>2 条规则</strong></div><div class="security-line"><span>最后使用 IP</span><strong>103.27.18.42</strong></div></div><div class="detail-action"><button onclick="showToast('周期用量已重置')">重置周期用量</button></div></div>
+            </div>
+
+            <div class="key-row" data-name="coding agent sk-lin-c62e" data-group="OpenAI 高速" data-status="active">
+              <div class="row-main">
+                <div class="identity"><span class="key-symbol"><i data-lucide="key-round"></i></span><div class="name-line"><strong>Coding Agent</strong><span class="status">正在使用</span></div><div class="secret-line"><code>sk-lin-c62e••••••••18d0</code><button class="copy-btn" title="复制密钥" onclick="copyKey(event, this)"><i data-lucide="copy"></i></button></div></div>
+                <div class="group-cell"><span class="group-badge"><span class="provider-dot openai">O</span><span>OpenAI 高速</span></span><div class="group-meta">当前并发 <strong>1</strong></div></div>
+                <div class="usage-cell"><div class="usage-values"><div><span>今日</span><strong>$8.26</strong></div><div><span>累计</span><strong>$146.10</strong></div></div><div class="quota unlimited"><div class="quota-copy"><span>未设置消费配额</span><span>不限</span></div><div class="quota-line"><i></i></div></div></div>
+                <div class="lifecycle"><div><i data-lucide="infinity"></i><span>永久有效</span></div><div><i data-lucide="history"></i><span>11 分钟前使用</span></div></div>
+                <div class="actions"><button class="action-btn" title="展开详情" onclick="toggleDetail(this)"><i data-lucide="sliders-horizontal"></i></button><button class="action-btn" title="停用" onclick="toggleStatus(this)"><i data-lucide="circle-pause"></i></button><button class="action-btn" title="编辑" onclick="openDialog('edit')"><i data-lucide="square-pen"></i></button><button class="action-btn danger" title="删除" onclick="showToast('这是视觉样稿，未执行删除')"><i data-lucide="trash-2"></i></button></div>
+              </div>
+              <div class="row-detail"><div class="detail-block"><h4><i data-lucide="gauge"></i>周期限制</h4><div class="security-line"><span>未设置周期限制</span><strong>不限</strong></div></div><div class="detail-block"><h4><i data-lucide="shield-check"></i>访问控制</h4><div class="security-line"><span>IP 访问限制</span><strong>未启用</strong></div><div class="security-line"><span>最后使用 IP</span><strong>45.76.22.18</strong></div></div><div class="detail-action"><button onclick="openDialog('edit')">配置限制</button></div></div>
+            </div>
+
+            <div class="key-row" data-name="research lab sk-lin-94af" data-group="Gemini 长文本" data-status="active">
+              <div class="row-main">
+                <div class="identity"><span class="key-symbol"><i data-lucide="key-round"></i></span><div class="name-line"><strong>Research Lab</strong><span class="status">正在使用</span></div><div class="secret-line"><code>sk-lin-94af••••••••62be</code><button class="copy-btn" title="复制密钥" onclick="copyKey(event, this)"><i data-lucide="copy"></i></button></div></div>
+                <div class="group-cell"><span class="group-badge"><span class="provider-dot" style="background:#e8ecff;color:#3568c8">G</span><span>Gemini 长文本</span></span><div class="group-meta">当前并发 <strong>0</strong></div></div>
+                <div class="usage-cell"><div class="usage-values"><div><span>今日</span><strong>$4.12</strong></div><div><span>累计</span><strong>$67.88</strong></div></div><div class="quota" style="--used:34%"><div class="quota-copy"><span>配额 $67.88 / $200</span><span>34%</span></div><div class="quota-line"><i></i></div></div></div>
+                <div class="lifecycle"><div><i data-lucide="calendar-clock"></i><span>剩余 28 天</span></div><div><i data-lucide="history"></i><span>42 分钟前使用</span></div></div>
+                <div class="actions"><button class="action-btn" title="展开详情" onclick="toggleDetail(this)"><i data-lucide="sliders-horizontal"></i></button><button class="action-btn" title="停用" onclick="toggleStatus(this)"><i data-lucide="circle-pause"></i></button><button class="action-btn" title="编辑" onclick="openDialog('edit')"><i data-lucide="square-pen"></i></button><button class="action-btn danger" title="删除" onclick="showToast('这是视觉样稿，未执行删除')"><i data-lucide="trash-2"></i></button></div>
+              </div>
+              <div class="row-detail"><div class="detail-block"><h4><i data-lucide="gauge"></i>周期限制</h4><div class="detail-grid"><div class="detail-metric"><span>5 小时</span><strong>不限</strong></div><div class="detail-metric"><span>1 天</span><strong>$4.12 / $25</strong></div><div class="detail-metric"><span>7 天</span><strong>$21.90 / $100</strong></div></div></div><div class="detail-block"><h4><i data-lucide="shield-check"></i>访问控制</h4><div class="security-line"><span>IP 黑名单</span><strong>1 条规则</strong></div><div class="security-line"><span>最后使用 IP</span><strong>172.19.4.6</strong></div></div><div class="detail-action"><button onclick="showToast('周期用量已重置')">重置周期用量</button></div></div>
+            </div>
+
+            <div class="key-row" data-name="legacy sandbox sk-lin-02cc" data-group="Claude 通用" data-status="paused">
+              <div class="row-main">
+                <div class="identity"><span class="key-symbol" style="background:#eef1f5;color:#7b8798"><i data-lucide="key-round"></i></span><div class="name-line"><strong>Legacy Sandbox</strong><span class="status paused">已停用</span></div><div class="secret-line"><code>sk-lin-02cc••••••••99a1</code><button class="copy-btn" title="复制密钥" onclick="copyKey(event, this)"><i data-lucide="copy"></i></button></div></div>
+                <div class="group-cell"><span class="group-badge"><span class="provider-dot">A</span><span>Claude 通用</span></span><div class="group-meta">当前并发 <strong>0</strong></div></div>
+                <div class="usage-cell"><div class="usage-values"><div><span>今日</span><strong>$0.00</strong></div><div><span>累计</span><strong>$22.14</strong></div></div><div class="quota unlimited"><div class="quota-copy"><span>未设置消费配额</span><span>不限</span></div><div class="quota-line"><i></i></div></div></div>
+                <div class="lifecycle"><div><i data-lucide="infinity"></i><span>永久有效</span></div><div><i data-lucide="history"></i><span>18 天前使用</span></div></div>
+                <div class="actions"><button class="action-btn" title="展开详情" onclick="toggleDetail(this)"><i data-lucide="sliders-horizontal"></i></button><button class="action-btn" title="启用" onclick="toggleStatus(this)"><i data-lucide="circle-play"></i></button><button class="action-btn" title="编辑" onclick="openDialog('edit')"><i data-lucide="square-pen"></i></button><button class="action-btn danger" title="删除" onclick="showToast('这是视觉样稿，未执行删除')"><i data-lucide="trash-2"></i></button></div>
+              </div>
+              <div class="row-detail"><div class="detail-block"><h4><i data-lucide="gauge"></i>周期限制</h4><div class="security-line"><span>未设置周期限制</span><strong>不限</strong></div></div><div class="detail-block"><h4><i data-lucide="shield-check"></i>访问控制</h4><div class="security-line"><span>IP 访问限制</span><strong>未启用</strong></div><div class="security-line"><span>最后使用 IP</span><strong>120.27.6.19</strong></div></div><div class="detail-action"><button onclick="openDialog('edit')">编辑密钥</button></div></div>
+            </div>
+
+            <div class="pager"><span>共 4 个密钥</span><div class="pager-buttons"><button class="page-btn"><i data-lucide="chevron-left" style="width:13px"></i></button><button class="page-btn active">1</button><button class="page-btn"><i data-lucide="chevron-right" style="width:13px"></i></button></div></div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="backdrop" id="dialogBackdrop" onclick="closeOnBackdrop(event)">
+    <section class="dialog">
+      <header class="dialog-head"><div><h2 id="dialogTitle">创建 API 密钥</h2><p>基础信息必填，其余限制可按需配置</p></div><button class="dialog-close" onclick="closeDialog()"><i data-lucide="x"></i></button></header>
+      <div class="dialog-body">
+        <div class="form-grid">
+          <div class="field"><label>密钥名称</label><input id="keyNameInput" placeholder="例如：Production Gateway" /></div>
+          <div class="field"><label>所属分组</label><select><option>Claude 通用</option><option>OpenAI 高速</option><option>Gemini 长文本</option></select></div>
+          <div class="field"><label>消费配额</label><input type="number" placeholder="0 表示不限" /></div>
+          <div class="field"><label for="expirySelect">有效期</label><select id="expirySelect" onchange="toggleCustomExpiry(this.value)"><option value="never">永久有效</option><option value="7d">7 天</option><option value="30d">30 天</option><option value="90d">90 天</option><option value="custom">自定义</option></select></div>
+          <div class="field full custom-expiry" id="customExpiryField">
+            <label for="customExpiryInput">自定义到期时间</label>
+            <input id="customExpiryInput" type="datetime-local" />
+            <span class="field-hint">按当前设备的本地时间生效，到期后密钥将自动停用</span>
+          </div>
+        </div>
+        <details class="advanced" open><summary><div>周期消费限制</div><span>5 小时、1 天和 7 天窗口</span></summary><div class="advanced-content"><div class="field"><label>5 小时限额</label><input type="number" placeholder="$ 0" /></div><div class="field"><label>1 天限额</label><input type="number" placeholder="$ 0" /></div><div class="field"><label>7 天限额</label><input type="number" placeholder="$ 0" /></div></div></details>
+        <details class="advanced"><summary><div>IP 访问限制</div><span>配置白名单或黑名单</span></summary><div class="advanced-content" style="grid-template-columns:1fr 1fr"><div class="field"><label>IP 白名单</label><input placeholder="每行一个 IP" /></div><div class="field"><label>IP 黑名单</label><input placeholder="每行一个 IP" /></div></div></details>
+        <details class="advanced"><summary><div>自定义密钥</div><span>仅创建时可设置，最少 16 位</span></summary><div class="advanced-content" style="grid-template-columns:1fr"><div class="field"><label>自定义密钥内容</label><input placeholder="字母、数字、下划线或连字符" /></div></div></details>
+      </div>
+      <footer class="dialog-foot"><button class="secondary-btn" onclick="closeDialog()">取消</button><button class="primary-btn" onclick="saveDialog()"><i data-lucide="check"></i><span>保存密钥</span></button></footer>
+    </section>
+  </div>
+  <div class="toast" id="toast"><i data-lucide="circle-check-big"></i><span id="toastText">已完成</span></div>
+
+  <script>
+    function initIcons() { if (window.lucide) window.lucide.createIcons(); }
+    function showToast(message) { const toast = document.getElementById('toast'); document.getElementById('toastText').textContent = message; toast.classList.add('show'); clearTimeout(window.toastTimer); window.toastTimer = setTimeout(() => toast.classList.remove('show'), 1500); }
+    function copyKey(event, button) { event.stopPropagation(); button.innerHTML = '<i data-lucide="check"></i>'; initIcons(); showToast('API 密钥已复制'); setTimeout(() => { button.innerHTML = '<i data-lucide="copy"></i>'; initIcons(); }, 1100); }
+    function toggleDetail(button) { button.closest('.key-row').classList.toggle('expanded'); }
+    function toggleStatus(button) { const row = button.closest('.key-row'); const badge = row.querySelector('.status'); const active = row.dataset.status === 'active'; row.dataset.status = active ? 'paused' : 'active'; badge.textContent = active ? '已停用' : '正在使用'; badge.classList.toggle('paused', active); button.innerHTML = active ? '<i data-lucide="circle-play"></i>' : '<i data-lucide="circle-pause"></i>'; initIcons(); showToast(active ? '密钥已停用' : '密钥已启用'); }
+    function filterRows() { const query = document.getElementById('search').value.trim().toLowerCase(); const group = document.getElementById('groupFilter').value; const status = document.getElementById('statusFilter').value; document.querySelectorAll('.key-row').forEach(row => { const matched = (!query || row.dataset.name.includes(query)) && (!group || row.dataset.group === group) && (!status || row.dataset.status === status); row.style.display = matched ? '' : 'none'; }); }
+    function refreshMock() { const icon = document.getElementById('refreshIcon'); icon.style.animation = 'spin .6s linear'; setTimeout(() => { icon.style.animation = ''; showToast('密钥数据已刷新'); }, 620); }
+    function formatLocalDateTime(date) {
+      const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+      return local.toISOString().slice(0, 16);
+    }
+    function toggleCustomExpiry(value) {
+      const field = document.getElementById('customExpiryField');
+      const input = document.getElementById('customExpiryInput');
+      const custom = value === 'custom';
+      field.classList.toggle('show', custom);
+      input.required = custom;
+      if (custom && !input.value) {
+        const defaultExpiry = new Date();
+        defaultExpiry.setDate(defaultExpiry.getDate() + 30);
+        defaultExpiry.setMinutes(0, 0, 0);
+        input.value = formatLocalDateTime(defaultExpiry);
+      }
+    }
+    function openDialog(mode) {
+      document.getElementById('dialogTitle').textContent = mode === 'edit' ? '编辑 API 密钥' : '创建 API 密钥';
+      document.getElementById('keyNameInput').value = mode === 'edit' ? 'Production Gateway' : '';
+      const expirySelect = document.getElementById('expirySelect');
+      const expiryInput = document.getElementById('customExpiryInput');
+      expirySelect.value = 'never';
+      expiryInput.value = '';
+      expiryInput.min = formatLocalDateTime(new Date());
+      toggleCustomExpiry(expirySelect.value);
+      document.getElementById('dialogBackdrop').classList.add('open');
+    }
+    function closeDialog() { document.getElementById('dialogBackdrop').classList.remove('open'); }
+    function closeOnBackdrop(event) { if (event.target.id === 'dialogBackdrop') closeDialog(); }
+    function saveDialog() { closeDialog(); showToast('密钥配置已保存'); }
+    window.addEventListener('keydown', event => { if (event.key === 'Escape') closeDialog(); });
+    initIcons();
+  </script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<style>
+  .compare-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; margin-top:24px; }
+  .design-card { overflow:hidden; border:1px solid #d7e0ec; border-radius:10px; background:#fff; box-shadow:0 8px 24px rgba(30,49,77,.08); cursor:pointer; transition:160ms ease; }
+  .design-card:hover { transform:translateY(-2px); border-color:#87a9ed; box-shadow:0 12px 30px rgba(30,49,77,.13); }
+  .design-card.selected { border:2px solid #2563eb; }
+  .preview { position:relative; height:340px; overflow:hidden; background:#f4f7fb; }
+  .app-rail { position:absolute; inset:0 auto 0 0; width:72px; background:#eaf0f7; border-right:1px solid #dce4ee; }
+  .logo { width:15px; height:22px; margin:22px 0 0 17px; border-radius:3px 3px 6px 3px; background:#2865e8; }
+  .nav-dot { width:40px; height:7px; margin:24px auto 0; border-radius:3px; background:#c2cede; }
+  .nav-dot.active { background:#4e7fee; }
+  .page { position:absolute; inset:0 0 0 72px; padding:22px; }
+  .page-title { width:80px; height:13px; border-radius:3px; background:#202a38; }
+  .metric-row { display:flex; gap:8px; margin-top:20px; }
+  .metric { width:58px; height:31px; border:1px solid #d4deeb; border-radius:5px; background:#fff; }
+  .chart { height:118px; margin-top:10px; border:1px solid #d4deeb; border-radius:6px; background:linear-gradient(#fff,#f8fbff); }
+  .scrim { position:absolute; inset:0; background:rgba(31,45,65,.18); backdrop-filter:blur(2px); }
+  .modal { position:absolute; top:50%; left:calc(50% + 36px); width:250px; transform:translate(-50%,-50%); overflow:hidden; border:1px solid rgba(255,255,255,.9); border-radius:8px; background:rgba(249,252,255,.96); box-shadow:0 22px 55px rgba(24,42,68,.24); }
+  .modal-head { display:flex; align-items:center; gap:9px; padding:13px 14px; border-bottom:1px solid #dbe4ef; }
+  .modal-icon { display:grid; width:28px; height:28px; border-radius:6px; background:#e0eafd; color:#2865e8; place-items:center; font-size:12px; }
+  .modal-copy { flex:1; }
+  .modal-copy strong { display:block; color:#202a38; font-size:10px; }
+  .modal-copy small { color:#758399; font-size:7px; }
+  .close { color:#7b899d; font-size:13px; }
+  .settings { padding:13px 14px; }
+  .setting-row { display:flex; align-items:center; justify-content:space-between; padding-bottom:12px; border-bottom:1px solid #e1e8f1; }
+  .setting-row span,.section-label { color:#66758a; font-size:7px; }
+  .toggle { width:27px; height:14px; border-radius:8px; background:#15916c; }
+  .toggle:after { display:block; width:10px; height:10px; margin:2px 2px 2px auto; border-radius:50%; background:#fff; content:''; }
+  .section-label { display:block; margin:12px 0 6px; }
+  .segments { display:grid; grid-template-columns:1fr 1fr; gap:3px; padding:3px; border:1px solid #d6e0ec; border-radius:6px; background:#e9eef5; }
+  .segment { padding:6px; border-radius:4px; color:#758399; font-size:7px; text-align:center; }
+  .segment.active { background:#fff; color:#2865e8; box-shadow:0 1px 3px rgba(26,45,70,.1); }
+  .preview-line { display:flex; align-items:center; gap:6px; margin-top:12px; padding-top:11px; border-top:1px solid #e1e8f1; color:#536176; font-size:7px; }
+  .preview-pill { padding:5px 7px; border-radius:4px; background:#2c3440; color:#fff; }
+  .modal-foot { display:flex; justify-content:flex-end; padding:10px 14px; border-top:1px solid #dbe4ef; background:#f2f6fb; }
+  .done { padding:6px 12px; border-radius:5px; background:#2865e8; color:#fff; font-size:7px; }
+  .drawer { position:absolute; inset:0 0 0 auto; width:210px; background:#fbfdff; border-left:1px solid #d7e0ec; box-shadow:-12px 0 34px rgba(25,43,68,.14); }
+  .drawer .modal-head { padding-top:20px; }
+  .drawer .settings { padding-top:18px; }
+  .profile-panel { position:absolute; inset:50px 18px 18px 90px; overflow:hidden; border:1px solid #d6e0ec; border-radius:7px; background:#fff; }
+  .profile-tabs { display:flex; gap:18px; padding:13px 16px 0; border-bottom:1px solid #e0e7f0; color:#718096; font-size:8px; }
+  .profile-tabs span { padding-bottom:10px; }
+  .profile-tabs .active { border-bottom:2px solid #2865e8; color:#2865e8; }
+  .profile-body { width:68%; padding:18px; }
+  .profile-body strong { display:block; margin-bottom:12px; color:#202a38; font-size:10px; }
+  .card-copy { padding:14px 15px 16px; }
+  .card-copy h3 { margin:0 0 6px; color:#202a38; font-size:15px; }
+  .card-copy p { margin:0; color:#66758a; font-size:12px; line-height:1.55; }
+  .recommend { display:inline-block; margin-bottom:8px; padding:3px 7px; border-radius:4px; background:#e7efff; color:#2865e8; font-size:10px; font-weight:700; }
+  @media (max-width:960px) { .compare-grid { grid-template-columns:1fr; } }
+</style>
+
+<h2>应用内“用量显示”应该放在哪里？</h2>
+<p class="subtitle">三种方案都与状态栏毛玻璃弹窗完全分离，内部不会出现“打开主窗口”或“退出”。点击卡片选择。</p>
+
+<div class="compare-grid">
+  <div class="design-card option" data-choice="a-standard-dialog" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="app-rail"><div class="logo"></div><div class="nav-dot active"></div><div class="nav-dot"></div><div class="nav-dot"></div></div>
+      <div class="page"><div class="page-title"></div><div class="metric-row"><div class="metric"></div><div class="metric"></div><div class="metric"></div></div><div class="chart"></div></div>
+      <div class="scrim"></div>
+      <div class="modal">
+        <div class="modal-head"><div class="modal-icon">◴</div><div class="modal-copy"><strong>用量显示</strong><small>设置菜单栏常驻信息</small></div><div class="close">×</div></div>
+        <div class="settings"><div class="setting-row"><span>在菜单栏显示</span><div class="toggle"></div></div><span class="section-label">显示来源</span><div class="segments"><div class="segment active">账户余额</div><div class="segment">订阅组</div></div><div class="preview-line"><span>菜单栏预览</span><span class="preview-pill">余额 $-0.25</span></div></div>
+        <div class="modal-foot"><span class="done">完成</span></div>
+      </div>
+    </div>
+    <div class="card-copy"><span class="recommend">推荐</span><h3>A. 标准设置弹窗</h3><p>沿用“修改密码”的对话框语言。信息集中、关闭明确，自动保存，底部只有“完成”。</p></div>
+  </div>
+
+  <div class="design-card option" data-choice="b-settings-drawer" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="app-rail"><div class="logo"></div><div class="nav-dot active"></div><div class="nav-dot"></div><div class="nav-dot"></div></div>
+      <div class="page"><div class="page-title"></div><div class="metric-row"><div class="metric"></div><div class="metric"></div><div class="metric"></div></div><div class="chart"></div></div>
+      <div class="scrim"></div>
+      <div class="drawer"><div class="modal-head"><div class="modal-icon">◴</div><div class="modal-copy"><strong>用量显示</strong><small>菜单栏设置</small></div><div class="close">×</div></div><div class="settings"><div class="setting-row"><span>在菜单栏显示</span><div class="toggle"></div></div><span class="section-label">显示来源</span><div class="segments"><div class="segment active">账户余额</div><div class="segment">订阅组</div></div><div class="preview-line"><span>预览</span><span class="preview-pill">余额 $-0.25</span></div></div></div>
+    </div>
+    <div class="card-copy"><h3>B. 右侧设置抽屉</h3><p>保留更多页面上下文，适合复杂设置；但当前内容较少，抽屉会显得偏重。</p></div>
+  </div>
+
+  <div class="design-card option" data-choice="c-profile-section" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="app-rail"><div class="logo"></div><div class="nav-dot active"></div><div class="nav-dot"></div><div class="nav-dot"></div></div>
+      <div class="page"><div class="page-title"></div></div>
+      <div class="profile-panel"><div class="profile-tabs"><span>个人资料</span><span>安全设置</span><span class="active">用量显示</span></div><div class="profile-body"><strong>菜单栏用量显示</strong><div class="setting-row"><span>在菜单栏显示</span><div class="toggle"></div></div><span class="section-label">显示来源</span><div class="segments"><div class="segment active">账户余额</div><div class="segment">订阅组</div></div><div class="preview-line"><span>预览</span><span class="preview-pill">余额 $-0.25</span></div></div></div>
+    </div>
+    <div class="card-copy"><h3>C. 个人设置页面</h3><p>最适合未来扩展更多偏好；但当前操作只有三项，从头像菜单进入会多一次页面跳转。</p></div>
+  </div>
+</div>

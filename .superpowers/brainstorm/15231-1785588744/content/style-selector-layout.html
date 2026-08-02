@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>选择样式控件布局</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 38px; background: #f4f6f9; color: #1b2634; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; }
+    main { max-width: 1080px; margin: 0 auto; }
+    h1 { margin: 0; font-size: 25px; letter-spacing: 0; }
+    .intro { margin: 9px 0 26px; color: #758192; font-size: 14px; }
+    .options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .option { min-width: 0; padding: 16px; border: 2px solid transparent; border-radius: 10px; background: white; box-shadow: 0 8px 26px rgba(41,55,75,.08); cursor: pointer; }
+    .option:hover { border-color: #b8d0f8; }
+    .option.selected { border-color: #2f78e7; }
+    .option-title { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
+    .option-title strong { font-size: 13px; }
+    .option-title span { color: #7a8797; font-size: 10px; }
+    .dialog { overflow: hidden; border: 1px solid #d6dee9; border-radius: 8px; background: #fbfdff; }
+    .dialog-head { padding: 13px 14px; border-bottom: 1px solid #e1e7ef; }
+    .dialog-head strong { font-size: 12px; }
+    .dialog-head p { margin: 3px 0 0; color: #8b96a4; font-size: 9px; }
+    .dialog-body { display: grid; gap: 14px; padding: 14px; }
+    .field-label { display: block; margin-bottom: 7px; color: #526175; font-size: 9px; font-weight: 700; }
+    .source { display: grid; grid-template-columns: 1fr 1fr; height: 30px; padding: 2px; border: 1px solid #dce3ec; border-radius: 6px; background: #eef2f7; }
+    .source span { display: grid; place-items: center; color: #6d7887; font-size: 9px; }
+    .source span:first-child { border-radius: 4px; background: #fff; color: #2564bf; box-shadow: 0 1px 3px rgba(45,60,80,.1); }
+    .segments { display: grid; grid-template-columns: repeat(3,1fr); height: 32px; padding: 2px; border: 1px solid #dce3ec; border-radius: 6px; background: #eef2f7; }
+    .segments span { display: grid; place-items: center; color: #6d7887; font-size: 8px; }
+    .segments span:first-child { border-radius: 4px; background: white; color: #2564bf; box-shadow: 0 1px 3px rgba(45,60,80,.1); }
+    .swatches { display: grid; grid-template-columns: repeat(3,1fr); gap: 7px; }
+    .swatch { display: grid; gap: 6px; padding: 5px; border: 1px solid #dbe3ed; border-radius: 6px; background: #fff; }
+    .swatch:first-child { border-color: #3f7fdc; box-shadow: 0 0 0 1px #3f7fdc; }
+    .swatch-preview { height: 48px; padding: 7px; border-radius: 9px; background: #e4eff5; }
+    .swatch-preview.dark { background: #282c57; }
+    .swatch-preview.blur { background: #dffbf5; box-shadow: inset -20px -16px 28px rgba(68,218,219,.38); }
+    .swatch-preview b { display: block; font-size: 16px; font-weight: 500; }
+    .swatch-preview.dark b { color: white; }
+    .swatch-preview i { display: block; width: 42%; height: 3px; margin-top: 6px; border-radius: 3px; background: #4386e9; }
+    .swatch span { color: #5f6d7e; font-size: 8px; text-align: center; }
+    .select { display: flex; height: 34px; align-items: center; justify-content: space-between; padding: 0 9px; border: 1px solid #ccd6e2; border-radius: 6px; background: #fff; color: #354357; font-size: 9px; }
+    .preview-line { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid #e3e8ef; color: #7b8795; font-size: 8px; }
+    .preview-chip { padding: 5px 8px; border-radius: 5px; background: #29313e; color: white; }
+    .caption { min-height: 50px; margin: 12px 2px 0; color: #697687; font-size: 11px; line-height: 1.55; }
+    @media (max-width: 860px) { .options { grid-template-columns: 1fr; } .option { max-width: 390px; width: 100%; margin: 0 auto; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>“展示样式”放在哪里最合适？</h1>
+    <p class="intro">三种方式都只存在于客户端内设置，外部菜单栏卡片不出现配置入口。</p>
+    <section class="options">
+      <article class="option" data-choice="a" onclick="toggleSelect(this)">
+        <div class="option-title"><strong>A · 三段文字按钮</strong><span>最紧凑</span></div>
+        <div class="dialog"><div class="dialog-head"><strong>用量显示</strong><p>设置菜单栏常驻信息</p></div><div class="dialog-body"><div><span class="field-label">显示来源</span><div class="source"><span>账户余额</span><span>订阅组</span></div></div><div><span class="field-label">展示样式</span><div class="segments"><span>默认浅色</span><span>深色</span><span>Blur</span></div></div><div class="preview-line"><span>菜单栏预览</span><b class="preview-chip">L 余额 $128.60</b></div></div></div>
+        <p class="caption">占用高度最少，但用户只能通过名称判断效果，切换后才知道样式长什么样。</p>
+      </article>
+      <article class="option" data-choice="b" onclick="toggleSelect(this)">
+        <div class="option-title"><strong>B · 三张缩略图</strong><span>推荐</span></div>
+        <div class="dialog"><div class="dialog-head"><strong>用量显示</strong><p>设置菜单栏常驻信息</p></div><div class="dialog-body"><div><span class="field-label">显示来源</span><div class="source"><span>账户余额</span><span>订阅组</span></div></div><div><span class="field-label">展示样式</span><div class="swatches"><div class="swatch"><div class="swatch-preview"><b>74%</b><i></i></div><span>默认浅色</span></div><div class="swatch"><div class="swatch-preview dark"><b>74%</b><i></i></div><span>深色</span></div><div class="swatch"><div class="swatch-preview blur"><b>74%</b><i></i></div><span>Blur</span></div></div></div><div class="preview-line"><span>菜单栏预览</span><b class="preview-chip">L 余额 $128.60</b></div></div></div>
+        <p class="caption">一眼能看懂三套皮肤，选择成本最低；弹窗会增加约 60px 高度，但仍保持单层配置布局。</p>
+      </article>
+      <article class="option" data-choice="c" onclick="toggleSelect(this)">
+        <div class="option-title"><strong>C · 下拉菜单</strong><span>最保守</span></div>
+        <div class="dialog"><div class="dialog-head"><strong>用量显示</strong><p>设置菜单栏常驻信息</p></div><div class="dialog-body"><div><span class="field-label">显示来源</span><div class="source"><span>账户余额</span><span>订阅组</span></div></div><div><span class="field-label">展示样式</span><div class="select"><span>默认浅色</span><b>⌄</b></div></div><div class="preview-line"><span>菜单栏预览</span><b class="preview-chip">L 余额 $128.60</b></div></div></div>
+        <p class="caption">界面最安静，也方便未来增加更多皮肤；但三套样式被藏起来，当前数量下没有必要。</p>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

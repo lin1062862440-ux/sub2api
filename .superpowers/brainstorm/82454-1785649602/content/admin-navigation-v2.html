@@ -1,0 +1,79 @@
+<style>
+  .identity-note { display:flex; align-items:center; gap:8px; margin:16px 0 22px; padding:11px 13px; border:1px solid #cfe7dc; border-radius:9px; background:#f1faf6; color:#176b55; font-size:13px; }
+  .identity-note::before { width:8px; height:8px; background:#18a071; border-radius:50%; content:''; }
+  .compare { display:grid; grid-template-columns:1.12fr .88fr; gap:20px; }
+  .choice { overflow:hidden; border:1px solid #dbe4ef; border-radius:12px; background:#fff; cursor:pointer; transition:.18s ease; }
+  .choice:hover { border-color:#86a7d7; transform:translateY(-2px); box-shadow:0 12px 28px rgba(39,63,96,.1); }
+  .choice.selected { border-color:#3975d5; box-shadow:0 0 0 3px rgba(57,117,213,.13); }
+  .choice-head { display:flex; align-items:center; gap:10px; padding:15px 17px; border-bottom:1px solid #e7edf5; }
+  .letter { display:grid; width:29px; height:29px; border-radius:7px; background:#eaf1ff; color:#245eb8; font-weight:800; place-items:center; }
+  .choice-head h3 { margin:0; font-size:15px; }
+  .recommended { margin-left:auto; padding:3px 8px; border-radius:999px; background:#eaf8f3; color:#087f5b; font-size:11px; font-weight:700; }
+  .states { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:15px; background:#f5f8fc; }
+  .state-card { overflow:hidden; border:1px solid #dce5ef; border-radius:9px; background:#fff; }
+  .state-label { padding:8px 10px; background:#f7f9fc; border-bottom:1px solid #e4eaf2; color:#6d7d92; font-size:10px; font-weight:800; }
+  .app { display:grid; height:365px; grid-template-columns:112px 1fr; background:#f4f7fb; }
+  .rail { display:flex; min-width:0; flex-direction:column; gap:5px; padding:11px 8px; background:#edf2f8; border-right:1px solid #dce4ef; }
+  .brand { padding:5px 7px 9px; color:#1d3557; font-size:12px; font-weight:800; }
+  .switch { display:grid; grid-template-columns:1fr 1fr; gap:2px; margin:0 1px 8px; padding:3px; background:#dce6f2; border-radius:7px; color:#748399; font-size:9px; text-align:center; }
+  .switch span { padding:5px 2px; border-radius:5px; }
+  .switch .active { background:#fff; color:#245eb8; box-shadow:0 1px 4px rgba(34,56,84,.1); font-weight:700; }
+  .section-label { margin:7px 7px 2px; color:#96a3b5; font-size:8px; font-weight:800; letter-spacing:.08em; }
+  .row { display:flex; min-height:27px; align-items:center; gap:6px; padding:0 7px; border-radius:6px; color:#627188; font-size:9px; white-space:nowrap; }
+  .row::before { width:6px; height:6px; flex:0 0 auto; background:#9cabc0; border-radius:2px; content:''; }
+  .row.active { background:#fff; color:#245eb8; box-shadow:0 2px 7px rgba(42,66,99,.08); font-weight:700; }
+  .row.active::before { background:#3975d5; }
+  .content { min-width:0; padding:15px; }
+  .page-title { width:86px; height:10px; background:#536983; border-radius:4px; }
+  .metrics { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:13px; }
+  .metric { height:47px; padding:8px; background:#fff; border:1px solid #e0e7f0; border-radius:7px; }
+  .metric::before,.metric::after { display:block; width:48%; height:5px; background:#d9e2ed; border-radius:3px; content:''; }
+  .metric::after { width:68%; height:9px; margin-top:8px; background:#8599b2; }
+  .panel { min-height:218px; margin-top:7px; padding:9px; background:#fff; border:1px solid #e0e7f0; border-radius:7px; }
+  .panel i { display:block; height:28px; margin-top:8px; background:#f0f3f7; border-radius:5px; }
+  .single-preview { padding:15px; background:#f5f8fc; }
+  .single-preview .app { height:397px; }
+  .single-preview .rail { overflow:hidden; }
+  .choice-copy { padding:14px 17px 17px; border-top:1px solid #e7edf5; }
+  .choice-copy p { margin:0; color:#66768c; font-size:12px; line-height:1.6; }
+  .choice-copy strong { display:block; margin-top:8px; color:#34445b; font-size:12px; }
+  @media(max-width:1050px){ .compare{grid-template-columns:1fr}.states{grid-template-columns:1fr 1fr}.app{height:340px} }
+</style>
+
+<h2>A 和 B 的真实身份行为</h2>
+<p class="subtitle">普通用户永远不会收到管理员路由与菜单；差别只发生在管理员账号内部。</p>
+<div class="identity-note">普通用户：不显示“个人 / 管理”切换，也不显示任何管理员入口。</div>
+
+<div class="compare">
+  <div class="choice" data-choice="a" onclick="toggleSelect(this)">
+    <div class="choice-head"><span class="letter">A</span><h3>仅管理员显示模式切换</h3><span class="recommended">推荐</span></div>
+    <div class="states">
+      <div class="state-card">
+        <div class="state-label">普通用户看到的客户端</div>
+        <div class="app">
+          <aside class="rail"><div class="brand">LinAI</div><div class="row active">仪表盘</div><div class="row">API 密钥</div><div class="row">使用记录</div><div class="row">渠道状态</div><div class="row">我的订阅</div><div class="row">兑换</div></aside>
+          <main class="content"><div class="page-title"/><div class="metrics"><div class="metric"/><div class="metric"/><div class="metric"/></div><div class="panel"><i/><i/><i/></div></main>
+        </div>
+      </div>
+      <div class="state-card">
+        <div class="state-label">管理员进入管理空间</div>
+        <div class="app">
+          <aside class="rail"><div class="brand">LinAI</div><div class="switch"><span>个人</span><span class="active">管理</span></div><div class="row active">管理概览</div><div class="row">账号管理</div><div class="row">用户管理</div><div class="row">全站用量</div><div class="row">渠道监控</div><div class="row">审计日志</div><div class="section-label">运营</div><div class="row">订阅管理</div><div class="row">兑换码</div><div class="row">公告管理</div></aside>
+          <main class="content"><div class="page-title"/><div class="metrics"><div class="metric"/><div class="metric"/><div class="metric"/></div><div class="panel"><i/><i/><i/></div></main>
+        </div>
+      </div>
+    </div>
+    <div class="choice-copy"><p>普通用户界面零变化。管理员进入管理空间后只看到管理菜单，回到个人空间后只看到自己的密钥、用量和订阅。</p><strong>适合 900px 最小窗口；图标紧凑侧栏也只需表达当前空间的菜单。</strong></div>
+  </div>
+
+  <div class="choice" data-choice="b" onclick="toggleSelect(this)">
+    <div class="choice-head"><span class="letter">B</span><h3>管理员统一长侧栏</h3></div>
+    <div class="single-preview">
+      <div class="app">
+        <aside class="rail"><div class="brand">LinAI · 管理员</div><div class="section-label">个人</div><div class="row">仪表盘</div><div class="row">API 密钥</div><div class="row">使用记录</div><div class="row">渠道状态</div><div class="row">我的订阅</div><div class="row">兑换</div><div class="section-label">管理</div><div class="row active">管理概览</div><div class="row">账号管理</div><div class="row">用户管理</div><div class="row">全站用量</div><div class="row">渠道监控</div><div class="row">审计日志</div><div class="section-label">运营</div><div class="row">订阅管理</div><div class="row">兑换码</div><div class="row">公告管理</div></aside>
+        <main class="content"><div class="page-title"/><div class="metrics"><div class="metric"/><div class="metric"/><div class="metric"/></div><div class="panel"><i/><i/><i/><i/></div></main>
+      </div>
+    </div>
+    <div class="choice-copy"><p>普通用户同样完全不受影响。管理员不用切换，但侧栏固定出现 15 个入口；窗口较矮时需要侧栏滚动，紧凑模式会连续出现大量无文字图标。</p><strong>适合菜单较少的后台；当前 B 范围继续扩展后会越来越拥挤。</strong></div>
+  </div>
+</div>

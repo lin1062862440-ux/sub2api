@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LinAI 用户组管理方案</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;font-family:Inter,"SF Pro Display","PingFang SC",sans-serif;color:#172033;background:#e9eef5}button,input,select,textarea{font:inherit}button{cursor:pointer}.stage{min-height:100vh;padding:22px}.intro{width:min(1180px,100%);margin:0 auto 14px;display:flex;align-items:end;justify-content:space-between;gap:20px}.intro h1{margin:0;font-size:24px;letter-spacing:0}.intro p{margin:5px 0 0;color:#697386;font-size:13px}.choice{height:36px;padding:0 14px;border:1px solid #b8cdf7;border-radius:7px;background:#eff5ff;color:#2f67c6;font-size:12px;font-weight:700}.app{width:min(1180px,100%);height:min(760px,calc(100vh - 104px));min-height:620px;margin:auto;display:grid;grid-template-columns:184px minmax(0,1fr);overflow:hidden;border:1px solid rgba(102,119,145,.22);border-radius:10px;background:#f7f9fc;box-shadow:0 24px 70px rgba(35,49,73,.18)}.sidebar{padding:22px 14px;background:#182338;color:#c7d1e0}.brand{display:flex;align-items:center;gap:10px;padding:0 9px 19px;border-bottom:1px solid rgba(255,255,255,.09)}.brand-mark{width:31px;height:31px;display:grid;place-items:center;border-radius:7px;background:#fff;color:#2b64ca;font-weight:850}.brand strong{display:block;color:#fff;font-size:14px}.brand span{font-size:9px;color:#7f91ab}.switch{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin:16px 4px;padding:3px;border-radius:7px;background:rgba(255,255,255,.07)}.switch button{height:29px;border:0;border-radius:5px;background:transparent;color:#8292aa;font-size:10px}.switch .active{background:#f5f8fd;color:#25334b;font-weight:700}.nav-label{margin:16px 9px 6px;color:#677b99;font-size:9px;font-weight:800;text-transform:uppercase}.nav{display:grid;gap:3px}.nav-item{height:34px;display:flex;align-items:center;gap:9px;padding:0 10px;border-radius:6px;color:#aab8cb;font-size:11px}.nav-item svg{width:15px;height:15px;stroke:currentColor}.nav-item.active{background:#2e5fae;color:#fff}.main{min-width:0;overflow:hidden}.topbar{height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;border-bottom:1px solid #e5eaf1;background:rgba(255,255,255,.88)}.crumb{color:#758095;font-size:11px}.admin{display:flex;align-items:center;gap:8px;color:#4c586d;font-size:10px}.avatar{width:28px;height:28px;display:grid;place-items:center;border-radius:50%;background:#dce8fb;color:#2e63ba;font-weight:800}.workspace{height:calc(100% - 56px);overflow:auto;padding:22px 24px 28px}.page-head{display:flex;align-items:end;justify-content:space-between;gap:20px}.eyebrow{color:#3970c6;font-size:9px;font-weight:800;text-transform:uppercase}.page-head h2{margin:4px 0 0;font-size:23px;letter-spacing:0}.page-head p{margin:5px 0 0;color:#758095;font-size:11px}.primary{height:36px;display:flex;align-items:center;gap:7px;padding:0 13px;border:0;border-radius:7px;background:#2f67c6;color:#fff;font-size:11px;font-weight:750;box-shadow:0 6px 16px rgba(47,103,198,.2)}.primary span{font-size:18px;font-weight:400}.summary{display:grid;grid-template-columns:repeat(4,1fr);margin-top:18px;border:1px solid #e0e6ee;border-radius:8px;background:#fff}.metric{min-height:64px;padding:13px 15px;border-right:1px solid #e8edf3}.metric:last-child{border:0}.metric span{display:block;color:#7a8598;font-size:9px}.metric strong{display:block;margin-top:6px;font-size:19px}.metric small{margin-left:5px;color:#8290a4;font-size:9px;font-weight:500}.metric.attn strong{color:#bd6a28}.toolbar{display:flex;align-items:center;gap:8px;margin-top:13px}.search{position:relative;flex:1}.search input,.toolbar select{height:35px;border:1px solid #dde4ec;border-radius:7px;background:#fff;color:#384459;font-size:10px;outline:none}.search input{width:100%;padding:0 12px 0 33px}.search svg{position:absolute;top:10px;left:11px;width:14px;height:14px;stroke:#8d98aa}.toolbar select{padding:0 27px 0 10px}.refresh{width:35px;height:35px;display:grid;place-items:center;border:1px solid #dde4ec;border-radius:7px;background:#fff;color:#657187}.refresh svg{width:14px}.table{margin-top:10px;overflow:hidden;border:1px solid #e0e6ee;border-radius:8px;background:#fff}.thead,.row{display:grid;grid-template-columns:minmax(180px,1.5fr) 95px 105px 85px minmax(130px,1fr) 88px;align-items:center}.thead{height:38px;padding:0 15px;background:#f3f6f9;color:#8490a2;font-size:9px;font-weight:800}.row{min-height:73px;padding:0 15px;border-top:1px solid #edf0f4;font-size:10px;transition:.18s}.row:hover{background:#f8fbff}.group-name{display:flex;align-items:center;gap:10px}.platform-icon{width:34px;height:34px;display:grid;place-items:center;border-radius:8px;background:#fff1e9;color:#bb5e2b}.platform-icon.openai{background:#e8f5ef;color:#177452}.platform-icon.gemini{background:#edf0ff;color:#5268cf}.platform-icon svg{width:17px;height:17px}.group-name strong{display:block;font-size:11px}.group-name small{display:block;margin-top:4px;color:#8994a6;font-size:9px}.pill{width:max-content;padding:4px 7px;border-radius:5px;background:#eef4ff;color:#3d68ac;font-size:9px}.pill.sub{background:#f3edff;color:#7956b2}.rate{font-variant-numeric:tabular-nums;font-weight:800}.rate small{font-size:8px;color:#8b95a6;font-weight:500}.limits{display:flex;gap:4px;flex-wrap:wrap}.limit{padding:3px 5px;border-radius:4px;background:#f2f5f8;color:#68758a;font-size:8px}.status{display:flex;align-items:center;gap:5px;color:#377f63}.status i{width:6px;height:6px;border-radius:50%;background:#48a37c;box-shadow:0 0 0 3px #e5f4ed}.actions{display:flex;justify-content:flex-end;gap:4px}.icon-btn{width:28px;height:28px;display:grid;place-items:center;border:1px solid #e0e6ee;border-radius:6px;background:#fff;color:#657187}.icon-btn svg{width:13px;height:13px}.editor-backdrop{position:fixed;inset:0;z-index:10;display:none;align-items:stretch;justify-content:flex-end;background:rgba(24,35,56,.25);backdrop-filter:blur(5px)}.editor-backdrop.open{display:flex}.drawer{width:min(460px,92vw);height:100%;overflow:auto;background:#fbfcfe;box-shadow:-20px 0 55px rgba(31,45,69,.22);animation:slide .22s ease-out}.drawer-head{position:sticky;top:0;z-index:2;display:flex;align-items:flex-start;justify-content:space-between;padding:20px 22px;border-bottom:1px solid #e4e9f0;background:rgba(251,252,254,.94);backdrop-filter:blur(12px)}.drawer h3{margin:0;font-size:18px}.drawer-head p{margin:4px 0 0;color:#7e899a;font-size:10px}.close{width:31px;height:31px;border:1px solid #e0e6ed;border-radius:6px;background:#fff;color:#657187}.form-body{padding:18px 22px 86px}.section-title{display:flex;align-items:center;gap:8px;margin:3px 0 11px;color:#263249;font-size:11px;font-weight:800}.section-title:after{content:"";height:1px;flex:1;background:#e7ebf1}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px}.field{display:grid;gap:5px}.field.wide{grid-column:1/-1}.field label{color:#6e7a8e;font-size:9px}.field input,.field select,.field textarea{width:100%;border:1px solid #dce3eb;border-radius:7px;background:#fff;color:#2f3a4e;font-size:10px;outline:none}.field input,.field select{height:36px;padding:0 10px}.field textarea{min-height:64px;padding:9px 10px;resize:none}.segmented{display:grid;grid-template-columns:1fr 1fr;gap:3px;padding:3px;border-radius:7px;background:#e9eef5}.segmented button{height:30px;border:0;border-radius:5px;background:transparent;color:#7e899a;font-size:9px}.segmented .active{background:#fff;color:#2f67c6;font-weight:800;box-shadow:0 2px 8px rgba(53,70,96,.1)}.quota{margin-top:17px}.hint{margin:8px 0 0;padding:9px 10px;border-left:3px solid #e4aa58;background:#fff8eb;color:#8a6737;font-size:9px;line-height:1.5}.advanced{margin-top:16px;border:1px solid #e1e6ed;border-radius:8px;background:#fff}.advanced summary{display:flex;align-items:center;justify-content:space-between;padding:12px 13px;list-style:none;color:#445169;font-size:10px;font-weight:800;cursor:pointer}.advanced summary::-webkit-details-marker{display:none}.advanced summary span{color:#8b96a7;font-size:9px;font-weight:500}.advanced-content{padding:0 13px 13px;border-top:1px solid #edf0f4}.advanced-row{display:flex;align-items:center;justify-content:space-between;padding:11px 0;border-bottom:1px solid #eff2f5}.advanced-row:last-child{border:0}.advanced-row strong{display:block;font-size:10px}.advanced-row small{display:block;margin-top:3px;color:#8b96a7;font-size:8px}.toggle{width:34px;height:19px;padding:2px;border:0;border-radius:20px;background:#dfe5ec}.toggle:after{content:"";display:block;width:15px;height:15px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(41,53,72,.2)}.drawer-foot{position:fixed;right:0;bottom:0;width:min(460px,92vw);display:flex;justify-content:flex-end;gap:8px;padding:13px 22px;border-top:1px solid #e2e7ed;background:rgba(255,255,255,.93);backdrop-filter:blur(12px)}.drawer-foot button{height:35px;padding:0 13px;border:1px solid #dce3eb;border-radius:7px;background:#fff;color:#58657a;font-size:10px}.drawer-foot .save{border-color:#2f67c6;background:#2f67c6;color:#fff;font-weight:750}@keyframes slide{from{transform:translateX(35px);opacity:.5}to{transform:none;opacity:1}}@media(max-width:860px){.app{grid-template-columns:64px}.sidebar{padding:18px 9px}.brand{padding:0 7px 15px}.brand>div:last-child,.switch,.nav-label,.nav-item span{display:none}.nav-item{justify-content:center}.summary{grid-template-columns:1fr 1fr}.metric:nth-child(2){border-right:0}.metric:nth-child(-n+2){border-bottom:1px solid #e8edf3}.thead,.row{grid-template-columns:minmax(170px,1.5fr) 90px 90px 72px}.thead>*:nth-child(5),.row>*:nth-child(5),.thead>*:nth-child(3),.row>*:nth-child(3){display:none}}@media(max-width:620px){.stage{padding:0}.intro{display:none}.app{height:100vh;min-height:600px;border:0;border-radius:0}.workspace{padding:18px}.page-head{align-items:flex-start;flex-direction:column}.primary{width:100%;justify-content:center}.summary{grid-template-columns:1fr 1fr}.toolbar select{display:none}.thead,.row{grid-template-columns:1fr 75px}.thead>*:not(:first-child):not(:last-child),.row>*:not(:first-child):not(:last-child){display:none}}
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <div class="intro">
+      <div><h1>用户组管理 · 原生客户端方案</h1><p>点击“新建用户组”查看编辑抽屉；这是推荐的“日常管理 + 高级折叠”方向。</p></div>
+      <button class="choice" data-choice="groups-balanced" onclick="toggleSelect(this)">采用这个方向</button>
+    </div>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand"><div class="brand-mark">L</div><div><strong>LinAI</strong><span>DESKTOP</span></div></div>
+        <div class="switch"><button>个人</button><button class="active">管理</button></div>
+        <div class="nav-label">运营管理</div>
+        <div class="nav">
+          <div class="nav-item"><svg fill="none" viewBox="0 0 24 24"><path d="M4 13h6V4H4zm10 7h6v-9h-6zM4 20h6v-3H4zm10-13h6V4h-6z" stroke-width="1.8"/></svg><span>管理概览</span></div>
+          <div class="nav-item"><svg fill="none" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5" stroke-width="1.8"/><path d="M5 20c.7-4.1 3-6.2 7-6.2s6.3 2.1 7 6.2" stroke-width="1.8"/></svg><span>用户管理</span></div>
+          <div class="nav-item active"><svg fill="none" viewBox="0 0 24 24"><circle cx="8" cy="9" r="3" stroke-width="1.8"/><circle cx="17" cy="8" r="2.4" stroke-width="1.8"/><path d="M2.8 20c.6-4 2.4-6 5.2-6s4.7 2 5.2 6M14 14c3.8-.8 6.1 1.2 6.7 4.8" stroke-width="1.8"/></svg><span>用户组</span></div>
+          <div class="nav-item"><svg fill="none" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3" stroke-width="1.8"/><path d="M7 10h10M7 14h6" stroke-width="1.8"/></svg><span>账号管理</span></div>
+          <div class="nav-item"><svg fill="none" viewBox="0 0 24 24"><path d="M4 18V9l8-5 8 5v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2Z" stroke-width="1.8"/><path d="M9 20v-7h6v7" stroke-width="1.8"/></svg><span>订阅管理</span></div>
+          <div class="nav-item"><svg fill="none" viewBox="0 0 24 24"><path d="M5 19V9m7 10V5m7 14v-7" stroke-width="1.8"/></svg><span>全站用量</span></div>
+        </div>
+      </aside>
+      <main class="main">
+        <div class="topbar"><span class="crumb">管理工作区 / 用户组</span><div class="admin"><span>lin@lynn.lat</span><div class="avatar">L</div></div></div>
+        <div class="workspace">
+          <header class="page-head">
+            <div><span class="eyebrow">ACCESS & BILLING GROUPS</span><h2>用户组</h2><p>集中管理平台接入、计费倍率、订阅额度和模型能力。</p></div>
+            <button class="primary" onclick="openDrawer()"><span>＋</span>新建用户组</button>
+          </header>
+          <section class="summary">
+            <div class="metric"><span>用户组总数</span><strong>12</strong></div>
+            <div class="metric"><span>当前启用</span><strong>10 <small>83%</small></strong></div>
+            <div class="metric"><span>订阅分组</span><strong>4</strong></div>
+            <div class="metric attn"><span>需要关注</span><strong>2 <small>无可用账号</small></strong></div>
+          </section>
+          <div class="toolbar">
+            <div class="search"><svg fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke-width="2"/><path d="m16 16 5 5" stroke-width="2"/></svg><input placeholder="搜索组名或描述" /></div>
+            <select><option>全部平台</option><option>Claude</option><option>OpenAI</option><option>Gemini</option></select>
+            <select><option>全部状态</option><option>启用</option><option>停用</option></select>
+            <button class="refresh" title="刷新"><svg fill="none" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6.1 8.2A7 7 0 0 1 18.8 9M17.9 15.8A7 7 0 0 1 5.2 15" stroke="currentColor" stroke-width="1.8"/></svg></button>
+          </div>
+          <section class="table">
+            <div class="thead"><span>用户组</span><span>类型</span><span>计费倍率</span><span>账号</span><span>订阅额度</span><span></span></div>
+            <div class="row">
+              <div class="group-name"><div class="platform-icon"><svg fill="none" viewBox="0 0 24 24"><path d="M7 17 12 5l5 12M9 13h6" stroke="currentColor" stroke-width="1.8"/></svg></div><div><strong>Claude Pro</strong><small>高优先级 Claude 订阅服务</small></div></div><span class="pill sub">订阅</span><div class="rate">0.85x <small>优惠</small></div><div><strong>8 / 10</strong><div class="status"><i></i><small>可用</small></div></div><div class="limits"><span class="limit">日 $20</span><span class="limit">周 $100</span></div><div class="actions"><button class="icon-btn" onclick="openDrawer()" title="编辑"><svg fill="none" viewBox="0 0 24 24"><path d="m4 20 4.2-1 10-10a2 2 0 0 0-3-3l-10 10L4 20Z" stroke="currentColor" stroke-width="1.8"/></svg></button><button class="icon-btn" title="更多">•••</button></div>
+            </div>
+            <div class="row">
+              <div class="group-name"><div class="platform-icon openai"><svg fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="1.5"/></svg></div><div><strong>OpenAI Standard</strong><small>Codex 与 Responses 默认分组</small></div></div><span class="pill">按量</span><div class="rate">1.00x <small>标准</small></div><div><strong>16 / 18</strong><div class="status"><i></i><small>可用</small></div></div><div class="limits"><span class="limit">不限制</span></div><div class="actions"><button class="icon-btn" onclick="openDrawer()" title="编辑"><svg fill="none" viewBox="0 0 24 24"><path d="m4 20 4.2-1 10-10a2 2 0 0 0-3-3l-10 10L4 20Z" stroke="currentColor" stroke-width="1.8"/></svg></button><button class="icon-btn" title="更多">•••</button></div>
+            </div>
+            <div class="row">
+              <div class="group-name"><div class="platform-icon gemini"><svg fill="none" viewBox="0 0 24 24"><path d="M12 3c1 5 4 8 9 9-5 1-8 4-9 9-1-5-4-8-9-9 5-1 8-4 9-9Z" stroke="currentColor" stroke-width="1.7"/></svg></div><div><strong>Gemini Vision</strong><small>图像生成与多模态任务</small></div></div><span class="pill">按量</span><div class="rate">1.15x <small>加价</small></div><div><strong>3 / 4</strong><div class="status"><i></i><small>可用</small></div></div><div class="limits"><span class="limit">不限制</span></div><div class="actions"><button class="icon-btn" onclick="openDrawer()" title="编辑"><svg fill="none" viewBox="0 0 24 24"><path d="m4 20 4.2-1 10-10a2 2 0 0 0-3-3l-10 10L4 20Z" stroke="currentColor" stroke-width="1.8"/></svg></button><button class="icon-btn" title="更多">•••</button></div>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+  </div>
+  <div id="editor" class="editor-backdrop" onclick="if(event.target===this)closeDrawer()">
+    <aside class="drawer">
+      <header class="drawer-head"><div><h3>编辑用户组</h3><p>Claude Pro · 基础配置直接可见</p></div><button class="close" onclick="closeDrawer()">×</button></header>
+      <div class="form-body">
+        <div class="section-title">基础信息</div>
+        <div class="form-grid">
+          <div class="field wide"><label>用户组名称</label><input value="Claude Pro" /></div>
+          <div class="field wide"><label>描述</label><textarea>高优先级 Claude 订阅服务</textarea></div>
+          <div class="field"><label>平台</label><select disabled><option>Claude / Anthropic</option></select></div>
+          <div class="field"><label>状态</label><select><option>启用</option><option>停用</option></select></div>
+          <div class="field wide"><label>计费方式</label><div class="segmented"><button>按量计费</button><button class="active">订阅额度</button></div></div>
+          <div class="field"><label>计费倍率</label><input value="0.85" /></div>
+          <div class="field"><label>RPM 上限</label><input value="120" /></div>
+        </div>
+        <div class="quota">
+          <div class="section-title">订阅额度</div>
+          <div class="form-grid"><div class="field"><label>每日额度（USD）</label><input value="20" /></div><div class="field"><label>每周额度（USD）</label><input value="100" /></div><div class="field"><label>每月额度（USD）</label><input placeholder="不限制" /></div><div class="field"><label>高峰倍率</label><input value="1.0" /></div></div>
+          <p class="hint">倍率会直接影响用户实际扣费。小于 1 为优惠，大于 1 为加价；保存前会展示变更摘要。</p>
+        </div>
+        <details class="advanced">
+          <summary>高级配置 <span>按平台动态显示 〉</span></summary>
+          <div class="advanced-content">
+            <div class="advanced-row"><div><strong>模型列表</strong><small>控制 /v1/models 对外可见模型</small></div><button class="toggle"></button></div>
+            <div class="advanced-row"><div><strong>模型路由</strong><small>按模型规则路由到指定账号</small></div><button class="toggle"></button></div>
+            <div class="advanced-row"><div><strong>故障转移</strong><small>无可用账号时切换备用分组</small></div><button class="toggle"></button></div>
+            <div class="advanced-row"><div><strong>消息分发映射</strong><small>自定义 Opus / Sonnet / Haiku 映射</small></div><button class="toggle"></button></div>
+          </div>
+        </details>
+      </div>
+      <footer class="drawer-foot"><button onclick="closeDrawer()">取消</button><button class="save">保存变更</button></footer>
+    </aside>
+  </div>
+  <script>function openDrawer(){document.getElementById('editor').classList.add('open')}function closeDrawer(){document.getElementById('editor').classList.remove('open')}document.addEventListener('keydown',e=>{if(e.key==='Escape')closeDrawer()})</script>
+</body>
+</html>
