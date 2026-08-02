@@ -1,11 +1,6 @@
 <template>
   <AppLayout>
-    <div class="min-w-0 space-y-6">
-      <header>
-        <h1 class="text-2xl font-semibold text-gray-950 dark:text-white">{{ t('userGroups.usage.title') }}</h1>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.description') }}</p>
-      </header>
-
+    <UserGroupWorkspaceShell>
       <section v-if="groupsError" class="rounded-lg border border-red-200 bg-red-50 px-5 py-8 text-center dark:border-red-900/60 dark:bg-red-950/30">
         <p class="text-sm text-red-700 dark:text-red-300">{{ groupsError }}</p>
         <button class="btn btn-secondary mt-4" type="button" @click="loadGroups">{{ t('userGroups.common.retry') }}</button>
@@ -23,42 +18,60 @@
           :can-manage="canManage"
           :loading="loadingGroups"
           @update:model-value="handleGroupChange"
-        />
-
-        <section class="border-b border-gray-200 pb-5 dark:border-dark-700">
-          <div class="grid gap-4 sm:grid-cols-2 2xl:grid-cols-[150px_150px_minmax(180px,1fr)_minmax(180px,1fr)_180px_auto] 2xl:items-end">
-            <label class="block">
-              <span class="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.startDate') }}</span>
+        >
+          <template #controls>
+            <label class="block min-w-[132px] flex-1 sm:w-36 sm:flex-none">
+              <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('userGroups.usage.startDate') }}</span>
               <input v-model="startDate" type="date" class="input" :max="endDate" />
             </label>
-            <label class="block">
-              <span class="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.endDate') }}</span>
+            <label class="block min-w-[132px] flex-1 sm:w-36 sm:flex-none">
+              <span class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('userGroups.usage.endDate') }}</span>
               <input v-model="endDate" type="date" class="input" :min="startDate" />
             </label>
+            <button
+              data-test="toggle-usage-filters"
+              type="button"
+              class="btn btn-secondary self-end"
+              :aria-expanded="showAdvancedFilters"
+              @click="showAdvancedFilters = !showAdvancedFilters"
+            >
+              <Icon name="filter" size="sm" class="mr-2" />
+              {{ t('userGroups.usage.moreFilters') }}
+              <span
+                v-if="activeAdvancedFilterCount"
+                class="ml-1 rounded-full bg-primary-100 px-1.5 py-0.5 text-xs font-semibold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300"
+                :title="t('userGroups.usage.activeFilters', { count: activeAdvancedFilterCount })"
+              >
+                {{ activeAdvancedFilterCount }}
+              </span>
+            </button>
+            <button data-test="apply-usage-filters" type="button" class="btn btn-primary self-end" :disabled="loadingData" @click="applyFilters">
+              <Icon name="search" size="sm" class="mr-2" />
+              {{ t('userGroups.usage.query') }}
+            </button>
+          </template>
+        </GroupContextRail>
+
+        <section v-if="showAdvancedFilters" data-test="advanced-usage-filters" class="grid gap-3 border-b border-gray-200 pb-4 dark:border-dark-700 sm:grid-cols-2 lg:grid-cols-3">
             <label class="block">
-              <span class="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.member') }}</span>
+              <span class="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('userGroups.usage.member') }}</span>
               <select v-model="memberFilter" data-test="member-filter" class="input">
                 <option value="">{{ t('userGroups.common.allMembers') }}</option>
                 <option v-for="member in members" :key="member.user_id" :value="member.user_id">{{ member.username || member.email }}</option>
               </select>
             </label>
             <label class="block">
-              <span class="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.model') }}</span>
+              <span class="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('userGroups.usage.model') }}</span>
               <input v-model="modelFilter" data-test="model-filter" class="input" :placeholder="t('userGroups.usage.modelPlaceholder')" />
             </label>
             <label class="block">
-              <span class="mb-1.5 block text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.billingType') }}</span>
+              <span class="mb-1.5 block text-xs font-medium text-gray-600 dark:text-gray-300">{{ t('userGroups.usage.billingType') }}</span>
               <select v-model="billingFilter" data-test="billing-filter" class="input">
                 <option value="">{{ t('userGroups.usage.allBillingTypes') }}</option>
                 <option value="0">{{ t('userGroups.usage.balanceBilling') }}</option>
                 <option value="1">{{ t('userGroups.usage.subscriptionBilling') }}</option>
               </select>
             </label>
-            <button data-test="apply-usage-filters" type="button" class="btn btn-primary" :disabled="loadingData" @click="applyFilters">
-              <Icon name="search" size="sm" class="mr-2" />
-              {{ t('userGroups.usage.query') }}
-            </button>
-          </div>
         </section>
 
         <section v-if="dataError" data-test="usage-error" class="rounded-lg border border-red-200 bg-red-50 px-5 py-8 text-center dark:border-red-900/60 dark:bg-red-950/30">
@@ -69,8 +82,34 @@
         <template v-else-if="result">
           <GroupUsageSummary :summary="result.summary" />
 
-          <section class="space-y-3">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('userGroups.usage.memberSummary') }}</h2>
+          <div class="flex" role="tablist" :aria-label="t('userGroups.usage.resultView')">
+            <div class="inline-flex rounded-lg bg-gray-100 p-1 dark:bg-dark-800">
+              <button
+                data-test="usage-view-members"
+                type="button"
+                class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+                :class="resultView === 'members' ? 'bg-white text-gray-950 shadow-sm dark:bg-dark-700 dark:text-white' : 'text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white'"
+                :aria-selected="resultView === 'members'"
+                role="tab"
+                @click="resultView = 'members'"
+              >
+                {{ t('userGroups.usage.memberView') }}
+              </button>
+              <button
+                data-test="usage-view-details"
+                type="button"
+                class="rounded-md px-3 py-1.5 text-sm font-medium transition-colors"
+                :class="resultView === 'details' ? 'bg-white text-gray-950 shadow-sm dark:bg-dark-700 dark:text-white' : 'text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white'"
+                :aria-selected="resultView === 'details'"
+                role="tab"
+                @click="resultView = 'details'"
+              >
+                {{ t('userGroups.usage.detailView') }}
+              </button>
+            </div>
+          </div>
+
+          <section v-if="resultView === 'members'" data-test="usage-member-table">
             <div class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
               <div v-if="result.by_user.length === 0" class="px-5 py-10 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.noUsage') }}</div>
               <template v-else>
@@ -99,8 +138,7 @@
             </div>
           </section>
 
-          <section class="space-y-3">
-            <h2 class="text-base font-semibold text-gray-900 dark:text-white">{{ t('userGroups.usage.requestDetails') }}</h2>
+          <section v-else data-test="usage-detail-table">
             <div class="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-900">
               <div v-if="loadingData" class="px-5 py-12 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('common.loading') }}</div>
               <div v-else-if="result.items.length === 0" class="px-5 py-12 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.noUsage') }}</div>
@@ -146,7 +184,7 @@
 
         <div v-else-if="loadingData" class="px-5 py-16 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('common.loading') }}</div>
       </template>
-    </div>
+    </UserGroupWorkspaceShell>
   </AppLayout>
 </template>
 
@@ -162,6 +200,7 @@ import { useAuthStore } from '@/stores/auth'
 import type { UserGroup, UserGroupMember, UserGroupUsageParams, UserGroupUsageResult } from '@/types/userGroups'
 import GroupContextRail from './components/GroupContextRail.vue'
 import GroupUsageSummary from './components/GroupUsageSummary.vue'
+import UserGroupWorkspaceShell from './components/UserGroupWorkspaceShell.vue'
 
 const MetricPair = defineComponent({
   props: { label: { type: String, required: true }, value: { type: String, required: true } },
@@ -192,8 +231,15 @@ const startDate = ref(formatLocalDate(addDays(new Date(), -6)))
 const memberFilter = ref('')
 const modelFilter = ref('')
 const billingFilter = ref<'' | '0' | '1'>('')
+const showAdvancedFilters = ref(false)
+const resultView = ref<'members' | 'details'>('members')
 const page = ref(1)
 const pageSize = ref(20)
+const activeAdvancedFilterCount = computed(() => [
+  memberFilter.value,
+  modelFilter.value.trim(),
+  billingFilter.value,
+].filter(Boolean).length)
 
 function addDays(value: Date, days: number) {
   const next = new Date(value)

@@ -1,5 +1,5 @@
 <template>
-  <section class="grid divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-700 dark:border-dark-700 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-5">
+  <section data-test="usage-summary-band" class="grid grid-cols-2 divide-x divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-700 dark:border-dark-700 sm:grid-cols-2 xl:grid-cols-5 xl:divide-y-0">
     <div class="px-5 py-4">
       <p class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.requests') }}</p>
       <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ formatNumber(summary.total_requests) }}</p>

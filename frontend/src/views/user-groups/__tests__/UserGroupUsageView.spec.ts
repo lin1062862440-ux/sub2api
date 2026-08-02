@@ -7,7 +7,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   getMembers: vi.fn(),
   getUsage: vi.fn(),
-  route: { query: { group_id: '7' } as Record<string, string> },
+  route: { name: 'UserGroupUsage', query: { group_id: '7' } as Record<string, string> },
   replace: vi.fn(),
 }))
 
@@ -66,6 +66,10 @@ function mountView() {
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
         Icon: { template: '<i />' },
+        RouterLink: {
+          props: ['to'],
+          template: '<a><slot /></a>',
+        },
         Pagination: {
           props: ['page', 'total', 'pageSize'],
           emits: ['update:page'],
@@ -89,7 +93,7 @@ describe('UserGroupUsageView', () => {
 
   afterEach(() => vi.useRealTimers())
 
-  it('uses a seven-day local range and renders split billing totals, member totals, and details', async () => {
+  it('uses a seven-day local range and opens on the member summary', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -102,13 +106,18 @@ describe('UserGroupUsageView', () => {
     expect(wrapper.get('[data-test="balance-consumption"]').text()).toContain('$3.25')
     expect(wrapper.get('[data-test="subscription-consumption"]').text()).toContain('$10.00')
     expect(wrapper.text()).toContain('Alice')
-    expect(wrapper.text()).toContain('claude-sonnet-4')
-    expect(wrapper.text()).toContain('req-safe-1')
+    expect(wrapper.get('[data-test="usage-member-table"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="usage-detail-table"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="usage-summary-band"]').classes()).toContain('xl:grid-cols-5')
   })
 
   it('applies member, model, and billing filters and paginates details', async () => {
     const wrapper = mountView()
     await flushPromises()
+
+    expect(wrapper.find('[data-test="advanced-usage-filters"]').exists()).toBe(false)
+    await wrapper.get('[data-test="toggle-usage-filters"]').trigger('click')
+    expect(wrapper.get('[data-test="advanced-usage-filters"]').exists()).toBe(true)
 
     await wrapper.get('[data-test="member-filter"]').setValue('11')
     await wrapper.get('[data-test="model-filter"]').setValue('gpt-5')
@@ -118,9 +127,23 @@ describe('UserGroupUsageView', () => {
 
     expect(mocks.getUsage).toHaveBeenLastCalledWith(7, expect.objectContaining({ user_id: 11, model: 'gpt-5', billing_type: 0, page: 1 }))
 
+    await wrapper.get('[data-test="usage-view-details"]').trigger('click')
     await wrapper.get('[data-test="next-page"]').trigger('click')
     await flushPromises()
     expect(mocks.getUsage).toHaveBeenLastCalledWith(7, expect.objectContaining({ page: 2 }))
+  })
+
+  it('switches between member and detail results without requesting usage again', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const requestCount = mocks.getUsage.mock.calls.length
+    await wrapper.get('[data-test="usage-view-details"]').trigger('click')
+
+    expect(wrapper.get('[data-test="usage-detail-table"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('claude-sonnet-4')
+    expect(wrapper.text()).toContain('req-safe-1')
+    expect(mocks.getUsage).toHaveBeenCalledTimes(requestCount)
   })
 
   it('uses the route group and updates the query when the group changes', async () => {
@@ -151,14 +174,14 @@ describe('UserGroupUsageView', () => {
     expect(wrapper.text()).toContain('userGroups.usage.noUsage')
   })
 
-  it('delays the six-column filter layout until the content area is wide enough', async () => {
+  it('keeps advanced filters in a responsive inline row', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    const filterGrid = wrapper.get('[data-test="apply-usage-filters"]').element.parentElement
-    const classes = String(filterGrid?.className).split(/\s+/)
-    expect(classes.some(className => className.startsWith('2xl:grid-cols-'))).toBe(true)
-    expect(classes.some(className => className.startsWith('xl:grid-cols-'))).toBe(false)
+    await wrapper.get('[data-test="toggle-usage-filters"]').trigger('click')
+    const classes = wrapper.get('[data-test="advanced-usage-filters"]').classes()
+    expect(classes).toContain('lg:grid-cols-3')
+    expect(classes.some(className => className.startsWith('sm:grid-cols-'))).toBe(true)
   })
 
   it('keeps usage rows stacked until their fixed columns fit the content area', async () => {
@@ -167,13 +190,8 @@ describe('UserGroupUsageView', () => {
 
     const responsiveClasses = wrapper.findAll('[class]').flatMap(element => element.classes())
     const memberLayoutClasses = responsiveClasses.filter(className => className.includes('grid-cols-[minmax(180px'))
-    const detailLayoutClasses = responsiveClasses.filter(className => className.includes('grid-cols-[minmax(160px'))
-
     expect(memberLayoutClasses.length).toBeGreaterThan(0)
-    expect(detailLayoutClasses.length).toBeGreaterThan(0)
     expect(memberLayoutClasses.some(className => className.startsWith('xl:'))).toBe(true)
-    expect(detailLayoutClasses.some(className => className.startsWith('xl:'))).toBe(true)
     expect(memberLayoutClasses.some(className => /^(md|lg):/.test(className))).toBe(false)
-    expect(detailLayoutClasses.some(className => /^(md|lg):/.test(className))).toBe(false)
   })
 })
