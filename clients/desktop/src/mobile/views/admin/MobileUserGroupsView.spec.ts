@@ -272,6 +272,121 @@ describe('MobileUserGroupsView', () => {
     expect(mocks.replaceViewers).toHaveBeenCalledWith(3, [9, 7])
   })
 
+  it('keeps an existing member outside the first candidate page visible and submits it unchanged', async () => {
+    mocks.members.mockResolvedValueOnce([{
+      ...member,
+      user_id: 501,
+      username: 'Outside Member',
+      email: 'outside-member@example.com',
+    }])
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="selected-person-501"]').text()).toContain('Outside Member')
+    expect(wrapper.find('[data-testid="people-option-501"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.replaceMembers).toHaveBeenCalledWith(3, [501])
+  })
+
+  it('keeps an existing viewer outside the first candidate page visible and submits it unchanged', async () => {
+    mocks.viewers.mockResolvedValueOnce([{
+      ...viewer,
+      user_id: 777,
+      username: 'Outside Viewer',
+      email: 'outside-viewer@example.com',
+    }])
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="group-viewers-3"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="selected-person-777"]').text()).toContain('Outside Viewer')
+    expect(wrapper.find('[data-testid="people-option-777"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.replaceViewers).toHaveBeenCalledWith(3, [777])
+  })
+
+  it('preserves unsaved selections across people searches without showing non-matches as results', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="people-option-9"]').trigger('click')
+    mocks.users.mockResolvedValueOnce({
+      items: [user({ id: 9, username: 'Chen', email: 'chen@example.com' })],
+      total: 1,
+      page: 1,
+      page_size: 100,
+    })
+    await wrapper.get('[data-testid="people-search"]').setValue(' chen ')
+    await wrapper.get('[data-testid="people-search-form"]').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.members).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="people-option-7"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="people-option-9"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="selected-person-7"]').text()).toContain('Lin')
+
+    mocks.users.mockResolvedValueOnce({
+      items: [user(), user({ id: 9, username: 'Chen', email: 'chen@example.com' })],
+      total: 2,
+      page: 1,
+      page_size: 100,
+    })
+    await wrapper.get('[data-testid="people-search"]').setValue('')
+    await wrapper.get('[data-testid="people-search-form"]').trigger('submit')
+    await flushPromises()
+    expect(mocks.members).toHaveBeenCalledTimes(1)
+    expect(wrapper.get('[data-testid="people-option-7"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="people-option-9"]').attributes('aria-pressed')).toBe('true')
+
+    await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
+    await flushPromises()
+    expect(mocks.replaceMembers).toHaveBeenCalledWith(3, [7, 9])
+  })
+
+  it('retries a malformed candidate search without reloading or overwriting local selections', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="people-option-9"]').trigger('click')
+
+    mocks.users.mockResolvedValueOnce({
+      items: [{ ...user(), id: 'bad-id' }],
+      total: 1,
+      page: 1,
+      page_size: 100,
+    })
+    await wrapper.get('[data-testid="people-search"]').setValue('chen')
+    await wrapper.get('[data-testid="people-search-form"]').trigger('submit')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="people-data-error"]').text()).toContain('候选用户数据格式异常')
+
+    mocks.users.mockResolvedValueOnce({
+      items: [user({ id: 9, username: 'Chen', email: 'chen@example.com' })],
+      total: 1,
+      page: 1,
+      page_size: 100,
+    })
+    await wrapper.get('[data-testid="retry-user-group-people"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.members).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('[data-testid="selected-person-7"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="people-option-9"]').attributes('aria-pressed')).toBe('true')
+    await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
+    await flushPromises()
+    expect(mocks.replaceMembers).toHaveBeenCalledWith(3, [7, 9])
+  })
+
   it('sanitizes replacement IDs and disables save for malformed people data until retry succeeds', async () => {
     mocks.members.mockResolvedValueOnce([
       member,
@@ -285,12 +400,7 @@ describe('MobileUserGroupsView', () => {
 
     expect(wrapper.get('[data-testid="people-data-error"]').text()).toBe('成员数据格式异常，请重试。')
     expect(wrapper.get('[data-testid="save-user-group-people"]').attributes('disabled')).toBeDefined()
-    mocks.members.mockResolvedValueOnce([member, { ...member }, {
-      ...member,
-      user_id: 999,
-      username: 'Unknown',
-      email: 'unknown@example.com',
-    }])
+    mocks.members.mockResolvedValueOnce([member, { ...member }])
     mocks.users.mockResolvedValueOnce({
       items: [user(), user({ id: 9, username: 'Chen', email: 'chen@example.com' }), { ...user({ id: 9 }) }],
       total: 3,

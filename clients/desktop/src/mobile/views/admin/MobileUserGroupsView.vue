@@ -72,14 +72,17 @@ const peopleLoading = ref(false)
 const peopleSaving = ref(false)
 const peopleDataValid = ref(false)
 const peopleDataError = ref('')
+const peopleRetryScope = ref<'context' | 'candidates'>('context')
 const peopleError = ref('')
-const candidates = ref<AdminUser[]>([])
+const visibleCandidates = ref<AdminUser[]>([])
+const knownPeople = ref<AdminUser[]>([])
 const selectedIds = ref<number[]>([])
 
 let mounted = false
 let listGeneration = 0
 let editorGeneration = 0
 let peopleGeneration = 0
+let peopleSearchGeneration = 0
 let feedbackGeneration = 0
 
 const canManage = computed(() => (
@@ -102,6 +105,14 @@ const busy = computed(() => (
   initialLoading.value || listLoading.value || editorSaving.value || archiveSaving.value || peopleLoading.value || peopleSaving.value
 ))
 const peopleLabel = computed(() => peopleMode.value === 'members' ? '成员' : '查看者')
+const hiddenSelectedPeople = computed(() => {
+  const visibleIds = new Set(visibleCandidates.value.map((candidate) => candidate.id))
+  const peopleById = new Map(knownPeople.value.map((person) => [person.id, person]))
+  return selectedIds.value
+    .filter((id) => !visibleIds.has(id))
+    .map((id) => peopleById.get(id))
+    .filter((person): person is AdminUser => Boolean(person))
+})
 
 function safeText(value: unknown) {
   return typeof value === 'string' ? value : ''
@@ -144,6 +155,7 @@ function ownsFeedback(token: number) {
 function closeAllEditors() {
   editorGeneration += 1
   peopleGeneration += 1
+  peopleSearchGeneration += 1
   editorOpen.value = false
   archiveOpen.value = false
   peopleOpen.value = false
@@ -341,28 +353,56 @@ function validUser(candidate: unknown): candidate is AdminUser {
   return safeId(value.id) && typeof value.username === 'string' && typeof value.email === 'string'
 }
 
+function selectedPersonAsUser(person: GroupPerson): AdminUser {
+  return {
+    id: person.user_id,
+    username: person.username,
+    email: person.email,
+    avatar_url: person.avatar_url,
+    role: 'user',
+    balance: 'balance' in person && Number.isFinite(person.balance) ? person.balance : 0,
+    concurrency: 0,
+    status: person.status === 'disabled' ? 'disabled' : 'active',
+    allowed_groups: [],
+    notes: '',
+    created_at: '',
+    updated_at: '',
+  }
+}
+
+function mergeKnownPeople(people: AdminUser[], replace = false) {
+  const byId = new Map<number, AdminUser>()
+  if (!replace) knownPeople.value.forEach((person) => byId.set(person.id, person))
+  people.forEach((person) => byId.set(person.id, person))
+  knownPeople.value = [...byId.values()]
+}
+
 function closePeople() {
   if (peopleSaving.value) return
   peopleGeneration += 1
+  peopleSearchGeneration += 1
   peopleOpen.value = false
   peopleGroup.value = null
   peopleError.value = ''
   peopleDataError.value = ''
+  peopleRetryScope.value = 'context'
   peopleDataValid.value = false
 }
 
 function openPeople(target: UserGroup, mode: PeopleMode) {
   if (!canManage.value || !safeId(target.id)) return
   peopleGeneration += 1
+  peopleSearchGeneration += 1
   peopleGroup.value = target
   peopleMode.value = mode
   peopleSearch.value = ''
   peopleOpen.value = true
   peopleError.value = ''
-  void loadPeople(peopleGeneration)
+  peopleRetryScope.value = 'context'
+  void loadPeople(peopleGeneration, peopleSearchGeneration)
 }
 
-async function loadPeople(generation = ++peopleGeneration, preserveCandidates = false) {
+async function loadPeople(generation = ++peopleGeneration, searchGeneration = ++peopleSearchGeneration) {
   const target = peopleGroup.value
   const mode = peopleMode.value
   if (!target || !safeId(target.id)) return
@@ -381,7 +421,8 @@ async function loadPeople(generation = ++peopleGeneration, preserveCandidates = 
       mode === 'members' ? getUserGroupMembers(targetId) : getUserGroupViewers(targetId),
       listAdminUsers(params),
     ])
-    if (!mounted || generation !== peopleGeneration || peopleGroup.value?.id !== targetId || peopleMode.value !== mode) return
+    if (!mounted || generation !== peopleGeneration || searchGeneration !== peopleSearchGeneration
+      || peopleGroup.value?.id !== targetId || peopleMode.value !== mode) return
     if (!Array.isArray(selectedResponse) || selectedResponse.some((person) => !validPerson(person))) {
       throw new Error('INVALID_SELECTED_PEOPLE')
     }
@@ -390,41 +431,90 @@ async function loadPeople(generation = ++peopleGeneration, preserveCandidates = 
       throw new Error('INVALID_PEOPLE_CANDIDATES')
     }
 
-    const byId = new Map<number, AdminUser>()
-    if (preserveCandidates) candidates.value.forEach((candidate) => byId.set(candidate.id, candidate))
-    usersResponse.items.forEach((candidate) => byId.set(candidate.id, candidate))
-    candidates.value = [...byId.values()]
-    const candidateIds = new Set(candidates.value.map((candidate) => candidate.id))
-    selectedIds.value = [...new Set(selectedResponse.map((person) => person.user_id))]
-      .filter((id) => safeId(id) && candidateIds.has(id))
+    visibleCandidates.value = [...new Map(usersResponse.items.map((candidate) => [candidate.id, candidate])).values()]
+    mergeKnownPeople([
+      ...selectedResponse.map(selectedPersonAsUser),
+      ...visibleCandidates.value,
+    ], true)
+    selectedIds.value = [...new Set(selectedResponse.map((person) => person.user_id))].filter(safeId)
     peopleDataValid.value = true
   } catch (caught) {
-    if (!mounted || generation !== peopleGeneration || peopleGroup.value?.id !== targetId || peopleMode.value !== mode) return
+    if (!mounted || generation !== peopleGeneration || searchGeneration !== peopleSearchGeneration
+      || peopleGroup.value?.id !== targetId || peopleMode.value !== mode) return
     if (isPermissionError(caught)) {
       revokePermission()
       return
     }
-    candidates.value = []
+    visibleCandidates.value = []
+    knownPeople.value = []
     selectedIds.value = []
+    peopleRetryScope.value = 'context'
     const malformed = caught instanceof Error && caught.message.startsWith('INVALID_')
     peopleDataError.value = malformed
       ? `${mode === 'members' ? '成员' : '查看者'}数据格式异常，请重试。`
       : `${mode === 'members' ? '成员' : '查看者'}加载失败，请重试。`
   } finally {
-    if (mounted && generation === peopleGeneration) peopleLoading.value = false
+    if (mounted && generation === peopleGeneration && searchGeneration === peopleSearchGeneration) peopleLoading.value = false
+  }
+}
+
+async function loadPeopleCandidates(generation: number, searchGeneration: number) {
+  const target = peopleGroup.value
+  const mode = peopleMode.value
+  if (!target || !safeId(target.id)) return
+  const targetId = target.id
+  peopleLoading.value = true
+  peopleDataError.value = ''
+  peopleError.value = ''
+  try {
+    const response = await listAdminUsers({
+      page: 1,
+      page_size: PEOPLE_PAGE_SIZE,
+      ...(peopleSearch.value.trim() ? { search: peopleSearch.value.trim() } : {}),
+    })
+    if (!mounted || generation !== peopleGeneration || searchGeneration !== peopleSearchGeneration
+      || peopleGroup.value?.id !== targetId || peopleMode.value !== mode) return
+    if (!response || typeof response !== 'object' || !Array.isArray(response.items)
+      || response.items.some((candidate) => !validUser(candidate))) {
+      throw new Error('INVALID_PEOPLE_CANDIDATES')
+    }
+    visibleCandidates.value = [...new Map(response.items.map((candidate) => [candidate.id, candidate])).values()]
+    mergeKnownPeople(visibleCandidates.value)
+    peopleDataValid.value = true
+  } catch (caught) {
+    if (!mounted || generation !== peopleGeneration || searchGeneration !== peopleSearchGeneration
+      || peopleGroup.value?.id !== targetId || peopleMode.value !== mode) return
+    if (isPermissionError(caught)) {
+      revokePermission()
+      return
+    }
+    visibleCandidates.value = []
+    peopleDataValid.value = false
+    peopleRetryScope.value = 'candidates'
+    const malformed = caught instanceof Error && caught.message.startsWith('INVALID_')
+    peopleDataError.value = malformed
+      ? '候选用户数据格式异常，请重试。'
+      : '候选用户加载失败，请重试。'
+  } finally {
+    if (mounted && generation === peopleGeneration && searchGeneration === peopleSearchGeneration) peopleLoading.value = false
   }
 }
 
 function retryPeople() {
   if (peopleSaving.value) return
+  peopleSearchGeneration += 1
+  if (peopleRetryScope.value === 'candidates') {
+    void loadPeopleCandidates(peopleGeneration, peopleSearchGeneration)
+    return
+  }
   peopleGeneration += 1
-  void loadPeople(peopleGeneration)
+  void loadPeople(peopleGeneration, peopleSearchGeneration)
 }
 
 function submitPeopleSearch() {
   if (peopleSaving.value) return
-  peopleGeneration += 1
-  void loadPeople(peopleGeneration, true)
+  peopleSearchGeneration += 1
+  void loadPeopleCandidates(peopleGeneration, peopleSearchGeneration)
 }
 
 function togglePerson(id: number) {
@@ -440,8 +530,7 @@ async function savePeople() {
   const generation = peopleGeneration
   if (!target || !safeId(target.id) || !peopleDataValid.value || peopleLoading.value || peopleSaving.value || !canManage.value) return
   const targetId = target.id
-  const candidateIds = new Set(candidates.value.map((candidate) => candidate.id).filter(safeId))
-  const ids = [...new Set(selectedIds.value)].filter((id) => safeId(id) && candidateIds.has(id))
+  const ids = [...new Set(selectedIds.value)].filter(safeId)
   const token = claimFeedback()
   peopleSaving.value = true
   peopleError.value = ''
@@ -475,6 +564,7 @@ onUnmounted(() => {
   listGeneration += 1
   editorGeneration += 1
   peopleGeneration += 1
+  peopleSearchGeneration += 1
 })
 </script>
 
@@ -542,12 +632,20 @@ onUnmounted(() => {
         <form class="people-search" data-testid="people-search-form" @submit.prevent="submitPeopleSearch"><Search :size="17" /><input v-model="peopleSearch" data-testid="people-search" autocomplete="off" placeholder="搜索名称、邮箱或 ID" /><button type="submit" :disabled="peopleLoading || peopleSaving">搜索</button></form>
         <div v-if="peopleLoading" class="people-loading" role="status">正在加载{{ peopleLabel }}</div>
         <div v-else-if="peopleDataError" class="people-data-error" role="alert"><p data-testid="people-data-error">{{ peopleDataError }}</p><button type="button" data-testid="retry-user-group-people" @click="retryPeople">重试</button></div>
-        <div v-else class="people-list">
-          <button v-for="candidate in candidates" :key="candidate.id" type="button" class="person-option" :class="{ selected: selectedIds.includes(candidate.id) }" :data-testid="`people-option-${candidate.id}`" :aria-pressed="selectedIds.includes(candidate.id)" @click="togglePerson(candidate.id)">
-            <span><strong>{{ safeName(candidate.username || candidate.email) }}</strong><small>{{ safeText(candidate.email) }} · #{{ candidate.id }}</small></span><i><Check :size="13" /></i>
-          </button>
-          <p v-if="!candidates.length" class="people-empty">没有符合条件的用户</p>
-        </div>
+        <template v-else>
+          <section v-if="hiddenSelectedPeople.length" class="selected-people" aria-label="当前结果之外的已选用户">
+            <span>已选择，不在当前结果中</span>
+            <button v-for="person in hiddenSelectedPeople" :key="person.id" type="button" class="person-option selected" :data-testid="`selected-person-${person.id}`" aria-pressed="true" @click="togglePerson(person.id)">
+              <span><strong>{{ safeName(person.username || person.email) }}</strong><small>{{ safeText(person.email) }} · #{{ person.id }}</small></span><i><Check :size="13" /></i>
+            </button>
+          </section>
+          <div class="people-list" aria-label="候选用户搜索结果">
+            <button v-for="candidate in visibleCandidates" :key="candidate.id" type="button" class="person-option" :class="{ selected: selectedIds.includes(candidate.id) }" :data-testid="`people-option-${candidate.id}`" :aria-pressed="selectedIds.includes(candidate.id)" @click="togglePerson(candidate.id)">
+              <span><strong>{{ safeName(candidate.username || candidate.email) }}</strong><small>{{ safeText(candidate.email) }} · #{{ candidate.id }}</small></span><i><Check :size="13" /></i>
+            </button>
+            <p v-if="!visibleCandidates.length" class="people-empty">没有符合条件的用户</p>
+          </div>
+        </template>
         <p v-if="peopleError" class="sheet-error" data-testid="user-group-people-error" role="alert">{{ peopleError }}</p>
       </div>
       <template #footer><button type="button" data-testid="close-user-group-people" :disabled="peopleSaving" @click="closePeople">取消</button><button class="sheet-primary" type="button" data-testid="save-user-group-people" :disabled="peopleSaving || peopleLoading || !peopleDataValid" @click="savePeople"><LoaderCircle v-if="peopleSaving" :size="17" class="spinning" /><Check v-else :size="17" />{{ peopleSaving ? '保存中' : `保存${peopleLabel}` }}</button></template>
@@ -556,5 +654,5 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.primary-action,.directory-toolbar button,.page-state button,.group-card footer button,.editor-form input,.editor-form textarea,.people-search input,.people-search button,.people-data-error button,.person-option{box-sizing:border-box;min-height:44px}.primary-action{display:flex;align-items:center;gap:6px;padding:0 13px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.user-groups-content{display:grid;min-width:0;gap:12px}.directory-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.directory-toolbar label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.directory-toolbar input{width:100%;min-width:0;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.directory-toolbar button{padding:0 13px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.directory-toolbar .refresh-button{display:grid;width:44px;padding:0;border-color:var(--border-strong);background:var(--bg-surface);color:var(--text-primary);place-items:center}.directory-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--text-tertiary);font-size:12px}.directory-meta strong{padding:4px 7px;border-radius:5px;background:#edf4ff;color:var(--accent-strong);font-size:11px}.permission-error,.action-message,.action-error{display:flex;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border-radius:6px;font-size:13px;line-height:1.45}.permission-error,.action-error{border:1px solid #eccfc9;background:#fff5f2;color:#9e493c}.action-message{border:1px solid #cce6d8;background:#eef9f3;color:#287154}.list-busy{margin:0;padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.page-state{display:flex;min-height:180px;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-secondary);text-align:center}.page-state strong{color:var(--text-primary);font-size:16px}.page-state p{margin:0;font-size:14px}.page-state button{display:flex;align-items:center;gap:6px;margin-top:5px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.group-list{display:grid;gap:10px}.group-card{display:grid;min-width:0;gap:12px;padding:14px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.group-card>header{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:10px}.group-card>header>div{display:grid;min-width:0;gap:4px}.group-card>header strong,.group-card>header p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.group-card>header strong{font-size:15px}.group-card>header p{margin:0;color:var(--text-tertiary);font-size:12px}.group-card>header>span{padding:4px 7px;border-radius:5px;background:#eaf7f0;color:#287755;font-size:11px}.group-card>header>span.archived{background:#f0f2f5;color:#687282}.group-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0;overflow:hidden;border:1px solid var(--border-subtle);border-radius:6px}.group-card dl div{display:grid;gap:4px;padding:9px 11px}.group-card dl div+div{border-left:1px solid var(--border-subtle)}.group-card dt{color:var(--text-tertiary);font-size:10px}.group-card dd{margin:0;font-family:var(--font-data);font-size:15px;font-weight:700}.group-card footer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.group-card footer button{display:flex;min-width:0;align-items:center;justify-content:center;gap:5px;padding:0 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;font-size:12px}.group-card footer .danger{color:#a34a41}.editor-form>div{display:grid;gap:14px}.editor-form label{display:grid;gap:6px}.editor-form label span{color:var(--text-secondary);font-size:13px;font-weight:650}.editor-form input,.editor-form textarea{width:100%;padding:10px 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;overflow-wrap:anywhere}.editor-form textarea{min-height:104px;resize:vertical}.archive-copy{display:grid;justify-items:center;gap:10px;padding:8px 0;text-align:center}.archive-copy p{max-width:100%;margin:0;overflow-wrap:anywhere;line-height:1.55}.sheet-error{margin:0;padding:9px 10px;border:1px solid #eccfc9;border-radius:6px;background:#fff5f2;color:#9e493c;font-size:13px}.people-sheet{display:grid;min-width:0;gap:12px}.people-sheet>header{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px}.people-sheet>header strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.people-sheet>header span{flex:0 0 auto;color:var(--text-tertiary);font-size:12px}.people-search{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:7px;padding-left:10px;border:1px solid var(--border-strong);border-radius:6px;color:var(--text-tertiary)}.people-search input{min-width:0;padding:0;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.people-search button{margin-right:4px;padding:0 12px;border:0;border-radius:5px;background:var(--accent-soft);color:var(--accent-strong);font:inherit}.people-loading,.people-empty{padding:34px 12px;color:var(--text-tertiary);text-align:center}.people-data-error{display:grid;justify-items:center;gap:8px;padding:24px 12px;color:#9e493c;text-align:center}.people-data-error p{margin:0}.people-data-error button{padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.people-list{display:grid;gap:8px}.person-option{display:grid;width:100%;min-width:0;grid-template-columns:minmax(0,1fr) 24px;align-items:center;gap:10px;padding:10px 11px;border:1px solid var(--border-subtle);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);text-align:left}.person-option>span{display:grid;min-width:0;gap:3px}.person-option strong,.person-option small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.person-option small{color:var(--text-tertiary)}.person-option>i{display:grid;width:22px;height:22px;border:1px solid var(--border-strong);border-radius:5px;color:transparent;place-items:center}.person-option.selected{border-color:#abc4ec;background:#f5f9ff}.person-option.selected>i{border-color:var(--accent);background:var(--accent);color:#fff}.sheet-primary,.sheet-danger{display:flex;align-items:center;gap:6px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.sheet-danger{border-color:#a34a41;background:#a34a41}.spinning{animation:spin .75s linear infinite}.mobile-pagination{margin-top:2px}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:380px){.directory-toolbar{grid-template-columns:minmax(0,1fr) 44px}.directory-toolbar>button[type=submit]{grid-column:1/-1;grid-row:2}.group-card footer{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+.primary-action,.directory-toolbar button,.page-state button,.group-card footer button,.editor-form input,.editor-form textarea,.people-search input,.people-search button,.people-data-error button,.person-option{box-sizing:border-box;min-height:44px}.primary-action{display:flex;align-items:center;gap:6px;padding:0 13px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.user-groups-content{display:grid;min-width:0;gap:12px}.directory-toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.directory-toolbar label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.directory-toolbar input{width:100%;min-width:0;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.directory-toolbar button{padding:0 13px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.directory-toolbar .refresh-button{display:grid;width:44px;padding:0;border-color:var(--border-strong);background:var(--bg-surface);color:var(--text-primary);place-items:center}.directory-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--text-tertiary);font-size:12px}.directory-meta strong{padding:4px 7px;border-radius:5px;background:#edf4ff;color:var(--accent-strong);font-size:11px}.permission-error,.action-message,.action-error{display:flex;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border-radius:6px;font-size:13px;line-height:1.45}.permission-error,.action-error{border:1px solid #eccfc9;background:#fff5f2;color:#9e493c}.action-message{border:1px solid #cce6d8;background:#eef9f3;color:#287154}.list-busy{margin:0;padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.page-state{display:flex;min-height:180px;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--text-secondary);text-align:center}.page-state strong{color:var(--text-primary);font-size:16px}.page-state p{margin:0;font-size:14px}.page-state button{display:flex;align-items:center;gap:6px;margin-top:5px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.group-list{display:grid;gap:10px}.group-card{display:grid;min-width:0;gap:12px;padding:14px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.group-card>header{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:10px}.group-card>header>div{display:grid;min-width:0;gap:4px}.group-card>header strong,.group-card>header p{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.group-card>header strong{font-size:15px}.group-card>header p{margin:0;color:var(--text-tertiary);font-size:12px}.group-card>header>span{padding:4px 7px;border-radius:5px;background:#eaf7f0;color:#287755;font-size:11px}.group-card>header>span.archived{background:#f0f2f5;color:#687282}.group-card dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));margin:0;overflow:hidden;border:1px solid var(--border-subtle);border-radius:6px}.group-card dl div{display:grid;gap:4px;padding:9px 11px}.group-card dl div+div{border-left:1px solid var(--border-subtle)}.group-card dt{color:var(--text-tertiary);font-size:10px}.group-card dd{margin:0;font-family:var(--font-data);font-size:15px;font-weight:700}.group-card footer{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}.group-card footer button{display:flex;min-width:0;align-items:center;justify-content:center;gap:5px;padding:0 6px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;font-size:12px}.group-card footer .danger{color:#a34a41}.editor-form>div{display:grid;gap:14px}.editor-form label{display:grid;gap:6px}.editor-form label span{color:var(--text-secondary);font-size:13px;font-weight:650}.editor-form input,.editor-form textarea{width:100%;padding:10px 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;overflow-wrap:anywhere}.editor-form textarea{min-height:104px;resize:vertical}.archive-copy{display:grid;justify-items:center;gap:10px;padding:8px 0;text-align:center}.archive-copy p{max-width:100%;margin:0;overflow-wrap:anywhere;line-height:1.55}.sheet-error{margin:0;padding:9px 10px;border:1px solid #eccfc9;border-radius:6px;background:#fff5f2;color:#9e493c;font-size:13px}.people-sheet{display:grid;min-width:0;gap:12px}.people-sheet>header{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px}.people-sheet>header strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.people-sheet>header span{flex:0 0 auto;color:var(--text-tertiary);font-size:12px}.people-search{display:grid;grid-template-columns:20px minmax(0,1fr) auto;align-items:center;gap:7px;padding-left:10px;border:1px solid var(--border-strong);border-radius:6px;color:var(--text-tertiary)}.people-search input{min-width:0;padding:0;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.people-search button{margin-right:4px;padding:0 12px;border:0;border-radius:5px;background:var(--accent-soft);color:var(--accent-strong);font:inherit}.people-loading,.people-empty{padding:34px 12px;color:var(--text-tertiary);text-align:center}.people-data-error{display:grid;justify-items:center;gap:8px;padding:24px 12px;color:#9e493c;text-align:center}.people-data-error p{margin:0}.people-data-error button{padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.selected-people,.people-list{display:grid;gap:8px}.selected-people{padding-bottom:12px;border-bottom:1px solid var(--border-subtle)}.selected-people>span{color:var(--text-tertiary);font-size:11px}.person-option{display:grid;width:100%;min-width:0;grid-template-columns:minmax(0,1fr) 24px;align-items:center;gap:10px;padding:10px 11px;border:1px solid var(--border-subtle);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);text-align:left}.person-option>span{display:grid;min-width:0;gap:3px}.person-option strong,.person-option small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.person-option small{color:var(--text-tertiary)}.person-option>i{display:grid;width:22px;height:22px;border:1px solid var(--border-strong);border-radius:5px;color:transparent;place-items:center}.person-option.selected{border-color:#abc4ec;background:#f5f9ff}.person-option.selected>i{border-color:var(--accent);background:var(--accent);color:#fff}.sheet-primary,.sheet-danger{display:flex;align-items:center;gap:6px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.sheet-danger{border-color:#a34a41;background:#a34a41}.spinning{animation:spin .75s linear infinite}.mobile-pagination{margin-top:2px}@keyframes spin{to{transform:rotate(360deg)}}@media(max-width:380px){.directory-toolbar{grid-template-columns:minmax(0,1fr) 44px}.directory-toolbar>button[type=submit]{grid-column:1/-1;grid-row:2}.group-card footer{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>
