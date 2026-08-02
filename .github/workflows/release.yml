@@ -84,8 +84,57 @@ jobs:
           path: backend/internal/web/dist/
           retention-days: 1
 
+  build-desktop-windows:
+    if: ${{ !(github.event.inputs.simple_release == 'true' || vars.SIMPLE_RELEASE == 'true') }}
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+          cache-dependency-path: clients/desktop/pnpm-lock.yaml
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc,i686-pc-windows-msvc
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            clients/desktop/src-tauri
+            clients/desktop/src-installer-windows
+
+      - name: Install desktop dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: clients/desktop
+
+      - name: Build Windows installers
+        run: |
+          pnpm bundle:windows:x64
+          pnpm bundle:windows:x86
+        working-directory: clients/desktop
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: linai-windows-installer
+          path: clients/desktop/dist-windows/LinAI-*-windows-*-setup.exe
+          if-no-files-found: error
+
   release:
-    needs: [update-version, build-frontend]
+    needs: [update-version, build-frontend, build-desktop-windows]
+    if: ${{ always() && needs.update-version.result == 'success' && needs.build-frontend.result == 'success' && (needs.build-desktop-windows.result == 'success' || needs.build-desktop-windows.result == 'skipped') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -105,6 +154,13 @@ jobs:
         with:
           name: frontend-dist
           path: backend/internal/web/dist/
+
+      - name: Download Windows installer artifact
+        if: ${{ env.SIMPLE_RELEASE != 'true' }}
+        uses: actions/download-artifact@v8
+        with:
+          name: linai-windows-installer
+          path: dist-desktop-windows/
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -184,6 +240,13 @@ jobs:
           GITHUB_REPO_OWNER_LOWER: ${{ steps.lowercase.outputs.owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME || 'skip' }}
+
+      - name: Upload Windows installer to release
+        if: ${{ env.SIMPLE_RELEASE != 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: gh release upload "$RELEASE_TAG" dist-desktop-windows/LinAI-*-windows-*-setup.exe --clobber
 
       # Update DockerHub description
       - name: Update DockerHub description

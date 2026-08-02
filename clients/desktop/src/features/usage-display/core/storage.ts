@@ -14,6 +14,7 @@ export type UsageDisplayAppearance = 'sky' | 'meadow' | 'sunset' | 'native'
 export type FloatingUsageStyle = 'orb' | 'bar'
 
 const store = new LazyStore('linai.json', { autoSave: 100 })
+const installerDefaultKey = 'usage_display:installer-default'
 
 export function defaultUsageDisplayConfig(): UsageDisplayConfig {
   return {
@@ -73,6 +74,10 @@ function isValidConfig(value: unknown): value is UsageDisplayConfig {
 
 export async function loadUsageDisplayConfig(userId: number): Promise<UsageDisplayConfig> {
   const value = await store.get<unknown>(`usage_display:${userId}`)
+  if (value === undefined || value === null) {
+    const installerDefault = await store.get<unknown>(installerDefaultKey)
+    return normalizeConfig(installerDefault)
+  }
   return normalizeConfig(value)
 }
 

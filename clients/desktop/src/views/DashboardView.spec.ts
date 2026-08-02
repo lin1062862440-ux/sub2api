@@ -184,6 +184,27 @@ describe('DashboardView', () => {
     }))
   })
 
+  it('uses the local calendar date near the UTC day boundary', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 7, 3, 0, 30))
+    const wrapper = mount(DashboardView)
+    await flushPromises()
+
+    expect(mocks.getDashboardTrend).toHaveBeenCalledWith({
+      granularity: 'day',
+      start_date: '2026-07-28',
+      end_date: '2026-08-03',
+    })
+    expect(mocks.getDashboardModels).toHaveBeenCalledWith({
+      limit: 10,
+      start_date: '2026-07-28',
+      end_date: '2026-08-03',
+    })
+
+    wrapper.unmount()
+    vi.useRealTimers()
+  })
+
   it('exposes loading and refreshing states without removing successful data', async () => {
     const initialStats = deferred<typeof stats>()
     mocks.getDashboardStats.mockReturnValueOnce(initialStats.promise)

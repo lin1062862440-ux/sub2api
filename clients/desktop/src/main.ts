@@ -4,11 +4,14 @@ import { getCurrent, onOpenUrl } from '@tauri-apps/plugin-deep-link'
 import App from './App.vue'
 import { router } from './router'
 import { parseResetDeepLink, setResetHandoff } from '@/lib/deep-link'
+import { disableWebviewContextMenu } from '@/lib/context-menu'
 import { appCapabilities } from '@/lib/platform-capabilities'
 import { bootstrap } from '@/stores/session'
 import './style.css'
 import './components/user-groups/user-groups.css'
 import './mobile/mobile.css'
+
+disableWebviewContextMenu()
 
 async function handleDeepLinks(urls: string[]) {
   const handoff = urls.map(parseResetDeepLink).find((value) => value !== null)

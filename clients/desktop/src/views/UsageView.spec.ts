@@ -28,6 +28,7 @@ vi.mock('@/api', () => ({
 vi.mock('@/stores/session', () => ({ session: mocks.session }))
 
 import UsageView from './UsageView.vue'
+import UsageRecordsTable from '@/components/UsageRecordsTable.vue'
 
 const stats = {
   total_requests: 24,
@@ -122,11 +123,36 @@ describe('UsageView', () => {
     mocks.getUsageStats.mockClear()
     mocks.getUsageRecords.mockClear()
 
-    await wrapper.get('[data-testid="api-key-filter"]').setValue('2')
+    await wrapper.get('[data-testid="api-key-filter-trigger"]').trigger('click')
+    const productionKey = wrapper.findAll('[role="option"]')
+      .find((option) => option.text().includes('production-key'))
+    expect(productionKey).toBeDefined()
+    await productionKey!.trigger('click')
     await flushPromises()
 
     expect(mocks.getUsageStats).toHaveBeenLastCalledWith(expect.objectContaining({ api_key_id: 2 }))
     expect(mocks.getUsageRecords).toHaveBeenLastCalledWith(expect.objectContaining({ api_key_id: 2, page: 1 }))
+  })
+
+  it('recovers key choices and uses full-width styled filter menus', async () => {
+    mocks.getUsageApiKeys.mockRejectedValueOnce(new Error('unavailable'))
+    const wrapper = mount(UsageView)
+    await flushPromises()
+
+    const keyTrigger = wrapper.get('[data-testid="api-key-filter-trigger"]')
+    expect(keyTrigger.element.tagName).toBe('BUTTON')
+    await keyTrigger.get('svg').trigger('click')
+    expect(wrapper.get('[data-testid="api-key-filter"]').get('[role="listbox"]').text())
+      .toContain('production-key')
+
+    const modelTrigger = wrapper.get('[data-testid="model-filter-trigger"]')
+    await modelTrigger.trigger('click')
+    expect(wrapper.get('[data-testid="model-filter"]').get('[role="listbox"]').text())
+      .toContain('claude-sonnet-4')
+
+    await wrapper.get('.filter-command').trigger('click')
+    expect(wrapper.get('.advanced-filters').element.parentElement)
+      .toBe(wrapper.get('.advanced-filter-anchor').element)
   })
 
   it('keeps successful records visible when one analysis endpoint fails', async () => {
@@ -179,14 +205,14 @@ describe('UsageView', () => {
     initialStats.resolve(stats)
     await flushPromises()
     expect(wrapper.get('.usage-page').classes()).toContain('is-loaded')
-    expect(wrapper.text()).toContain('production-key')
+    expect(wrapper.getComponent(UsageRecordsTable).props('rows')).toEqual([record])
 
     const refreshedStats = deferred<typeof stats>()
     mocks.getUsageStats.mockReturnValueOnce(refreshedStats.promise)
     await wrapper.get('.icon-button').trigger('click')
 
     expect(wrapper.get('.usage-page').classes()).toContain('is-refreshing')
-    expect(wrapper.text()).toContain('production-key')
+    expect(wrapper.getComponent(UsageRecordsTable).props('rows')).toEqual([record])
 
     refreshedStats.resolve(stats)
     await flushPromises()

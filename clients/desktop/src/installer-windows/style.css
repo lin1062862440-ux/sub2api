@@ -1,0 +1,421 @@
+:root {
+  color-scheme: light dark;
+  font-family: "Segoe UI Variable", "Segoe UI", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#installer-app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  letter-spacing: 0;
+}
+
+.installer-shell {
+  display: grid;
+  grid-template-rows: 40px minmax(0, 1fr) 96px;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: light-dark(#ffffff, #171d25);
+  color: light-dark(#171b24, #edf3fa);
+  border: 1px solid light-dark(#c8d1dd, #3b4654);
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 15px;
+  background: light-dark(#ffffff, #202731);
+  border-bottom: 1px solid light-dark(#e1e6ee, #303946);
+  color: light-dark(#455365, #c4cfdb);
+  user-select: none;
+}
+
+.window-actions {
+  display: flex;
+  height: 100%;
+}
+
+.window-actions button {
+  display: grid;
+  width: 46px;
+  height: 100%;
+  padding: 0;
+  place-items: center;
+  background: transparent;
+  border: 0;
+  color: inherit;
+}
+
+.window-actions button:hover:not(:disabled) {
+  background: light-dark(#eef1f5, #2a3340);
+}
+
+.window-actions button:last-child:hover:not(:disabled) {
+  background: #c42b1c;
+  color: #ffffff;
+}
+
+.window-actions button:disabled {
+  opacity: 0.38;
+}
+
+.installer-scene {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  background: light-dark(#ffffff, #10151c);
+}
+
+.particle-field {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.config-panel {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  width: 62%;
+  flex-direction: column;
+  padding: 27px 40px 22px;
+  overflow: hidden;
+  background: light-dark(#ffffff, #1b222c);
+  border-left: 1px solid light-dark(#e1e6ee, #303946);
+  opacity: 0;
+  clip-path: inset(0 0 0 100%);
+  transform: translateX(52px);
+  transition:
+    opacity 260ms ease,
+    transform 900ms cubic-bezier(.22, .75, .18, 1),
+    clip-path 900ms cubic-bezier(.22, .75, .18, 1);
+}
+
+.phase-config .config-panel,
+.phase-installing .config-panel,
+.phase-complete .config-panel,
+.phase-error .config-panel {
+  opacity: 1;
+  clip-path: inset(0);
+  transform: translateX(0);
+}
+
+.kicker {
+  color: light-dark(#245ccc, #8ab4ff);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.config-panel h1 {
+  margin: 7px 0 13px;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.path-label {
+  margin-bottom: 6px;
+  color: light-dark(#465467, #c6d0dc);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.path-control {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  min-height: 40px;
+  align-items: center;
+  gap: 9px;
+  padding-left: 12px;
+  background: light-dark(#ffffff, #202833);
+  border: 1px solid light-dark(#cbd4de, #43505f);
+  border-radius: 6px;
+  color: light-dark(#69778a, #aebac8);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+
+.path-control:focus-within {
+  border-color: light-dark(#2563eb, #60a5fa);
+  box-shadow: 0 0 0 3px light-dark(rgba(37, 99, 235, .12), rgba(96, 165, 250, .18));
+}
+
+.path-control input {
+  min-width: 0;
+  height: 36px;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  color: light-dark(#171b24, #edf3fa);
+  font-size: 14px;
+  text-overflow: ellipsis;
+}
+
+.path-control button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid light-dark(#d9e0e7, #3b4654);
+  color: light-dark(#245ccc, #8ab4ff);
+  font-size: 14px;
+}
+
+.path-control button:not(:disabled) {
+  cursor: pointer;
+}
+
+.path-control input:disabled,
+.path-control button:disabled {
+  opacity: 0.58;
+}
+
+.space-copy {
+  display: flex;
+  justify-content: space-between;
+  margin: 5px 0 7px;
+  color: light-dark(#768395, #919ead);
+  font-size: 13px;
+}
+
+.option-list {
+  display: grid;
+}
+
+.install-option {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  min-height: 51px;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid light-dark(#e1e6ee, #333d4a);
+}
+
+.install-option:has(input:not(:disabled)) {
+  cursor: pointer;
+}
+
+.option-icon {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  place-items: center;
+  background: light-dark(#edf7f4, #203a36);
+  border-radius: 6px;
+  color: light-dark(#24755f, #7be0c3);
+}
+
+.install-option strong,
+.install-option small {
+  display: block;
+}
+
+.install-option strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.install-option small {
+  margin-top: 1px;
+  color: light-dark(#667085, #9eabba);
+  font-size: 12px;
+}
+
+.install-option input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: light-dark(#1f5bd5, #60a5fa);
+}
+
+.install-error {
+  margin: 8px 0 0;
+  color: light-dark(#b4233c, #ff9aa9);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.config-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.config-actions button {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 17px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.config-actions button:not(:disabled) {
+  cursor: pointer;
+}
+
+.secondary-action {
+  background: light-dark(#ffffff, #202a36);
+  border: 1px solid light-dark(#d7dde8, #485668);
+  color: light-dark(#344054, #d9e4f0);
+}
+
+.secondary-action:hover:not(:disabled) {
+  background: light-dark(#f7f9fc, #293441);
+  border-color: light-dark(#aab4c4, #65758a);
+}
+
+.primary-action {
+  background: light-dark(#1f5bd5, #60a5fa);
+  border: 1px solid light-dark(#1f5bd5, #60a5fa);
+  color: light-dark(#ffffff, #08111f);
+  box-shadow: 0 7px 18px light-dark(rgba(31, 91, 213, .22), rgba(96, 165, 250, .24));
+}
+
+.primary-action:hover:not(:disabled) {
+  background: light-dark(#184db9, #7db7ff);
+  border-color: light-dark(#184db9, #7db7ff);
+}
+
+.primary-action:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.config-actions button:disabled {
+  cursor: default;
+  opacity: 0.58;
+  box-shadow: none;
+}
+
+.complete-mark {
+  position: absolute;
+  z-index: 3;
+  top: calc(50% - 34px);
+  left: calc(19% - 34px);
+  display: grid;
+  width: 68px;
+  height: 68px;
+  place-items: center;
+  border: 2px solid light-dark(#1f5bd5, #60a5fa);
+  border-radius: 50%;
+  color: light-dark(#1f5bd5, #60a5fa);
+  opacity: 0;
+  transform: scale(.55);
+  transition: opacity 280ms ease, transform 520ms cubic-bezier(.2, .9, .2, 1);
+}
+
+.phase-complete .complete-mark {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.progress-area {
+  padding: 14px 22px 16px;
+  background: light-dark(#ffffff, #171d25);
+  border-top: 1px solid light-dark(#e1e6ee, #303946);
+}
+
+.progress-copy {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 8px;
+  color: light-dark(#526070, #b6c1ce);
+  font-size: 13px;
+}
+
+.progress-copy span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.progress-copy strong {
+  flex: 0 0 auto;
+  color: light-dark(#1f5bd5, #60a5fa);
+  font-weight: 500;
+}
+
+.progress-track {
+  height: 6px;
+  overflow: hidden;
+  background: light-dark(#e2e7ed, #313a46);
+  border-radius: 3px;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  background: light-dark(#1f5bd5, #60a5fa);
+  border-radius: inherit;
+  transition: width 130ms linear;
+}
+
+.progress-steps {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  margin-top: 8px;
+  color: light-dark(#8a95a2, #7f8b99);
+  font-size: 12px;
+}
+
+.progress-steps span:nth-child(2),
+.progress-steps span:nth-child(3) {
+  text-align: center;
+}
+
+.progress-steps span:last-child {
+  text-align: right;
+}
+
+.progress-steps .active {
+  color: light-dark(#1f5bd5, #60a5fa);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+}

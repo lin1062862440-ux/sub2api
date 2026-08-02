@@ -1,7 +1,7 @@
 {
   "name": "linai-desktop",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,6 +14,11 @@
     "android:init": "tauri android init --ci --skip-targets-install",
     "android:dev": "tauri android dev",
     "android:apk": "tauri android build --debug --apk --target aarch64 --ci",
+    "build:installer:windows:ui": "vite build --config vite.installer.config.ts",
+    "dev:installer:windows": "vite --config vite.installer.config.ts",
+    "bundle:windows": "pnpm bundle:windows:x64",
+    "bundle:windows:x64": "node scripts/build-windows-installer.mjs --target x86_64-pc-windows-msvc",
+    "bundle:windows:x86": "node scripts/build-windows-installer.mjs --target i686-pc-windows-msvc",
     "bundle:macos": "pnpm brand:sync && APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} tauri build --bundles app,dmg"
   },
   "dependencies": {

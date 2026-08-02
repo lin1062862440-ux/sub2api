@@ -1,9 +1,9 @@
 #[cfg(desktop)]
 pub mod local_config;
 #[cfg(desktop)]
-mod usage_display;
-#[cfg(desktop)]
 mod text_export;
+#[cfg(desktop)]
+mod usage_display;
 
 #[cfg(desktop)]
 pub fn run() {
