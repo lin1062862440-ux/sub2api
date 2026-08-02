@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 const sourceModules = import.meta.glob([
-  './layouts/AppLayout.vue',
+  './layouts/DesktopAppLayout.vue',
   './views/*.vue',
   './views/admin/*.vue',
 ], { eager: true, query: '?raw', import: 'default' }) as Record<string, string>
@@ -33,7 +33,7 @@ const responsiveViews = [
 
 describe('desktop responsive layout contract', () => {
   it('uses the authenticated content pane as the responsive boundary', () => {
-    const layout = readSource('./layouts/AppLayout.vue')
+    const layout = readSource('./layouts/DesktopAppLayout.vue')
 
     expect(layout).toContain('container-name: app-content')
     expect(layout).toContain('container-type: inline-size')

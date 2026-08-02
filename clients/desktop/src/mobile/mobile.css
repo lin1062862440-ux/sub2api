@@ -40,12 +40,6 @@ html[data-mobile='true'] :is(.auth-window, .auth-shell) :is(.form-pane, .auth-sh
   padding-bottom: calc(28px + env(safe-area-inset-bottom));
 }
 
-html[data-mobile='true'] .mobile-page-scroll {
-  width: 100%;
-  padding-top: calc(var(--mobile-app-bar) + env(safe-area-inset-top) + 16px);
-  padding-bottom: calc(var(--mobile-bottom-nav) + env(safe-area-inset-bottom) + 16px);
-}
-
 @media (max-width: 520px) {
   html[data-mobile='true'] .app-content {
     overflow-x: hidden;

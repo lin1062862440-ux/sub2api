@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { defineComponent } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import MobileBottomSheet from './MobileBottomSheet.vue'
@@ -19,6 +20,18 @@ afterEach(() => {
 })
 
 describe('MobilePage', () => {
+  it('does not add a second main landmark inside the mobile content shell', () => {
+    const wrapper = mountComponent(
+      defineComponent({
+        components: { MobilePage },
+        template: '<main class="mobile-content"><MobilePage title="用量" /></main>',
+      }),
+    )
+
+    expect(wrapper.findAll('main')).toHaveLength(1)
+    expect(wrapper.get('.mobile-page-scroll').element.tagName).toBe('DIV')
+  })
+
   it('keeps its page shell and action region stable while rendering content', () => {
     const wrapper = mountComponent(MobilePage, {
       props: { title: '用量', subtitle: '近 30 天' },

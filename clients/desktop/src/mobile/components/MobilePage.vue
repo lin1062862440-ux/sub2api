@@ -30,7 +30,7 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <main class="mobile-page-scroll">
+  <div class="mobile-page-scroll">
     <header class="mobile-page-header">
       <div class="mobile-page-heading">
         <h1>{{ title }}</h1>
@@ -67,7 +67,7 @@ const emit = defineEmits<{
     <section v-else class="mobile-page-content">
       <slot />
     </section>
-  </main>
+  </div>
 </template>
 
 <style scoped>

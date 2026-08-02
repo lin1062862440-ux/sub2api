@@ -223,9 +223,7 @@ onBeforeUnmount(() => {
 .mobile-bottom-sheet-content :deep(a),
 .mobile-bottom-sheet-footer :deep(button),
 .mobile-bottom-sheet-footer :deep(a) {
-  display: inline-flex;
   min-height: 44px;
-  align-items: center;
 }
 
 .mobile-bottom-sheet-content :deep(input),
