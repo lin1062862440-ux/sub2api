@@ -280,6 +280,19 @@ describe('MobileAdminAccountsView', () => {
     expect(wrapper.get('[data-testid="account-editor-name"]').element).toHaveProperty('value', healthy.name)
   })
 
+  it('renders an extreme finite account expiry with a safe placeholder', async () => {
+    const extremeExpiry = account({ expires_at: Number.MAX_VALUE })
+    mocks.list.mockResolvedValueOnce(response([extremeExpiry]))
+    const wrapper = mount(MobileAdminAccountsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="account-detail-trigger-17"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="account-detail"]').text()).toContain('永不过期')
+    expect(wrapper.get('[data-testid="account-detail"]').text()).not.toContain('Invalid')
+  })
+
   it('traps focus in account detail and editor dialogs and restores their triggers', async () => {
     const wrapper = mount(MobileAdminAccountsView, { attachTo: document.body })
     await flushPromises()
@@ -540,6 +553,30 @@ describe('MobileAdminAccountsView', () => {
     expect(wrapper.get('[data-testid="account-action-message"]').text()).toContain(`${unhealthy.name} 已恢复运行状态`)
     expect(wrapper.find('[data-testid="account-action-error"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('older-operation-secret')
+  })
+
+  it('does not let an older standalone account reload conflict with a newer mutation result', async () => {
+    const olderList = deferred<AdminAccountListResponse>()
+    const newerRecover = deferred<AdminAccount>()
+    mocks.list
+      .mockResolvedValueOnce(response())
+      .mockReturnValueOnce(olderList.promise)
+      .mockResolvedValueOnce(response())
+    mocks.recover.mockReturnValueOnce(newerRecover.promise)
+    const wrapper = mount(MobileAdminAccountsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="account-refresh"]').trigger('click')
+    await openMenu(wrapper, 29)
+    await wrapper.get('[data-testid="recover-account-29"]').trigger('click')
+    olderList.reject(new Error('token=older-list-secret'))
+    await flushPromises()
+    newerRecover.resolve({ ...unhealthy, status: 'active', schedulable: true, error_message: null })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="account-action-message"]').text()).toContain(`${unhealthy.name} 已恢复运行状态`)
+    expect(wrapper.find('[data-testid="account-action-error"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('older-list-secret')
   })
 
   it('shows loading, retryable private errors and empty results', async () => {

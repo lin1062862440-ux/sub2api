@@ -110,7 +110,12 @@ function ownsFeedback(token: number) {
   return mounted && token === feedbackGeneration
 }
 
-async function loadGroups(targetPage = result.value.page, background = loaded.value, feedbackToken?: number) {
+async function loadGroups(
+  targetPage = result.value.page,
+  background = loaded.value,
+  feedbackToken?: number,
+  reportFailure = true,
+) {
   const generation = ++loadGeneration
   const requestedPage = Math.min(pageCount.value, Math.max(1, Math.floor(targetPage) || 1))
   if (!loaded.value && !background) initialLoading.value = true
@@ -123,7 +128,7 @@ async function loadGroups(targetPage = result.value.page, background = loaded.va
     const total = safeNumber(response.total)
     const availablePages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (requestedPage > availablePages) {
-      await loadGroups(availablePages, true, feedbackToken)
+      await loadGroups(availablePages, true, feedbackToken, reportFailure)
       return
     }
     result.value = {
@@ -136,7 +141,7 @@ async function loadGroups(targetPage = result.value.page, background = loaded.va
   } catch {
     if (!mounted || generation !== loadGeneration) return
     if (!loaded.value) fatalError.value = '分组列表加载失败，请检查网络后重试。'
-    else if (feedbackToken === undefined || ownsFeedback(feedbackToken)) {
+    else if (reportFailure && (feedbackToken === undefined || ownsFeedback(feedbackToken))) {
       actionMessage.value = ''
       actionError.value = '分组列表刷新失败，已保留当前数据。'
     }
@@ -148,9 +153,18 @@ async function loadGroups(targetPage = result.value.page, background = loaded.va
   }
 }
 
+function requestGroupsLoad(targetPage: number, background: boolean) {
+  const feedbackToken = claimFeedback()
+  void loadGroups(targetPage, background, feedbackToken, true)
+}
+
+function retryGroups() {
+  requestGroupsLoad(1, false)
+}
+
 function submitSearch() {
   search.value = searchDraft.value.trim()
-  void loadGroups(1, loaded.value)
+  requestGroupsLoad(1, loaded.value)
 }
 
 function openFilters() {
@@ -163,7 +177,7 @@ function applyFilters() {
   platform.value = draftPlatform.value
   status.value = draftStatus.value
   filterSheetOpen.value = false
-  void loadGroups(1, loaded.value)
+  requestGroupsLoad(1, loaded.value)
 }
 
 function resetFilters() {
@@ -172,7 +186,7 @@ function resetFilters() {
   platform.value = ''
   status.value = ''
   filterSheetOpen.value = false
-  void loadGroups(1, loaded.value)
+  requestGroupsLoad(1, loaded.value)
 }
 
 function openCreate() {
@@ -213,7 +227,7 @@ async function saveGroup(payload: CreateAdminGroupRequest) {
     if (!mounted) return
     editorOpen.value = false
     editingGroup.value = null
-    await loadGroups(result.value.page, true, feedbackToken)
+    await loadGroups(result.value.page, true, feedbackToken, false)
   } catch {
     if (mounted) editorError.value = '分组保存失败，请稍后重试。'
   } finally {
@@ -298,7 +312,7 @@ async function confirmStatusChange() {
       items: result.value.items.map((item) => item.id === group.id ? { ...item, status: nextStatus } : item),
     }
     if (ownsFeedback(feedbackToken)) actionMessage.value = `已${nextStatus === 'active' ? '启用' : '停用'}分组“${safeName(group.name)}”`
-    await loadGroups(result.value.page, true, feedbackToken)
+    await loadGroups(result.value.page, true, feedbackToken, false)
   } catch {
     if (ownsFeedback(feedbackToken)) {
       actionMessage.value = ''
@@ -314,7 +328,7 @@ async function confirmStatusChange() {
 
 function changePage(page: number) {
   if (busy.value || page < 1 || page > pageCount.value || page === result.value.page) return
-  void loadGroups(page, true)
+  requestGroupsLoad(page, true)
 }
 
 onMounted(() => {
@@ -342,8 +356,8 @@ onUnmounted(() => {
     loading-label="正在加载分组"
     empty-title="暂无分组"
     empty-message="当前筛选范围内没有分组。"
-    @retry="loadGroups(1, false)"
-    @refresh="loadGroups(1, false)"
+    @retry="retryGroups"
+    @refresh="retryGroups"
   >
     <template #action>
       <button class="create-button" type="button" data-testid="create-group" @click="openCreate"><Plus :size="18" />新增</button>

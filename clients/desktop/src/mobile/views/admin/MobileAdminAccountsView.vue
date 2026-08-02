@@ -137,7 +137,12 @@ function ownsFeedback(token: number) {
   return mounted && token === feedbackGeneration
 }
 
-async function loadAccounts(targetPage = result.value.page, background = loaded.value, feedbackToken?: number) {
+async function loadAccounts(
+  targetPage = result.value.page,
+  background = loaded.value,
+  feedbackToken?: number,
+  reportFailure = true,
+) {
   const generation = ++loadGeneration
   const requestedPage = Math.min(pageCount.value, Math.max(1, Math.floor(targetPage) || 1))
   if (!loaded.value && !background) initialLoading.value = true
@@ -150,7 +155,7 @@ async function loadAccounts(targetPage = result.value.page, background = loaded.
     const total = safeNumber(response.total)
     const availablePages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (requestedPage > availablePages) {
-      await loadAccounts(availablePages, true, feedbackToken)
+      await loadAccounts(availablePages, true, feedbackToken, reportFailure)
       return
     }
     result.value = {
@@ -163,7 +168,7 @@ async function loadAccounts(targetPage = result.value.page, background = loaded.
   } catch {
     if (!mounted || generation !== loadGeneration) return
     if (!loaded.value) fatalError.value = '账号列表加载失败，请检查网络后重试。'
-    else if (feedbackToken === undefined || ownsFeedback(feedbackToken)) {
+    else if (reportFailure && (feedbackToken === undefined || ownsFeedback(feedbackToken))) {
       actionMessage.value = ''
       actionError.value = '账号列表刷新失败，已保留当前数据。'
     }
@@ -175,9 +180,22 @@ async function loadAccounts(targetPage = result.value.page, background = loaded.
   }
 }
 
+function requestAccountsLoad(targetPage: number, background: boolean) {
+  const feedbackToken = claimFeedback()
+  void loadAccounts(targetPage, background, feedbackToken, true)
+}
+
+function retryAccounts() {
+  requestAccountsLoad(1, false)
+}
+
+function refreshAccounts() {
+  requestAccountsLoad(result.value.page, true)
+}
+
 function submitSearch() {
   search.value = searchDraft.value.trim()
-  void loadAccounts(1, loaded.value)
+  requestAccountsLoad(1, loaded.value)
 }
 
 function openFilters() {
@@ -190,7 +208,7 @@ function applyFilters() {
   platform.value = draftPlatform.value
   status.value = draftStatus.value
   filterSheetOpen.value = false
-  void loadAccounts(1, loaded.value)
+  requestAccountsLoad(1, loaded.value)
 }
 
 function resetFilters() {
@@ -199,7 +217,7 @@ function resetFilters() {
   platform.value = ''
   status.value = ''
   filterSheetOpen.value = false
-  void loadAccounts(1, loaded.value)
+  requestAccountsLoad(1, loaded.value)
 }
 
 function replaceAccount(updated: AdminAccount) {
@@ -224,7 +242,7 @@ async function mutateAccount(
     if (!mounted) return
     replaceAccount(updated)
     if (ownsFeedback(feedbackToken)) actionMessage.value = successMessage
-    await loadAccounts(result.value.page, true, feedbackToken)
+    await loadAccounts(result.value.page, true, feedbackToken, false)
   } catch {
     if (ownsFeedback(feedbackToken)) {
       actionMessage.value = ''
@@ -313,7 +331,7 @@ function editAccount(account: AdminAccount) {
 
 function handleSaved(updated: AdminAccount) {
   replaceAccount(updated)
-  void loadAccounts(result.value.page, true)
+  void loadAccounts(result.value.page, true, undefined, false)
 }
 
 async function refreshAccount(account: AdminAccount) {
@@ -333,7 +351,7 @@ async function refreshAccount(account: AdminAccount) {
     } else {
       throw new Error('invalid refresh response')
     }
-    await loadAccounts(result.value.page, true, feedbackToken)
+    await loadAccounts(result.value.page, true, feedbackToken, false)
     if (ownsFeedback(feedbackToken) && warningMessage) {
       actionError.value = ''
       actionMessage.value = warningMessage
@@ -400,7 +418,7 @@ async function submitTest() {
     if (!mounted) return
     if (ownsFeedback(feedbackToken)) actionMessage.value = `${safeName(account.name)}：${response.message || '连接测试通过'}`
     closeTestDialogAfterSuccess()
-    await loadAccounts(result.value.page, true, feedbackToken)
+    await loadAccounts(result.value.page, true, feedbackToken, false)
   } catch {
     if (mounted) testError.value = '连接测试失败，请检查账号状态后重试。'
   } finally {
@@ -446,7 +464,7 @@ function handleDocumentPointer(event: MouseEvent) {
 
 function changePage(page: number) {
   if (busy.value || page < 1 || page > pageCount.value || page === result.value.page) return
-  void loadAccounts(page, true)
+  requestAccountsLoad(page, true)
 }
 
 onMounted(() => {
@@ -476,11 +494,11 @@ onUnmounted(() => {
     loading-label="正在加载账号"
     empty-title="暂无账号"
     empty-message="当前筛选范围内没有账号。"
-    @retry="loadAccounts(1, false)"
-    @refresh="loadAccounts(1, false)"
+    @retry="retryAccounts"
+    @refresh="retryAccounts"
   >
     <template #action>
-      <button class="icon-button" type="button" data-testid="account-refresh" aria-label="刷新账号" :disabled="busy" @click="loadAccounts(result.page, true)">
+      <button class="icon-button" type="button" data-testid="account-refresh" aria-label="刷新账号" :disabled="busy" @click="refreshAccounts">
         <RefreshCw :size="18" :class="{ spinning: listLoading }" />
       </button>
     </template>

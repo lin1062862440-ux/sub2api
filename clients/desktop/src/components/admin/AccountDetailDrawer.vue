@@ -55,8 +55,9 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 function formatExpiry(value: number | null) {
-  if (props.mobile && !Number.isFinite(value)) return '永不过期'
-  return value ? formatDateTime(new Date(value * 1000).toISOString()) : '永不过期'
+  if (!value || !Number.isFinite(value)) return '永不过期'
+  const expiry = new Date(value * 1000)
+  return Number.isFinite(expiry.getTime()) ? formatDateTime(expiry.toISOString()) : '永不过期'
 }
 
 function safeNumber(value: unknown, fallback = 0) {

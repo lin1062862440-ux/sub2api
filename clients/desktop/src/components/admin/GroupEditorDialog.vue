@@ -130,6 +130,12 @@ function submit() {
     validationError.value = '计费倍率必须是大于 0 的有限数字。'
     return
   }
+  const rpmLimit = Number(form.rpmLimit)
+  const rpmBlank = form.rpmLimit === '' || (typeof form.rpmLimit === 'string' && !form.rpmLimit.trim())
+  if (rpmBlank || !Number.isFinite(rpmLimit) || !Number.isInteger(rpmLimit) || rpmLimit < 0) {
+    validationError.value = '每用户 RPM 必须是非负整数。'
+    return
+  }
   const dailyLimit = parseQuota(form.dailyLimit)
   const weeklyLimit = parseQuota(form.weeklyLimit)
   const monthlyLimit = parseQuota(form.monthlyLimit)
@@ -142,7 +148,7 @@ function submit() {
     description: form.description.trim(),
     platform: form.platform,
     rate_multiplier: rateMultiplier,
-    rpm_limit: Math.round(Number.isFinite(Number(form.rpmLimit)) && Number(form.rpmLimit) >= 0 ? Number(form.rpmLimit) : 0),
+    rpm_limit: rpmLimit,
     is_exclusive: form.isExclusive,
     subscription_type: form.subscriptionType,
     daily_limit_usd: dailyLimit,

@@ -271,6 +271,18 @@ describe('MobileAdminGroupsView', () => {
     }))
   })
 
+  it('preserves a zero RPM limit as the valid unlimited boundary', async () => {
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="edit-group-8"]').trigger('click')
+    await wrapper.get('[data-testid="group-rpm-limit"]').setValue('0')
+    await wrapper.get('[data-testid="group-editor"]').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.update).toHaveBeenCalledWith(8, expect.objectContaining({ rpm_limit: 0 }))
+  })
+
   it.each([
     ['rate multiplier zero', 'group-rate-multiplier', '0', '计费倍率必须是大于 0 的有限数字。'],
     ['negative rate multiplier', 'group-rate-multiplier', '-1', '计费倍率必须是大于 0 的有限数字。'],
@@ -279,6 +291,11 @@ describe('MobileAdminGroupsView', () => {
     ['negative daily quota', 'group-daily-limit', '-1', '额度必须是有限的非负数字，或留空表示不限。'],
     ['infinite weekly quota', 'group-weekly-limit', 'Infinity', '额度必须是有限的非负数字，或留空表示不限。'],
     ['NaN monthly quota', 'group-monthly-limit', 'NaN', '额度必须是有限的非负数字，或留空表示不限。'],
+    ['blank RPM limit', 'group-rpm-limit', '', '每用户 RPM 必须是非负整数。'],
+    ['negative RPM limit', 'group-rpm-limit', '-1', '每用户 RPM 必须是非负整数。'],
+    ['fractional RPM limit', 'group-rpm-limit', '1.5', '每用户 RPM 必须是非负整数。'],
+    ['infinite RPM limit', 'group-rpm-limit', 'Infinity', '每用户 RPM 必须是非负整数。'],
+    ['NaN RPM limit', 'group-rpm-limit', 'NaN', '每用户 RPM 必须是非负整数。'],
   ])('rejects %s without submitting or leaking the raw value', async (_caseName, testId, value, expectedError) => {
     const wrapper = mount(MobileAdminGroupsView)
     await flushPromises()
@@ -378,6 +395,31 @@ describe('MobileAdminGroupsView', () => {
     expect(wrapper.get('[data-testid="group-action-message"]').text()).toContain(`已启用分组“${inactiveGroup.name}”`)
     expect(wrapper.find('[data-testid="group-action-error"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('older-group-secret')
+  })
+
+  it('does not let an older standalone group search conflict with a newer mutation result', async () => {
+    const olderList = deferred<AdminGroupListResponse>()
+    const newerStatus = deferred<AdminGroup>()
+    mocks.list
+      .mockResolvedValueOnce(response())
+      .mockReturnValueOnce(olderList.promise)
+      .mockResolvedValueOnce(response())
+    mocks.status.mockReturnValueOnce(newerStatus.promise)
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="group-search"]').setValue('older list')
+    await wrapper.get('[data-testid="group-search-form"]').trigger('submit')
+    await wrapper.get('[data-testid="toggle-group-14"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-group-status"]').trigger('click')
+    olderList.reject(new Error('credential=older-group-list-secret'))
+    await flushPromises()
+    newerStatus.resolve({ ...inactiveGroup, status: 'active' })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="group-action-message"]').text()).toContain(`已启用分组“${inactiveGroup.name}”`)
+    expect(wrapper.find('[data-testid="group-action-error"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('older-group-list-secret')
   })
 
   it('shows loading, retryable private errors and empty results', async () => {
