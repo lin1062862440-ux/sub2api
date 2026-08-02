@@ -12,6 +12,7 @@ describe('desktop administrator route guard', () => {
     expect(resolveRouteAccess({
       authenticated: true,
       role: 'user',
+      workspace: 'personal',
       runMode: 'standard',
       userGroupAccess: false,
       capabilities: capabilitiesFor('macos'),
@@ -24,6 +25,7 @@ describe('desktop administrator route guard', () => {
     expect(resolveRouteAccess({
       authenticated: true,
       role: 'admin',
+      workspace: 'admin',
       runMode: 'standard',
       userGroupAccess: true,
       capabilities: capabilitiesFor('macos'),
@@ -36,6 +38,7 @@ describe('desktop administrator route guard', () => {
     expect(resolveRouteAccess({
       authenticated: false,
       role: null,
+      workspace: 'personal',
       runMode: 'standard',
       userGroupAccess: false,
       capabilities: capabilitiesFor('macos'),
@@ -46,6 +49,7 @@ describe('desktop administrator route guard', () => {
     expect(resolveRouteAccess({
       authenticated: true,
       role: 'admin',
+      workspace: 'admin',
       runMode: 'simple',
       userGroupAccess: true,
       capabilities: capabilitiesFor('macos'),
@@ -58,6 +62,7 @@ describe('desktop administrator route guard', () => {
     expect(resolveRouteAccess({
       authenticated: true,
       role: 'user',
+      workspace: 'personal',
       runMode: 'standard',
       userGroupAccess: true,
       capabilities: capabilitiesFor('macos'),
@@ -68,6 +73,7 @@ describe('desktop administrator route guard', () => {
     expect(resolveRouteAccess({
       authenticated: true,
       role: 'user',
+      workspace: 'personal',
       runMode: 'standard',
       userGroupAccess: false,
       capabilities: capabilitiesFor('macos'),
@@ -86,11 +92,99 @@ describe('desktop administrator route guard', () => {
     expect(resolveRouteAccess({
       authenticated: true,
       role: 'admin',
+      workspace: 'admin',
       runMode: 'standard',
       userGroupAccess: true,
       capabilities: capabilitiesFor('android'),
       toName: 'api-keys',
       meta: { requiresCapability: 'apiKeys' },
     })).toEqual({ name: 'dashboard' })
+  })
+
+  it('redirects Android personal workspace away from excluded routes', () => {
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'user',
+      workspace: 'personal',
+      runMode: 'standard',
+      userGroupAccess: false,
+      capabilities: capabilitiesFor('android'),
+      toName: 'channels',
+      meta: { standardOnly: true },
+    })).toEqual({ name: 'dashboard' })
+  })
+
+  it('redirects Android admin workspace away from excluded routes', () => {
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'admin',
+      workspace: 'admin',
+      runMode: 'standard',
+      userGroupAccess: true,
+      capabilities: capabilitiesFor('android'),
+      toName: 'admin-usage',
+      meta: { requiresAdmin: true },
+    })).toEqual({ name: 'admin-dashboard' })
+  })
+
+  it('prevents ordinary users from selecting admin workspace or routes', () => {
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'user',
+      workspace: 'admin',
+      runMode: 'standard',
+      userGroupAccess: false,
+      capabilities: capabilitiesFor('android'),
+      toName: 'dashboard',
+      meta: {},
+    })).toEqual({ name: 'dashboard' })
+
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'user',
+      workspace: 'personal',
+      runMode: 'standard',
+      userGroupAccess: false,
+      capabilities: capabilitiesFor('android'),
+      toName: 'admin-dashboard',
+      meta: { requiresAdmin: true },
+    })).toEqual({ name: 'dashboard' })
+  })
+
+  it('allows approved Android routes for their permitted workspace', () => {
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'user',
+      workspace: 'personal',
+      runMode: 'standard',
+      userGroupAccess: false,
+      capabilities: capabilitiesFor('android'),
+      toName: 'subscriptions',
+      meta: { standardOnly: true },
+    })).toBe(true)
+
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'admin',
+      workspace: 'admin',
+      runMode: 'standard',
+      userGroupAccess: true,
+      capabilities: capabilitiesFor('android'),
+      toName: 'admin-accounts',
+      meta: { requiresAdmin: true },
+    })).toBe(true)
+  })
+
+  it('retains desktop access to routes excluded from the mobile allowlist', () => {
+    expect(resolveRouteAccess({
+      authenticated: true,
+      role: 'user',
+      workspace: 'personal',
+      runMode: 'standard',
+      userGroupAccess: false,
+      capabilities: capabilitiesFor('macos'),
+      toName: 'channels',
+      meta: { standardOnly: true },
+    })).toBe(true)
   })
 })

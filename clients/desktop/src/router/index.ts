@@ -6,12 +6,15 @@
  */
 import { watch } from 'vue'
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import { readWorkspaceMode, workspaceDestination, type WorkspaceMode } from '@/lib/admin-workspace'
+import { isMobileRouteAllowed } from '@/mobile/navigation'
 import { appCapabilities, type PlatformCapabilities } from '@/lib/platform-capabilities'
 import { isAuthenticated, session } from '@/stores/session'
 
 interface RouteAccessInput {
   authenticated: boolean
   role: 'admin' | 'user' | null
+  workspace: WorkspaceMode
   runMode: 'standard' | 'simple'
   userGroupAccess: boolean
   capabilities: PlatformCapabilities
@@ -24,11 +27,18 @@ export function resolveRouteAccess(input: RouteAccessInput): true | { name: stri
     return input.meta.public ? true : { name: 'login' }
   }
   if (input.toName === 'login') return { name: 'dashboard' }
+  if (input.meta.public) return true
+  if (input.workspace === 'admin' && input.role !== 'admin') return { name: 'dashboard' }
+
+  const workspaceHome = workspaceDestination(input.workspace)
   const requiredCapability = input.meta.requiresCapability as keyof PlatformCapabilities | undefined
   if (requiredCapability && !input.capabilities[requiredCapability]) return { name: 'dashboard' }
   if (input.meta.requiresAdmin && input.role !== 'admin') return { name: 'dashboard' }
   if (input.meta.requiresUserGroupAccess && !input.userGroupAccess) return { name: 'dashboard' }
   if (input.meta.standardOnly && input.runMode === 'simple') return { name: 'dashboard' }
+  if (input.capabilities.mobile && !isMobileRouteAllowed(input.toName, input.workspace)) {
+    return { name: workspaceHome }
+  }
   return true
 }
 
@@ -205,6 +215,7 @@ router.beforeEach((to) => {
   return resolveRouteAccess({
     authenticated: isAuthenticated(),
     role: session.user?.role ?? null,
+    workspace: readWorkspaceMode(session.user),
     runMode: session.runMode,
     userGroupAccess: session.user?.role === 'admin' || session.userGroupCapabilities?.can_access === true,
     capabilities: appCapabilities,
