@@ -673,6 +673,52 @@ describe('MobileUserGroupsView', () => {
     expect(wrapper.find('[data-testid="edit-user-group-3"]').exists()).toBe(false)
   })
 
+  it('coalesces deferred permission recovery and only applies the latest trusted session', async () => {
+    mocks.members.mockRejectedValueOnce({ status: 403, code: 40301 })
+    const recovery = deferred<void>()
+    mocks.refreshUser.mockReturnValueOnce(recovery.promise)
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+
+    const refresh = wrapper.get('[data-testid="refresh-user-groups"]')
+    await refresh.trigger('click')
+    await refresh.trigger('click')
+    expect(mocks.refreshUser).toHaveBeenCalledTimes(1)
+    expect(refresh.attributes('disabled')).toBeDefined()
+    expect(refresh.attributes('aria-busy')).toBe('true')
+
+    mocks.session.user.role = 'user'
+    mocks.session.userGroupCapabilities = { can_access: true, can_manage: false, group_count: 1 }
+    recovery.resolve()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(false)
+    expect(refresh.attributes('disabled')).toBeUndefined()
+    expect(refresh.attributes('aria-busy')).toBe('false')
+  })
+
+  it('releases rejected permission recovery so refresh can retry', async () => {
+    mocks.members.mockRejectedValueOnce({ status: 403, code: 40301 })
+    mocks.refreshUser.mockRejectedValueOnce(new Error('refresh failed'))
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
+    await flushPromises()
+
+    const refresh = wrapper.get('[data-testid="refresh-user-groups"]')
+    await refresh.trigger('click')
+    await flushPromises()
+    expect(refresh.attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(false)
+
+    mocks.refreshUser.mockResolvedValueOnce(undefined)
+    await refresh.trigger('click')
+    await flushPromises()
+    expect(mocks.refreshUser).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(true)
+  })
+
   it('keeps search, refresh and create in empty/error states and hides mutations for read-only users', async () => {
     mocks.list.mockRejectedValueOnce(new Error('token=list-secret'))
     const wrapper = mountView()

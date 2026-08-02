@@ -48,6 +48,7 @@ const listError = ref('')
 const actionMessage = ref('')
 const actionError = ref('')
 const permissionRevoked = ref(false)
+const permissionRecoveryLoading = ref(false)
 const searchDraft = ref('')
 const search = ref('')
 const page = ref(1)
@@ -88,6 +89,7 @@ let editorSaveOwner = 0
 let archiveSaveOwner = 0
 let peopleSaveOwner = 0
 let peopleLoadOwner = 0
+let permissionRecoveryOwner = 0
 
 const canManage = computed(() => (
   !permissionRevoked.value
@@ -106,7 +108,8 @@ const visibleGroups = computed(() => {
   return filteredGroups.value.slice(start, start + PAGE_SIZE)
 })
 const busy = computed(() => (
-  initialLoading.value || listLoading.value || editorSaving.value || archiveSaving.value || peopleLoading.value || peopleSaving.value
+  initialLoading.value || listLoading.value || permissionRecoveryLoading.value
+  || editorSaving.value || archiveSaving.value || peopleLoading.value || peopleSaving.value
 ))
 const peopleLabel = computed(() => peopleMode.value === 'members' ? '成员' : '查看者')
 const hiddenSelectedPeople = computed(() => {
@@ -170,6 +173,8 @@ function closeAllEditors() {
 
 function revokePermission() {
   permissionRevoked.value = true
+  permissionRecoveryOwner += 1
+  permissionRecoveryLoading.value = false
   listGeneration += 1
   editorSaveOwner += 1
   archiveSaveOwner += 1
@@ -248,15 +253,23 @@ async function loadGroups(
 }
 
 async function refreshGroups() {
+  if (permissionRecoveryLoading.value) return
   const token = claimFeedback()
   if (permissionRevoked.value) {
+    const recoveryOwner = ++permissionRecoveryOwner
+    let trusted = false
+    permissionRecoveryLoading.value = true
     try {
       await refreshUser()
-      if (mounted && (session.user?.role === 'admin' || session.userGroupCapabilities?.can_manage === true)) {
-        permissionRevoked.value = false
-      }
+      trusted = true
     } catch {
       // Keep management revoked until an authoritative session refresh succeeds.
+    } finally {
+      if (mounted && recoveryOwner === permissionRecoveryOwner) permissionRecoveryLoading.value = false
+    }
+    if (!mounted || recoveryOwner !== permissionRecoveryOwner) return
+    if (trusted && (session.user?.role === 'admin' || session.userGroupCapabilities?.can_manage === true)) {
+      permissionRevoked.value = false
     }
   }
   if (mounted) await loadGroups(loaded.value, token, true)
@@ -625,6 +638,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   mounted = false
+  permissionRecoveryOwner += 1
   listGeneration += 1
   editorGeneration += 1
   peopleGeneration += 1
@@ -643,7 +657,7 @@ onUnmounted(() => {
       <form class="directory-toolbar" data-testid="user-group-search-form" @submit.prevent="submitSearch">
         <label><Search :size="17" /><input v-model="searchDraft" data-testid="user-group-search" autocomplete="off" placeholder="搜索名称或说明" /></label>
         <button type="submit" :disabled="listLoading">搜索</button>
-        <button class="refresh-button" type="button" data-testid="refresh-user-groups" aria-label="刷新用户组" :disabled="listLoading" @click="refreshGroups"><RefreshCw :size="18" :class="{ spinning: listLoading }" /></button>
+        <button class="refresh-button" type="button" data-testid="refresh-user-groups" aria-label="刷新用户组" :aria-busy="permissionRecoveryLoading" :disabled="listLoading || permissionRecoveryLoading" @click="refreshGroups"><RefreshCw :size="18" :class="{ spinning: listLoading || permissionRecoveryLoading }" /></button>
       </form>
 
       <div class="directory-meta"><span>共 {{ filteredGroups.length }} 个用户组</span><strong>{{ canManage ? '可管理' : '只读' }}</strong></div>
