@@ -11,16 +11,15 @@ import {
 } from '@lucide/vue'
 
 import * as api from '@/api'
-import type { SubscriptionGroup, SubscriptionStatus, UserSubscription } from '@/api'
+import type { SubscriptionGroup, UserSubscription } from '@/api'
 import ProviderIcon from '@/components/ProviderIcon.vue'
-
-interface QuotaWindow {
-  key: 'daily' | 'weekly' | 'monthly'
-  label: string
-  used: number
-  limit: number
-  resetLabel: string
-}
+import {
+  formatSubscriptionDate as formatDate,
+  isSubscriptionExhausted as isExhausted,
+  subscriptionProgress as progress,
+  subscriptionQuotaWindows as quotaWindows,
+  subscriptionStatusLabel as statusLabel,
+} from '@/lib/subscription-display'
 
 const subscriptions = ref<UserSubscription[]>([])
 const loading = ref(true)
@@ -39,55 +38,6 @@ const nextExpiry = computed(() => subscriptions.value
   .filter((item) => item.status === 'active' && item.expires_at)
   .sort((a, b) => Date.parse(a.expires_at!) - Date.parse(b.expires_at!))[0]?.expires_at ?? null)
 
-function isFiniteLimit(value: number | null | undefined): value is number {
-  return typeof value === 'number' && value > 0
-}
-
-function isExhausted(item: UserSubscription) {
-  const group = item.group
-  if (!group) return false
-  return (isFiniteLimit(group.daily_limit_usd) && item.daily_usage_usd >= group.daily_limit_usd)
-    || (isFiniteLimit(group.weekly_limit_usd) && item.weekly_usage_usd >= group.weekly_limit_usd)
-    || (isFiniteLimit(group.monthly_limit_usd) && item.monthly_usage_usd >= group.monthly_limit_usd)
-}
-
-function progress(used: number, limit: number) {
-  return Math.min(100, Math.max(0, used / limit * 100))
-}
-
-function resetTime(start: string | null, hours: number) {
-  if (!start) return '等待周期开始'
-  const resetAt = new Date(Date.parse(start) + hours * 60 * 60 * 1000)
-  const remaining = resetAt.getTime() - Date.now()
-  if (remaining <= 0) return '即将重置'
-  const totalHours = Math.ceil(remaining / 3_600_000)
-  if (totalHours < 24) return `${totalHours} 小时后重置`
-  return `${Math.ceil(totalHours / 24)} 天后重置`
-}
-
-function quotaWindows(item: UserSubscription): QuotaWindow[] {
-  const group = item.group
-  if (!group) return []
-  const windows: QuotaWindow[] = []
-  if (isFiniteLimit(group.daily_limit_usd)) windows.push({
-    key: 'daily', label: '日额度', used: item.daily_usage_usd, limit: group.daily_limit_usd,
-    resetLabel: resetTime(item.daily_window_start, 24),
-  })
-  if (isFiniteLimit(group.weekly_limit_usd)) windows.push({
-    key: 'weekly', label: '周额度', used: item.weekly_usage_usd, limit: group.weekly_limit_usd,
-    resetLabel: resetTime(item.weekly_window_start, 168),
-  })
-  if (isFiniteLimit(group.monthly_limit_usd)) windows.push({
-    key: 'monthly', label: '月额度', used: item.monthly_usage_usd, limit: group.monthly_limit_usd,
-    resetLabel: resetTime(item.monthly_window_start, 720),
-  })
-  return windows
-}
-
-function statusLabel(status: SubscriptionStatus) {
-  return { active: '使用中', expired: '已过期', revoked: '已撤销', suspended: '已暂停' }[status]
-}
-
 function platformLabel(group?: SubscriptionGroup) {
   const platform = group?.platform ?? ''
   return ({ anthropic: 'Anthropic', openai: 'OpenAI', gemini: 'Gemini', antigravity: 'Antigravity', grok: 'Grok', composite: '混合线路' } as Record<string, string>)[platform] ?? (platform || '订阅线路')
@@ -95,13 +45,6 @@ function platformLabel(group?: SubscriptionGroup) {
 
 function formatMoney(value: number) {
   return `$${value.toFixed(2)}`
-}
-
-function formatDate(value: string | null) {
-  if (!value) return '长期有效'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime()) || date.getUTCFullYear() <= 1) return '长期有效'
-  return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
 }
 
 function daysRemaining(value: string | null) {
