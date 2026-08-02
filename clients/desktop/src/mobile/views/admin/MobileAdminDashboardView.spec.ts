@@ -128,7 +128,7 @@ function requestedDays(params: AdminDashboardSnapshotParams): number {
 
 describe('MobileAdminDashboardView', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     arrangeSuccess()
   })
 
@@ -176,6 +176,72 @@ describe('MobileAdminDashboardView', () => {
     expect(wrapper.get('[data-range="30"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('9,900')
     expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('07-04')
+  })
+
+  it('does not label retained 7 day trend data as 30 days when the range request fails', async () => {
+    const failedSnapshot = deferred<AdminDashboardSnapshot>()
+    mocks.getSnapshot
+      .mockResolvedValueOnce(snapshot)
+      .mockReturnValueOnce(failedSnapshot.promise)
+
+    const wrapper = mount(MobileAdminDashboardView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('近 7 天请求变化')
+    await wrapper.get('[data-range="30"]').trigger('click')
+
+    expect(wrapper.get('[data-range="30"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('近 7 天请求变化')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).not.toContain('近 30 天请求变化')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('true')
+
+    failedSnapshot.reject(new Error('token=range-request-secret'))
+    await flushPromises()
+
+    expect(wrapper.get('[data-range="7"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-range="30"]').attributes('aria-pressed')).toBe('false')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('近 7 天请求变化')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('3,200')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).not.toContain('近 30 天请求变化')
+    expect(wrapper.get('[data-testid="partial-warning"]').text()).toContain('统计与趋势')
+    expect(wrapper.text()).not.toContain('range-request-secret')
+  })
+
+  it('restores the 30 day range after a failed switch to 7 days and allows retry', async () => {
+    const thirtyDaySnapshot = {
+      ...snapshot,
+      start_date: '2026-07-04',
+      trend: [trendPoint('2026-08-02', 9_900, 1_100_000)],
+    }
+    mocks.getSnapshot
+      .mockResolvedValueOnce(snapshot)
+      .mockResolvedValueOnce(thirtyDaySnapshot)
+      .mockRejectedValueOnce(new Error('credential=reverse-range-secret'))
+      .mockResolvedValueOnce(snapshot)
+
+    const wrapper = mount(MobileAdminDashboardView)
+    await flushPromises()
+    await wrapper.get('[data-range="30"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('近 30 天请求变化')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('9,900')
+
+    await wrapper.get('[data-range="7"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-range="30"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('近 30 天请求变化')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('9,900')
+    expect(wrapper.text()).not.toContain('reverse-range-secret')
+
+    await wrapper.get('[data-range="7"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-range="7"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('近 7 天请求变化')
+    expect(wrapper.get('[data-testid="request-trend"]').text()).toContain('3,200')
+    expect(wrapper.find('[data-testid="partial-warning"]').exists()).toBe(false)
   })
 
   it('keeps current data visible and owns busy state while refreshing', async () => {

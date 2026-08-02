@@ -25,7 +25,8 @@ interface TrendItem {
   width: string
 }
 
-const rangeDays = ref<RangeDays>(7)
+const selectedRangeDays = ref<RangeDays>(7)
+const snapshotRangeDays = ref<RangeDays | null>(null)
 const snapshot = ref<AdminDashboardSnapshot | null>(null)
 const realtime = ref<AdminDashboardRealtime | null>(null)
 const loading = ref(true)
@@ -36,6 +37,7 @@ const partialWarning = ref('')
 const stats = computed(() => snapshot.value?.stats)
 const hasContent = computed(() => snapshot.value !== null || realtime.value !== null)
 const busy = computed(() => loading.value || refreshing.value)
+const trendRangeDays = computed(() => snapshotRangeDays.value ?? selectedRangeDays.value)
 
 function finiteNonNegative(value: number | null | undefined): number | null {
   if (!Number.isFinite(value)) return null
@@ -117,6 +119,7 @@ let requestGeneration = 0
 
 async function load(preferRefresh = false) {
   const generation = ++requestGeneration
+  const requestedRangeDays = selectedRangeDays.value
   const hadContent = hasContent.value
   const useRefreshState = preferRefresh || hadContent
 
@@ -126,7 +129,7 @@ async function load(preferRefresh = false) {
   partialWarning.value = ''
 
   const [snapshotResult, realtimeResult] = await Promise.allSettled([
-    getAdminDashboardSnapshot(dateRange(rangeDays.value)),
+    getAdminDashboardSnapshot(dateRange(requestedRangeDays)),
     getAdminDashboardRealtime(),
   ])
 
@@ -135,8 +138,12 @@ async function load(preferRefresh = false) {
   const failed: string[] = []
   if (snapshotResult.status === 'fulfilled' && snapshotResult.value) {
     snapshot.value = snapshotResult.value
+    snapshotRangeDays.value = requestedRangeDays
   } else {
     failed.push('统计与趋势')
+    if (snapshot.value && snapshotRangeDays.value !== null) {
+      selectedRangeDays.value = snapshotRangeDays.value
+    }
   }
 
   if (realtimeResult.status === 'fulfilled' && realtimeResult.value) {
@@ -155,8 +162,8 @@ async function load(preferRefresh = false) {
 }
 
 function changeRange(days: RangeDays) {
-  if (rangeDays.value === days) return
-  rangeDays.value = days
+  if (selectedRangeDays.value === days) return
+  selectedRangeDays.value = days
   void load(true)
 }
 
@@ -218,7 +225,7 @@ onUnmounted(() => {
         :key="days"
         type="button"
         :data-range="days"
-        :aria-pressed="rangeDays === days"
+        :aria-pressed="selectedRangeDays === days"
         @click="changeRange(days)"
       >
         {{ days }} 天
@@ -267,7 +274,7 @@ onUnmounted(() => {
       <header>
         <div>
           <h2 id="mobile-request-trend-title">请求趋势</h2>
-          <p>近 {{ rangeDays }} 天请求变化</p>
+          <p>近 {{ trendRangeDays }} 天请求变化</p>
         </div>
         <span v-if="snapshot">{{ safeDateLabel(snapshot.start_date) }} 至 {{ safeDateLabel(snapshot.end_date) }}</span>
       </header>
