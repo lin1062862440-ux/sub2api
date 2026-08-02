@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -101,6 +103,7 @@ function deferred<T>() {
 }
 
 const wrappers: Array<{ unmount: () => void }> = []
+const source = readFileSync(resolve(process.cwd(), 'src/mobile/views/MobileDashboardView.vue'), 'utf8')
 
 function mountView() {
   const wrapper = mount(MobileDashboardView)
@@ -117,6 +120,7 @@ describe('MobileDashboardView', () => {
 
   afterEach(() => {
     for (const wrapper of wrappers.splice(0)) wrapper.unmount()
+    vi.useRealTimers()
   })
 
   it('keeps the MobilePage shell stable while the initial load is pending', () => {
@@ -149,6 +153,19 @@ describe('MobileDashboardView', () => {
       end_date: expect.any(String),
       granularity: 'day',
     }))
+  })
+
+  it('uses local calendar dates for the seven-day range before 08:00 in Asia/Shanghai', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-02T00:30:00+08:00'))
+
+    mountView()
+
+    expect(mocks.getDashboardTrend).toHaveBeenCalledWith({
+      start_date: '2026-07-27',
+      end_date: '2026-08-02',
+      granularity: 'day',
+    })
   })
 
   it('renders compact account, usage, trend, and subscription values', async () => {
@@ -188,6 +205,8 @@ describe('MobileDashboardView', () => {
     await wrapper.get('[data-testid="dashboard-refresh"]').trigger('click')
 
     expect(wrapper.get('[data-testid="dashboard-refresh"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-testid="dashboard-refresh"]').attributes('aria-label')).toBe('正在刷新首页')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('true')
     expect(wrapper.get('[data-testid="metric-requests"]').text()).toContain('9,400')
     expect(mocks.getDashboardStats).toHaveBeenCalledTimes(2)
 
@@ -197,7 +216,56 @@ describe('MobileDashboardView', () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="dashboard-refresh"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-testid="dashboard-refresh"]').attributes('aria-label')).toBe('刷新首页')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('false')
     expect(wrapper.get('[data-testid="metric-requests"]').text()).toContain('9,500')
+  })
+
+  it('keeps the newer load when an older request finishes last', async () => {
+    const firstStats = deferred<typeof stats>()
+    const firstTrend = deferred<typeof trend>()
+    const firstSubscriptions = deferred<typeof subscriptions>()
+    mocks.getDashboardStats.mockReturnValueOnce(firstStats.promise)
+    mocks.getDashboardTrend.mockReturnValueOnce(firstTrend.promise)
+    mocks.getSubscriptionSummary.mockReturnValueOnce(firstSubscriptions.promise)
+    const wrapper = mountView()
+
+    mocks.getDashboardStats.mockResolvedValueOnce({ ...stats, total_requests: 9700 })
+    mocks.getDashboardTrend.mockResolvedValueOnce(trend)
+    mocks.getSubscriptionSummary.mockResolvedValueOnce(subscriptions)
+    const setupState = (wrapper.vm.$ as unknown as { setupState: { load: () => Promise<void> } }).setupState
+    await setupState.load()
+    await flushPromises()
+    expect(wrapper.get('[data-testid="metric-requests"]').text()).toContain('9,700')
+
+    firstStats.resolve({ ...stats, total_requests: 1200 })
+    firstTrend.resolve(trend)
+    firstSubscriptions.resolve(subscriptions)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="metric-requests"]').text()).toContain('9,700')
+  })
+
+  it('ignores request completion after the view unmounts', async () => {
+    const pendingStats = deferred<typeof stats>()
+    const pendingTrend = deferred<typeof trend>()
+    const pendingSubscriptions = deferred<typeof subscriptions>()
+    mocks.getDashboardStats.mockReturnValueOnce(pendingStats.promise)
+    mocks.getDashboardTrend.mockReturnValueOnce(pendingTrend.promise)
+    mocks.getSubscriptionSummary.mockReturnValueOnce(pendingSubscriptions.promise)
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const wrapper = mountView()
+    const setupState = (wrapper.vm.$ as unknown as { setupState: { stats: typeof stats | null } }).setupState
+
+    wrapper.unmount()
+    pendingStats.resolve(stats)
+    pendingTrend.resolve(trend)
+    pendingSubscriptions.resolve(subscriptions)
+    await flushPromises()
+
+    expect(warning).not.toHaveBeenCalled()
+    expect(setupState.stats).toBeNull()
+    warning.mockRestore()
   })
 
   it('retains successful sections and reports only unavailable sections once', async () => {
@@ -229,6 +297,43 @@ describe('MobileDashboardView', () => {
     expect(mocks.getDashboardStats).toHaveBeenCalledTimes(2)
   })
 
+  it('recovers from the fatal retry state and renders fresh data', async () => {
+    mocks.getDashboardStats.mockRejectedValue(new Error('offline'))
+    mocks.getDashboardTrend.mockRejectedValue(new Error('offline'))
+    mocks.getSubscriptionSummary.mockRejectedValue(new Error('offline'))
+    const wrapper = mountView()
+    await flushPromises()
+
+    arrangeSuccess()
+    await wrapper.get('[data-testid="mobile-page-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="mobile-page-error"]').exists()).toBe(false)
+    expect(wrapper.get('[data-testid="metric-requests"]').text()).toContain('9,400')
+  })
+
+  it('retains prior data through a failed refresh and recovers on the next retry', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    mocks.getDashboardStats.mockRejectedValueOnce(new Error('offline'))
+    mocks.getDashboardTrend.mockRejectedValueOnce(new Error('offline'))
+    mocks.getSubscriptionSummary.mockRejectedValueOnce(new Error('offline'))
+    await wrapper.get('[data-testid="dashboard-refresh"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="metric-requests"]').text()).toContain('9,400')
+    expect(wrapper.get('[data-testid="dashboard-partial-warning"]').text()).toContain('核心指标')
+
+    mocks.getDashboardStats.mockResolvedValueOnce({ ...stats, total_requests: 9800 })
+    mocks.getDashboardTrend.mockResolvedValueOnce(trend)
+    mocks.getSubscriptionSummary.mockResolvedValueOnce(subscriptions)
+    await wrapper.get('[data-testid="dashboard-partial-warning"] button').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="metric-requests"]').text()).toContain('9,800')
+    expect(wrapper.find('[data-testid="dashboard-partial-warning"]').exists()).toBe(false)
+  })
+
   it('shows an explicit empty subscription state without a redemption link', async () => {
     mocks.getSubscriptionSummary.mockResolvedValue({ active_count: 0, total_used_usd: 0, subscriptions: [] })
 
@@ -238,6 +343,49 @@ describe('MobileDashboardView', () => {
     expect(wrapper.get('[data-testid="subscription-empty"]').text()).toContain('当前没有有效订阅')
     expect(wrapper.find('[data-testid="subscription-summary"] a').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('兑换')
+  })
+
+  it.each([
+    ['unlimited', {}, '不限额度'],
+    ['finite normal', { daily_used_usd: 2, daily_limit_usd: 10 }, '额度正常'],
+    ['exhausted', { monthly_used_usd: 10, monthly_limit_usd: 10 }, '额度已用满'],
+  ])('renders %s subscription quota semantics', async (_case, quota, expected) => {
+    mocks.getSubscriptionSummary.mockResolvedValue({
+      active_count: 1,
+      total_used_usd: 0,
+      subscriptions: [{
+        id: 8,
+        group_id: 4,
+        group_name: 'Current Plan',
+        status: 'active',
+        expires_at: null,
+        ...quota,
+      }],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="subscription-summary"]').text()).toContain(expected)
+  })
+
+  it('uses safe expiry fallbacks for null and invalid dates', async () => {
+    mocks.getSubscriptionSummary.mockResolvedValue({
+      active_count: 2,
+      total_used_usd: 0,
+      subscriptions: [
+        { id: 8, group_id: 4, group_name: 'No Expiry', status: 'active', expires_at: null },
+        { id: 9, group_id: 5, group_name: 'Bad Expiry', status: 'active', expires_at: 'not-a-date' },
+      ],
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const summary = wrapper.get('[data-testid="subscription-summary"]').text()
+    expect(summary).toContain('长期有效')
+    expect(summary).toContain('到期时间未知')
+    expect(summary).not.toContain('Invalid Date')
   })
 
   it('omits billing-only analytics in simple mode while keeping usage readable', async () => {
@@ -251,6 +399,34 @@ describe('MobileDashboardView', () => {
     expect(wrapper.get('[data-testid="metric-requests"]').text()).toContain('9,400')
     expect(wrapper.get('[data-testid="metric-tokens"]').text()).toContain('60万')
     expect(wrapper.get('[data-testid="metric-duration"]').text()).toContain('820ms')
+  })
+
+  it('distinguishes unavailable and successful empty subscriptions in simple mode', async () => {
+    mocks.session.runMode = 'simple'
+    mocks.getSubscriptionSummary.mockRejectedValueOnce(new Error('offline'))
+    const unavailable = mountView()
+    await flushPromises()
+
+    expect(unavailable.find('[data-testid="account-band"]').exists()).toBe(false)
+    expect(unavailable.get('[data-testid="dashboard-partial-warning"]').text()).toContain('订阅概况')
+    unavailable.unmount()
+
+    mocks.getSubscriptionSummary.mockResolvedValueOnce({ active_count: 0, total_used_usd: 0, subscriptions: [] })
+    const empty = mountView()
+    await flushPromises()
+
+    expect(empty.get('[data-testid="account-band"]').text()).toContain('0 个有效')
+    expect(empty.get('[data-testid="subscription-empty"]').text()).toContain('当前没有有效订阅')
+  })
+
+  it('marks initial loading busy and gives partial retry a 44px touch target', () => {
+    mocks.getDashboardStats.mockReturnValue(new Promise(() => {}))
+    mocks.getDashboardTrend.mockReturnValue(new Promise(() => {}))
+    mocks.getSubscriptionSummary.mockReturnValue(new Promise(() => {}))
+    const wrapper = mountView()
+
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('true')
+    expect(source).toMatch(/\.partial-warning button\s*\{[^}]*min-height:\s*44px/s)
   })
 
   it('excludes desktop-only analytics and long dashboard copy', async () => {

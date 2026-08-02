@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Activity, RefreshCw } from '@lucide/vue'
 
 import * as api from '@/api'
@@ -22,29 +22,38 @@ const isSimpleMode = computed(() => session.runMode === 'simple')
 const busy = computed(() => loading.value || refreshing.value)
 const hasContent = computed(() => Boolean(stats.value) || trendLoaded.value || subscriptionsLoaded.value)
 
+function formatLocalDate(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 function dateRange(): { start_date: string; end_date: string } {
   const end = new Date()
   const start = new Date()
   start.setDate(start.getDate() - 6)
-  const iso = (date: Date) => date.toISOString().slice(0, 10)
-  return { start_date: iso(start), end_date: iso(end) }
+  return { start_date: formatLocalDate(start), end_date: formatLocalDate(end) }
 }
 
-function quotaRatio(subscription: SubscriptionSummaryItem): number {
+function quotaRatio(subscription: SubscriptionSummaryItem): number | null {
   const windows = [
     [subscription.daily_used_usd, subscription.daily_limit_usd],
     [subscription.weekly_used_usd, subscription.weekly_limit_usd],
     [subscription.monthly_used_usd, subscription.monthly_limit_usd],
-  ]
+  ].filter(([, limit]) => Number.isFinite(limit) && (limit ?? 0) > 0)
+
+  if (windows.length === 0) return null
 
   return windows.reduce((highest, [used, limit]) => {
-    if (used === undefined || limit === undefined || limit <= 0) return highest
-    return Math.max(highest, used / limit)
+    const finiteUsed = Number.isFinite(used) ? used! : 0
+    return Math.max(highest, finiteUsed / limit!)
   }, 0)
 }
 
 function quotaLabel(subscription: SubscriptionSummaryItem): string {
   const ratio = quotaRatio(subscription)
+  if (ratio === null) return '不限额度'
   if (ratio >= 1) return '额度已用满'
   if (ratio >= 0.8) return '额度接近上限'
   return '额度正常'
@@ -58,7 +67,7 @@ const nearestExpiry = computed(() => activeSubscriptions.value
   .filter((subscription) => subscription.expires_at && !Number.isNaN(Date.parse(subscription.expires_at)))
   .sort((left, right) => Date.parse(left.expires_at!) - Date.parse(right.expires_at!))[0] ?? null)
 
-function formatExpiry(value: string | undefined): string {
+function formatExpiry(value: string | null | undefined): string {
   if (!value) return '长期有效'
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '到期时间未知'
@@ -75,8 +84,11 @@ function trendWidth(point: TrendPoint): string {
   return `${Math.max((point.requests / requestPeak.value) * 100, 3)}%`
 }
 
+let mounted = false
+let requestGeneration = 0
+
 async function load(isRefresh = false) {
-  if (refreshing.value) return
+  const generation = ++requestGeneration
   if (isRefresh) refreshing.value = true
   else loading.value = true
   fatalError.value = ''
@@ -88,6 +100,8 @@ async function load(isRefresh = false) {
     api.getDashboardTrend({ ...range, granularity: 'day' }),
     api.getSubscriptionSummary(),
   ])
+
+  if (!mounted || generation !== requestGeneration) return
 
   if (statsResult.status === 'fulfilled') stats.value = statsResult.value
   else unavailableSections.value.push('核心指标')
@@ -116,7 +130,13 @@ function refresh() {
 }
 
 onMounted(() => {
+  mounted = true
   void load()
+})
+
+onUnmounted(() => {
+  mounted = false
+  requestGeneration += 1
 })
 </script>
 
@@ -125,6 +145,7 @@ onMounted(() => {
     title="首页"
     :loading="loading && !hasContent"
     :error="fatalError"
+    :aria-busy="busy"
     loading-label="正在加载首页"
     @retry="refresh"
   >
@@ -133,7 +154,7 @@ onMounted(() => {
         class="refresh-button"
         type="button"
         title="刷新首页"
-        aria-label="刷新首页"
+        :aria-label="refreshing ? '正在刷新首页' : '刷新首页'"
         data-testid="dashboard-refresh"
         :disabled="busy"
         @click="refresh"
@@ -227,7 +248,7 @@ onMounted(() => {
             <span v-if="nearestExpiry?.id === subscription.id">最近到期 {{ formatExpiry(subscription.expires_at) }}</span>
             <span v-else>{{ formatExpiry(subscription.expires_at) }}</span>
           </div>
-          <em :class="{ warning: quotaRatio(subscription) >= 0.8 }">{{ quotaLabel(subscription) }}</em>
+          <em :class="{ warning: (quotaRatio(subscription) ?? 0) >= 0.8 }">{{ quotaLabel(subscription) }}</em>
         </div>
       </div>
       <div v-else class="section-empty" data-testid="subscription-empty">当前没有有效订阅</div>
@@ -271,7 +292,7 @@ onMounted(() => {
 }
 
 .partial-warning button {
-  min-height: 32px;
+  min-height: 44px;
   padding: 0 8px;
   border: 0;
   background: transparent;
