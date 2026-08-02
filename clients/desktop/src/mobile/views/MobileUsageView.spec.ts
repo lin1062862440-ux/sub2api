@@ -144,7 +144,7 @@ function mountView() {
 
 describe('MobileUsageView', () => {
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks()
     mocks.session.settings.allow_user_view_error_requests = true
     mocks.resolveUsageRange.mockImplementation((preset: keyof typeof deterministicRanges) => ({
       preset,
@@ -396,6 +396,224 @@ describe('MobileUsageView', () => {
     expect(wrapper.find('[data-testid="usage-inline-retry"]').exists()).toBe(true)
   })
 
+  it.each([
+    ['refresh', async (wrapper: ReturnType<typeof mountView>) => {
+      await wrapper.get('[data-testid="usage-refresh"]').trigger('click')
+    }],
+    ['date filter', async (wrapper: ReturnType<typeof mountView>) => {
+      await wrapper.get('[data-testid="usage-range-filter"]').setValue('last7d')
+    }],
+  ])('keeps %s request ownership while pagination is disabled', async (_case, startFullLoad) => {
+    mocks.getUsageRecords.mockResolvedValue({ items: [record], total: 45, page: 1, page_size: 20 })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const pendingStats = deferred<typeof stats>()
+    const pendingRecords = deferred<{ items: typeof record[]; total: number; page: number; page_size: number }>()
+    mocks.getUsageStats.mockReturnValueOnce(pendingStats.promise)
+    mocks.getUsageRecords.mockReturnValueOnce(pendingRecords.promise)
+
+    await startFullLoad(wrapper)
+
+    const next = wrapper.get('[data-testid="mobile-pagination-next"]')
+    expect(wrapper.get('.pagination-shell').attributes('disabled')).toBeDefined()
+    await next.trigger('click')
+    expect(mocks.getUsageRecords).toHaveBeenCalledTimes(2)
+
+    pendingStats.resolve({ ...stats, total_requests: 30 })
+    pendingRecords.resolve({ items: [{ ...record, model: 'full-load-result' }], total: 45, page: 1, page_size: 20 })
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="usage-refresh"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('false')
+    expect(wrapper.get('[data-testid="usage-record-card"]').text()).toContain('full-load-result')
+  })
+
+  it('shows only supported filters and counts only applicable filters on the errors tab', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="usage-request-type-filter"]').setValue('stream')
+    await flushPromises()
+    await wrapper.get('[data-testid="usage-advanced-trigger"]').trigger('click')
+    await wrapper.get('[data-testid="usage-group-filter"]').setValue('3')
+    await wrapper.get('[data-testid="usage-billing-type-filter"]').setValue('1')
+    await wrapper.get('[data-testid="usage-billing-mode-filter"]').setValue('token')
+    await wrapper.get('[data-testid="usage-filter-apply"]').trigger('click')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="usage-errors-tab"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="usage-request-type-filter"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="usage-advanced-trigger"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="usage-filter-count"]').exists()).toBe(false)
+    expect(mocks.getUsageErrors).toHaveBeenLastCalledWith(expect.not.objectContaining({
+      request_type: expect.anything(),
+      group_id: expect.anything(),
+      billing_type: expect.anything(),
+      billing_mode: expect.anything(),
+    }))
+    expect(mocks.getUsageStats).toHaveBeenLastCalledWith(expect.not.objectContaining({
+      request_type: expect.anything(),
+      group_id: expect.anything(),
+      billing_type: expect.anything(),
+      billing_mode: expect.anything(),
+    }))
+
+    await wrapper.get('[data-testid="usage-model-filter"]').setValue('gpt-5')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="usage-filter-count"]').text()).toBe('1')
+    await wrapper.get('[data-testid="usage-visible-reset"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="usage-model-filter"]').element).toHaveProperty('value', '')
+    expect(wrapper.find('[data-testid="usage-filter-count"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="usage-records-tab"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="usage-request-type-filter"]').element).toHaveProperty('value', 'stream')
+    expect(wrapper.get('[data-testid="usage-filter-count"]').text()).toBe('4')
+  })
+
+  it('keeps the committed page and cards when a page request fails', async () => {
+    mocks.getUsageRecords.mockResolvedValue({ items: [record], total: 45, page: 1, page_size: 20 })
+    const wrapper = mountView()
+    await flushPromises()
+
+    const pending = deferred<{ items: typeof record[]; total: number; page: number; page_size: number }>()
+    mocks.getUsageRecords.mockReturnValueOnce(pending.promise)
+    await wrapper.get('[data-testid="mobile-pagination-next"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="mobile-pagination-label"]').text()).toContain('1 / 3')
+    expect(wrapper.get('.pagination-shell').attributes('disabled')).toBeDefined()
+    pending.reject(new Error('offline'))
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="mobile-pagination-label"]').text()).toContain('1 / 3')
+    expect(wrapper.get('[data-testid="usage-record-card"]').text()).toContain(record.model)
+    expect(wrapper.get('[data-testid="usage-inline-error"]').text()).toContain('使用记录')
+  })
+
+  it('refetches the last valid page when a successful response shrinks the total', async () => {
+    mocks.getUsageRecords.mockResolvedValue({ items: [record], total: 45, page: 1, page_size: 20 })
+    const wrapper = mountView()
+    await flushPromises()
+
+    mocks.getUsageRecords.mockResolvedValueOnce({
+      items: [{ ...record, model: 'page-two-before-shrink' }],
+      total: 45,
+      page: 2,
+      page_size: 20,
+    })
+    await wrapper.get('[data-testid="mobile-pagination-next"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[data-testid="mobile-pagination-label"]').text()).toContain('2 / 3')
+
+    mocks.getUsageRecords
+      .mockResolvedValueOnce({ items: [], total: 21, page: 3, page_size: 20, pages: 2 })
+      .mockResolvedValueOnce({
+        items: [{ ...record, model: 'last-valid-page' }],
+        total: 21,
+        page: 2,
+        page_size: 20,
+        pages: 2,
+      })
+    await wrapper.get('[data-testid="mobile-pagination-next"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.getUsageRecords).toHaveBeenLastCalledWith(expect.objectContaining({ page: 2 }))
+    expect(wrapper.get('[data-testid="mobile-pagination-label"]').text()).toContain('2 / 2')
+    expect(wrapper.get('[data-testid="usage-record-card"]').text()).toContain('last-valid-page')
+  })
+
+  it('retries unavailable group options without exposing the raw failure', async () => {
+    mocks.getUsageGroups
+      .mockRejectedValueOnce(new Error('bearer secret from backend'))
+      .mockRejectedValueOnce(new Error('second sensitive failure'))
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="usage-advanced-trigger"]').trigger('click')
+    await flushPromises()
+
+    const status = wrapper.get('[data-testid="usage-group-status"]')
+    expect(status.text()).toContain('分组选项暂时不可用')
+    expect(status.text()).not.toContain('secret')
+    expect(wrapper.find('[data-testid="usage-group-retry"]').exists()).toBe(true)
+    expect(mocks.getUsageGroups).toHaveBeenCalledTimes(2)
+
+    mocks.getUsageGroups.mockResolvedValueOnce([{ id: 3, name: '恢复分组' }])
+    await wrapper.get('[data-testid="usage-group-retry"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="usage-group-filter"]').text()).toContain('恢复分组')
+    expect(wrapper.find('[data-testid="usage-group-status"]').exists()).toBe(false)
+  })
+
+  it('provides 44px roving tabs with linked panels and arrow-key navigation', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    const recordsTab = wrapper.get('[data-testid="usage-records-tab"]')
+    const errorsTab = wrapper.get('[data-testid="usage-errors-tab"]')
+    expect(recordsTab.attributes('aria-controls')).toBe('usage-records-panel')
+    expect(recordsTab.attributes('tabindex')).toBe('0')
+    expect(errorsTab.attributes('aria-controls')).toBe('usage-errors-panel')
+    expect(errorsTab.attributes('tabindex')).toBe('-1')
+    expect(wrapper.get('[role="tabpanel"]').attributes('id')).toBe('usage-records-panel')
+
+    await recordsTab.trigger('keydown', { key: 'ArrowRight' })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="usage-errors-tab"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.get('[data-testid="usage-errors-tab"]').attributes('tabindex')).toBe('0')
+    expect(wrapper.get('[role="tabpanel"]').attributes('id')).toBe('usage-errors-panel')
+
+    await wrapper.get('[data-testid="usage-errors-tab"]').trigger('keydown', { key: 'ArrowLeft' })
+    await flushPromises()
+    expect(wrapper.get('[data-testid="usage-records-tab"]').attributes('aria-selected')).toBe('true')
+
+    const source = readFileSync(resolve(process.cwd(), 'src/mobile/views/MobileUsageView.vue'), 'utf8')
+    expect(source).toMatch(/\.usage-tabs button\s*\{[^}]*min-height:\s*44px/s)
+  })
+
+  it('renders non-finite summary and record values as safe placeholders', async () => {
+    mocks.getUsageStats.mockResolvedValue({
+      ...stats,
+      total_requests: Number.POSITIVE_INFINITY,
+      total_tokens: Number.NaN,
+      total_actual_cost: Number.POSITIVE_INFINITY,
+      average_duration_ms: Number.NEGATIVE_INFINITY,
+    })
+    mocks.getUsageRecords.mockResolvedValue({
+      items: [{
+        ...record,
+        input_tokens: Number.POSITIVE_INFINITY,
+        output_tokens: Number.NaN,
+        cache_creation_tokens: Number.NEGATIVE_INFINITY,
+        cache_read_tokens: Number.POSITIVE_INFINITY,
+        total_tokens: Number.POSITIVE_INFINITY,
+        actual_cost: Number.POSITIVE_INFINITY,
+        duration_ms: Number.POSITIVE_INFINITY,
+      }],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+
+    const wrapper = mountView()
+    await flushPromises()
+
+    const values = [
+      wrapper.get('[data-testid="summary-requests"]').text(),
+      wrapper.get('[data-testid="summary-tokens"]').text(),
+      wrapper.get('[data-testid="summary-cost"]').text(),
+      wrapper.get('[data-testid="summary-duration"]').text(),
+      wrapper.get('[data-testid="usage-record-card"]').text(),
+    ].join(' ')
+    expect(values).toContain('—')
+    expect(values).not.toMatch(/Infinity|NaN|∞/)
+  })
+
   it('shows retry after a total initial failure and a clear state after a successful empty load', async () => {
     mocks.getUsageStats.mockRejectedValueOnce(new Error('offline'))
     mocks.getUsageRecords.mockRejectedValueOnce(new Error('offline'))
@@ -414,7 +632,12 @@ describe('MobileUsageView', () => {
   })
 
   it('emits valid previous and next record pages from total and page size', async () => {
-    mocks.getUsageRecords.mockResolvedValue({ items: [record], total: 45, page: 1, page_size: 20 })
+    mocks.getUsageRecords.mockImplementation(({ page }: { page: number }) => Promise.resolve({
+      items: [record],
+      total: 45,
+      page,
+      page_size: 20,
+    }))
     const wrapper = mountView()
     await flushPromises()
 
@@ -479,7 +702,6 @@ describe('MobileUsageView', () => {
     expect(source).not.toContain('getUsageApiKeys')
     expect(source).not.toContain('getUsageSnapshot')
     expect(source).not.toContain('getUsageModels')
-    expect(source).toMatch(/min-height:\s*44px/)
     expect(source).toMatch(/overflow-wrap:\s*anywhere|text-overflow:\s*ellipsis/)
   })
 })

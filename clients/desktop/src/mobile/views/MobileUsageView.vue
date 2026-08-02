@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { AlertCircle, RefreshCw, SlidersHorizontal } from '@lucide/vue'
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { AlertCircle, FilterX, RefreshCw, SlidersHorizontal } from '@lucide/vue'
 
 import * as api from '@/api'
 import type {
   GroupOption,
+  PaginatedResponse,
   UsageErrorFilters,
   UsageFilters,
   UsageLog,
@@ -47,6 +48,11 @@ const errors = ref<UserErrorRequest[]>([])
 const errorTotal = ref(0)
 const errorsLoaded = ref(false)
 const groups = ref<GroupOption[]>([])
+const groupsLoading = ref(false)
+const groupsLoaded = ref(false)
+const groupError = ref('')
+const recordsTabButton = ref<HTMLButtonElement | null>(null)
+const errorsTabButton = ref<HTMLButtonElement | null>(null)
 
 const recordPage = ref(1)
 const errorPage = ref(1)
@@ -56,7 +62,8 @@ const refreshing = ref(false)
 const fatalError = ref('')
 const inlineError = ref('')
 let mounted = false
-let requestGeneration = 0
+let fullLoadGeneration = 0
+let listGeneration = 0
 let groupGeneration = 0
 
 const currentRange = computed(() => resolveUsageRange(rangePreset.value))
@@ -65,17 +72,25 @@ const hasContent = computed(() => stats.value !== null || recordsLoaded.value ||
 const busy = computed(() => initialLoading.value || listLoading.value || refreshing.value)
 const activePage = computed(() => activeTab.value === 'records' ? recordPage.value : errorPage.value)
 const activeTotal = computed(() => activeTab.value === 'records' ? recordTotal.value : errorTotal.value)
-const activePageCount = computed(() => Math.max(1, Math.ceil(activeTotal.value / PAGE_SIZE)))
+const activePageCount = computed(() => {
+  const total = Number.isFinite(activeTotal.value) ? Math.max(0, activeTotal.value) : 0
+  return Math.max(1, Math.ceil(total / PAGE_SIZE))
+})
 const activeItemsLoaded = computed(() => activeTab.value === 'records' ? recordsLoaded.value : errorsLoaded.value)
 const activeItemsEmpty = computed(() => activeTab.value === 'records' ? records.value.length === 0 : errors.value.length === 0)
-const activeFilterCount = computed(() => [
-  rangePreset.value !== 'last24h',
-  Boolean(model.value.trim()),
-  Boolean(requestType.value),
-  groupId.value !== '',
-  billingType.value !== '',
-  Boolean(billingMode.value),
-].filter(Boolean).length)
+const activeListLoading = computed(() => listLoading.value || (refreshing.value && !activeItemsLoaded.value))
+const activeFilterCount = computed(() => {
+  const filters = [rangePreset.value !== 'last24h', Boolean(model.value.trim())]
+  if (activeTab.value === 'records') {
+    filters.push(
+      Boolean(requestType.value),
+      groupId.value !== '',
+      billingType.value !== '',
+      Boolean(billingMode.value),
+    )
+  }
+  return filters.filter(Boolean).length
+})
 
 function usageFilters(): UsageFilters {
   const filters: UsageFilters = {
@@ -128,6 +143,53 @@ function tokenTotal(item: UsageLog): number {
   return item.input_tokens + item.output_tokens + item.cache_creation_tokens + item.cache_read_tokens
 }
 
+function safeCount(value: number | null | undefined): string {
+  return Number.isFinite(value) ? formatCount(value) : '—'
+}
+
+function safeCost(value: number | null | undefined): string {
+  return Number.isFinite(value) ? formatCost(value) : '—'
+}
+
+function safeDuration(value: number | null | undefined): string {
+  return Number.isFinite(value) ? formatDuration(value) : '—'
+}
+
+interface LoadedPage<T> {
+  value: PaginatedResponse<T>
+  page: number
+}
+
+function responsePageCount<T>(value: PaginatedResponse<T>): number {
+  const explicit = value.pages ?? value.total_pages
+  if (Number.isFinite(explicit) && explicit! > 0) return Math.max(1, Math.floor(explicit!))
+  const pageSize = Number.isFinite(value.page_size) && value.page_size > 0 ? value.page_size : PAGE_SIZE
+  const total = Number.isFinite(value.total) ? Math.max(0, value.total) : 0
+  return Math.max(1, Math.ceil(total / pageSize))
+}
+
+async function fetchValidPage<T>(
+  targetPage: number,
+  request: (page: number) => Promise<PaginatedResponse<T>>,
+  isCurrent: () => boolean,
+): Promise<LoadedPage<T> | null> {
+  let requestedPage = Math.max(1, Math.floor(targetPage) || 1)
+  let value = await request(requestedPage)
+  if (!isCurrent()) return null
+
+  const pageCount = responsePageCount(value)
+  const reportedPage = Number.isFinite(value.page) ? Math.max(1, Math.floor(value.page)) : requestedPage
+  if ((requestedPage > pageCount || reportedPage > pageCount) && requestedPage !== pageCount) {
+    requestedPage = pageCount
+    value = await request(requestedPage)
+    if (!isCurrent()) return null
+  }
+
+  const finalPageCount = responsePageCount(value)
+  const finalReportedPage = Number.isFinite(value.page) ? Math.max(1, Math.floor(value.page)) : requestedPage
+  return { value, page: Math.min(finalPageCount, finalReportedPage) }
+}
+
 function failureMessage(failed: string[], refresh: boolean): string {
   const scope = failed.join('、')
   return refresh
@@ -136,7 +198,8 @@ function failureMessage(failed: string[], refresh: boolean): string {
 }
 
 async function loadUsage(isRefresh = false) {
-  const generation = ++requestGeneration
+  const generation = ++fullLoadGeneration
+  const listOwner = ++listGeneration
   const tab = activeTab.value
   const hadContent = hasContent.value
   fatalError.value = ''
@@ -144,40 +207,54 @@ async function loadUsage(isRefresh = false) {
 
   if (hadContent || isRefresh) refreshing.value = true
   else initialLoading.value = true
-  listLoading.value = true
+  listLoading.value = false
 
-  const statsRequest = api.getUsageStats(usageFilters())
+  const recordFilters = usageFilters()
+  const supportedErrorFilters = errorFilters()
+  const isCurrent = () => mounted
+    && generation === fullLoadGeneration
+    && listOwner === listGeneration
+  const statsRequest = api.getUsageStats(tab === 'records' ? recordFilters : supportedErrorFilters)
   const listRequest = tab === 'records'
-    ? api.getUsageRecords({ ...usageFilters(), page: recordPage.value, page_size: PAGE_SIZE })
-    : api.getUsageErrors({ ...errorFilters(), page: errorPage.value, page_size: PAGE_SIZE })
+    ? fetchValidPage(
+        recordPage.value,
+        (page) => api.getUsageRecords({ ...recordFilters, page, page_size: PAGE_SIZE }),
+        isCurrent,
+      )
+    : fetchValidPage(
+        errorPage.value,
+        (page) => api.getUsageErrors({ ...supportedErrorFilters, page, page_size: PAGE_SIZE }),
+        isCurrent,
+      )
   const [statsResult, listResult] = await Promise.allSettled([statsRequest, listRequest])
 
-  if (!mounted || generation !== requestGeneration) return
+  if (!mounted || generation !== fullLoadGeneration) return
 
   const failed: string[] = []
   if (statsResult.status === 'fulfilled') stats.value = statsResult.value
   else failed.push('汇总数据')
 
-  if (tab === 'records') {
-    if (listResult.status === 'fulfilled') {
-      const value = listResult.value as Awaited<ReturnType<typeof api.getUsageRecords>>
-      records.value = value.items ?? []
-      recordTotal.value = value.total ?? 0
+  if (listOwner === listGeneration && tab === 'records') {
+    if (listResult.status === 'fulfilled' && listResult.value) {
+      const result = listResult.value as LoadedPage<UsageLog>
+      records.value = result.value.items ?? []
+      recordTotal.value = result.value.total ?? 0
+      recordPage.value = result.page
       recordsLoaded.value = true
     } else {
       failed.push('使用记录')
     }
-  } else if (listResult.status === 'fulfilled') {
-    const value = listResult.value as Awaited<ReturnType<typeof api.getUsageErrors>>
-    errors.value = value.items ?? []
-    errorTotal.value = value.total ?? 0
+  } else if (listOwner === listGeneration && listResult.status === 'fulfilled' && listResult.value) {
+    const result = listResult.value as LoadedPage<UserErrorRequest>
+    errors.value = result.value.items ?? []
+    errorTotal.value = result.value.total ?? 0
+    errorPage.value = result.page
     errorsLoaded.value = true
-  } else {
+  } else if (listOwner === listGeneration) {
     failed.push('错误记录')
   }
 
   initialLoading.value = false
-  listLoading.value = false
   refreshing.value = false
   if (failed.length) {
     if (!hasContent.value) fatalError.value = '暂时无法加载使用记录，请检查网络后重试。'
@@ -185,53 +262,70 @@ async function loadUsage(isRefresh = false) {
   }
 }
 
-async function loadActiveList() {
-  const generation = ++requestGeneration
+async function loadActiveList(targetPage: number) {
+  const generation = ++listGeneration
   const tab = activeTab.value
   listLoading.value = true
   inlineError.value = ''
+  const isCurrent = () => mounted && generation === listGeneration
 
   try {
     if (tab === 'records') {
-      const value = await api.getUsageRecords({
-        ...usageFilters(),
-        page: recordPage.value,
-        page_size: PAGE_SIZE,
-      })
-      if (!mounted || generation !== requestGeneration) return
-      records.value = value.items ?? []
-      recordTotal.value = value.total ?? 0
+      const filters = usageFilters()
+      const result = await fetchValidPage(
+        targetPage,
+        (page) => api.getUsageRecords({ ...filters, page, page_size: PAGE_SIZE }),
+        isCurrent,
+      )
+      if (!result || !isCurrent()) return
+      records.value = result.value.items ?? []
+      recordTotal.value = result.value.total ?? 0
+      recordPage.value = result.page
       recordsLoaded.value = true
     } else {
-      const value = await api.getUsageErrors({
-        ...errorFilters(),
-        page: errorPage.value,
-        page_size: PAGE_SIZE,
-      })
-      if (!mounted || generation !== requestGeneration) return
-      errors.value = value.items ?? []
-      errorTotal.value = value.total ?? 0
+      const filters = errorFilters()
+      const result = await fetchValidPage(
+        targetPage,
+        (page) => api.getUsageErrors({ ...filters, page, page_size: PAGE_SIZE }),
+        isCurrent,
+      )
+      if (!result || !isCurrent()) return
+      errors.value = result.value.items ?? []
+      errorTotal.value = result.value.total ?? 0
+      errorPage.value = result.page
       errorsLoaded.value = true
     }
   } catch {
-    if (!mounted || generation !== requestGeneration) return
+    if (!isCurrent()) return
     inlineError.value = `${tab === 'records' ? '使用记录' : '错误记录'}加载失败，已保留当前数据。`
   } finally {
-    if (mounted && generation === requestGeneration) listLoading.value = false
+    if (isCurrent()) listLoading.value = false
   }
 }
 
 async function loadGroups() {
+  if (groupsLoading.value) return
   const generation = ++groupGeneration
+  groupsLoading.value = true
+  groupError.value = ''
   try {
     const value = await api.getUsageGroups()
-    if (mounted && generation === groupGeneration) groups.value = value ?? []
+    if (mounted && generation === groupGeneration) {
+      groups.value = value ?? []
+      groupsLoaded.value = true
+    }
   } catch {
-    // Group choices are optional; filters remain usable without them.
+    if (mounted && generation === groupGeneration) {
+      groupsLoaded.value = false
+      groupError.value = '分组选项暂时不可用。'
+    }
+  } finally {
+    if (mounted && generation === groupGeneration) groupsLoading.value = false
   }
 }
 
 function refresh() {
+  if (!groupsLoaded.value && !groupsLoading.value) void loadGroups()
   void loadUsage(hasContent.value)
 }
 
@@ -254,6 +348,7 @@ function openAdvancedFilters() {
   draftBillingType.value = billingType.value
   draftBillingMode.value = billingMode.value
   sheetOpen.value = true
+  if (!groupsLoaded.value && !groupsLoading.value) void loadGroups()
 }
 
 function applyAdvancedFilters() {
@@ -280,19 +375,52 @@ function resetFilters() {
   void loadUsage(hasContent.value)
 }
 
-function selectTab(tab: 'records' | 'errors') {
-  if (tab === activeTab.value || (tab === 'errors' && !errorViewEnabled.value)) return
+function resetApplicableFilters() {
+  rangePreset.value = 'last24h'
+  model.value = ''
+  if (activeTab.value === 'records') {
+    requestType.value = ''
+    groupId.value = ''
+    billingType.value = ''
+    billingMode.value = ''
+  }
+  resetPages()
+  void loadUsage(hasContent.value)
+}
+
+function focusTab(tab: 'records' | 'errors') {
+  void nextTick(() => {
+    ;(tab === 'records' ? recordsTabButton.value : errorsTabButton.value)?.focus()
+  })
+}
+
+function selectTab(tab: 'records' | 'errors', focus = false) {
+  if (tab === 'errors' && !errorViewEnabled.value) return
+  if (tab === activeTab.value) {
+    if (focus) focusTab(tab)
+    return
+  }
   activeTab.value = tab
   inlineError.value = ''
+  if (focus) focusTab(tab)
   void loadUsage(false)
 }
 
+function handleTabKeydown(event: KeyboardEvent) {
+  if (!errorViewEnabled.value) return
+  let target: 'records' | 'errors' | null = null
+  if (event.key === 'ArrowRight' || event.key === 'End') target = 'errors'
+  if (event.key === 'ArrowLeft' || event.key === 'Home') target = 'records'
+  if (!target) return
+  event.preventDefault()
+  selectTab(target, true)
+}
+
 function changePage(page: number) {
+  if (busy.value) return
   const validPage = Math.min(activePageCount.value, Math.max(1, page))
   if (validPage === activePage.value) return
-  if (activeTab.value === 'records') recordPage.value = validPage
-  else errorPage.value = validPage
-  void loadActiveList()
+  void loadActiveList(validPage)
 }
 
 onMounted(() => {
@@ -303,7 +431,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   mounted = false
-  requestGeneration += 1
+  fullLoadGeneration += 1
+  listGeneration += 1
   groupGeneration += 1
 })
 </script>
@@ -340,10 +469,10 @@ onUnmounted(() => {
 
     <div class="usage-content">
       <section v-if="stats" class="summary-grid" aria-label="用量汇总">
-        <div data-testid="summary-requests"><span>请求</span><strong>{{ formatCount(stats.total_requests) }}</strong></div>
-        <div data-testid="summary-tokens"><span>Token</span><strong>{{ formatCount(stats.total_tokens) }}</strong></div>
-        <div data-testid="summary-cost"><span>实际费用</span><strong>{{ formatCost(stats.total_actual_cost) }}</strong></div>
-        <div data-testid="summary-duration"><span>平均耗时</span><strong>{{ formatDuration(stats.average_duration_ms) }}</strong></div>
+        <div data-testid="summary-requests"><span>请求</span><strong>{{ safeCount(stats.total_requests) }}</strong></div>
+        <div data-testid="summary-tokens"><span>Token</span><strong>{{ safeCount(stats.total_tokens) }}</strong></div>
+        <div data-testid="summary-cost"><span>实际费用</span><strong>{{ safeCost(stats.total_actual_cost) }}</strong></div>
+        <div data-testid="summary-duration"><span>平均耗时</span><strong>{{ safeDuration(stats.average_duration_ms) }}</strong></div>
       </section>
 
       <section class="filter-area" aria-label="使用记录筛选">
@@ -364,7 +493,7 @@ onUnmounted(() => {
             @change="applyVisibleFilters"
           >
         </label>
-        <label>
+        <label v-if="activeTab === 'records'">
           <span>请求类型</span>
           <select v-model="requestType" data-testid="usage-request-type-filter" @change="applyVisibleFilters">
             <option value="">全部类型</option>
@@ -377,6 +506,7 @@ onUnmounted(() => {
           </select>
         </label>
         <button
+          v-if="activeTab === 'records'"
           class="advanced-button"
           type="button"
           data-testid="usage-advanced-trigger"
@@ -386,6 +516,17 @@ onUnmounted(() => {
           高级筛选
           <span v-if="activeFilterCount" data-testid="usage-filter-count">{{ activeFilterCount }}</span>
         </button>
+        <button
+          v-if="activeFilterCount"
+          class="filter-reset-button"
+          type="button"
+          data-testid="usage-visible-reset"
+          @click="resetApplicableFilters"
+        >
+          <FilterX :size="17" />
+          重置
+          <span v-if="activeTab === 'errors'" data-testid="usage-filter-count">{{ activeFilterCount }}</span>
+        </button>
       </section>
 
       <div v-if="inlineError" class="inline-error" data-testid="usage-inline-error" role="alert">
@@ -394,29 +535,45 @@ onUnmounted(() => {
         <button type="button" data-testid="usage-inline-retry" @click="retryInline">重试</button>
       </div>
 
-      <div class="usage-tabs" role="tablist" aria-label="记录类型">
+      <div class="usage-tabs" role="tablist" aria-label="记录类型" @keydown="handleTabKeydown">
         <button
+          id="usage-records-tab-control"
+          ref="recordsTabButton"
           type="button"
           role="tab"
           data-testid="usage-records-tab"
           :aria-selected="activeTab === 'records'"
+          aria-controls="usage-records-panel"
+          :tabindex="activeTab === 'records' ? 0 : -1"
           @click="selectTab('records')"
         >使用记录</button>
         <button
           v-if="errorViewEnabled"
+          id="usage-errors-tab-control"
+          ref="errorsTabButton"
           type="button"
           role="tab"
           data-testid="usage-errors-tab"
           :aria-selected="activeTab === 'errors'"
+          aria-controls="usage-errors-panel"
+          :tabindex="activeTab === 'errors' ? 0 : -1"
           @click="selectTab('errors')"
         >错误记录</button>
       </div>
 
-      <div v-if="listLoading" class="list-loading" data-testid="usage-list-loading" role="status">
+      <div v-if="activeListLoading" class="list-loading" data-testid="usage-list-loading" role="status">
         正在加载{{ activeTab === 'records' ? '使用记录' : '错误记录' }}
       </div>
 
-      <section v-if="activeTab === 'records'" class="record-list" aria-label="使用记录列表">
+      <section
+        v-if="activeTab === 'records'"
+        id="usage-records-panel"
+        class="record-list"
+        role="tabpanel"
+        aria-labelledby="usage-records-tab-control"
+        aria-label="使用记录列表"
+        tabindex="0"
+      >
         <article v-for="item in records" :key="item.id" class="record-card" data-testid="usage-record-card">
           <header>
             <strong>{{ item.model || '未知模型' }}</strong>
@@ -428,23 +585,31 @@ onUnmounted(() => {
             <span>{{ billingTypeLabel(item.billing_type) }}</span>
           </div>
           <dl class="record-details">
-            <div><dt>输入</dt><dd>{{ ` ${formatCount(item.input_tokens)}` }}</dd></div>
-            <div><dt>输出</dt><dd>{{ ` ${formatCount(item.output_tokens)}` }}</dd></div>
-            <div><dt>缓存创建</dt><dd>{{ ` ${formatCount(item.cache_creation_tokens)}` }}</dd></div>
-            <div><dt>缓存读取</dt><dd>{{ ` ${formatCount(item.cache_read_tokens)}` }}</dd></div>
-            <div><dt>合计</dt><dd>{{ ` ${formatCount(tokenTotal(item))}` }}</dd></div>
-            <div><dt>费用</dt><dd>{{ ` ${formatCost(item.actual_cost)}` }}</dd></div>
-            <div><dt>耗时</dt><dd>{{ ` ${formatDuration(item.duration_ms)}` }}</dd></div>
+            <div><dt>输入</dt><dd>{{ ` ${safeCount(item.input_tokens)}` }}</dd></div>
+            <div><dt>输出</dt><dd>{{ ` ${safeCount(item.output_tokens)}` }}</dd></div>
+            <div><dt>缓存创建</dt><dd>{{ ` ${safeCount(item.cache_creation_tokens)}` }}</dd></div>
+            <div><dt>缓存读取</dt><dd>{{ ` ${safeCount(item.cache_read_tokens)}` }}</dd></div>
+            <div><dt>合计</dt><dd>{{ ` ${safeCount(tokenTotal(item))}` }}</dd></div>
+            <div><dt>费用</dt><dd>{{ ` ${safeCost(item.actual_cost)}` }}</dd></div>
+            <div><dt>耗时</dt><dd>{{ ` ${safeDuration(item.duration_ms)}` }}</dd></div>
             <div><dt>分组</dt><dd>{{ ` ${item.group?.name || '未分组'}` }}</dd></div>
           </dl>
         </article>
-        <div v-if="recordsLoaded && !listLoading && records.length === 0" class="list-empty" data-testid="usage-list-empty">
+        <div v-if="recordsLoaded && !activeListLoading && records.length === 0" class="list-empty" data-testid="usage-list-empty">
           <strong>暂无使用记录</strong>
           <span>当前筛选范围内没有请求记录。</span>
         </div>
       </section>
 
-      <section v-else class="record-list" aria-label="错误记录列表">
+      <section
+        v-else
+        id="usage-errors-panel"
+        class="record-list"
+        role="tabpanel"
+        aria-labelledby="usage-errors-tab-control"
+        aria-label="错误记录列表"
+        tabindex="0"
+      >
         <article v-for="item in errors" :key="item.id" class="record-card error-card" data-testid="usage-error-card">
           <header>
             <strong>{{ item.model || '未知模型' }}</strong>
@@ -460,18 +625,24 @@ onUnmounted(() => {
             <div><dt>接口</dt><dd>{{ item.inbound_endpoint || '未知接口' }}</dd></div>
           </dl>
         </article>
-        <div v-if="errorsLoaded && !listLoading && errors.length === 0" class="list-empty" data-testid="usage-list-empty">
+        <div v-if="errorsLoaded && !activeListLoading && errors.length === 0" class="list-empty" data-testid="usage-list-empty">
           <strong>暂无错误记录</strong>
           <span>当前筛选范围内没有错误请求。</span>
         </div>
       </section>
 
-      <MobilePagination
+      <fieldset
         v-if="activeItemsLoaded && (!activeItemsEmpty || activeTotal > 0)"
-        :page="activePage"
-        :page-count="activePageCount"
-        @change="changePage"
-      />
+        class="pagination-shell"
+        :disabled="busy"
+        :aria-busy="busy"
+      >
+        <MobilePagination
+          :page="activePage"
+          :page-count="activePageCount"
+          @change="changePage"
+        />
+      </fieldset>
     </div>
 
     <MobileBottomSheet v-model="sheetOpen" title="高级筛选">
@@ -482,6 +653,13 @@ onUnmounted(() => {
             <option value="">全部分组</option>
             <option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option>
           </select>
+          <div v-if="groupsLoading" class="group-status" data-testid="usage-group-status" role="status">
+            正在加载分组选项
+          </div>
+          <div v-else-if="groupError" class="group-status is-error" data-testid="usage-group-status" role="alert">
+            <span>{{ groupError }}</span>
+            <button type="button" data-testid="usage-group-retry" @click="loadGroups">重试</button>
+          </div>
         </label>
         <label>
           <span>计费类型</span>
@@ -603,7 +781,8 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-.advanced-button {
+.advanced-button,
+.filter-reset-button {
   display: inline-flex;
   min-height: 44px;
   align-items: center;
@@ -618,7 +797,8 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-.advanced-button span {
+.advanced-button span,
+.filter-reset-button span {
   display: grid;
   min-width: 20px;
   height: 20px;
@@ -667,7 +847,7 @@ onUnmounted(() => {
 }
 
 .usage-tabs button {
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 12px;
   border: 0;
   border-radius: 5px;
@@ -690,6 +870,17 @@ onUnmounted(() => {
   color: var(--text-secondary);
   font-size: 13px;
   text-align: center;
+}
+
+.pagination-shell {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.pagination-shell:disabled {
+  opacity: 0.65;
 }
 
 .record-list {
@@ -802,6 +993,26 @@ onUnmounted(() => {
 .advanced-fields {
   display: grid;
   gap: 14px;
+}
+
+.group-status {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.group-status button {
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-primary);
+  font: inherit;
+  font-weight: 600;
 }
 
 .sheet-primary,
