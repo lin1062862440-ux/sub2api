@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { X } from '@lucide/vue'
 
 import type {
@@ -49,9 +49,56 @@ const form = reactive<GroupForm>({
   weeklyLimit: '',
   monthlyLimit: '',
 })
-const displayError = computed(() => props.mobile && props.error
+const validationError = ref('')
+const dialog = ref<HTMLElement | null>(null)
+const displayError = computed(() => validationError.value || (props.mobile && props.error
   ? '分组保存失败，请稍后重试。'
-  : props.error)
+  : props.error))
+let previousFocus: HTMLElement | null = null
+let mounted = false
+
+function focusableElements() {
+  if (!dialog.value) return []
+  return Array.from(dialog.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => !element.hasAttribute('hidden'))
+}
+
+async function focusInitialControl() {
+  await nextTick()
+  dialog.value?.querySelector<HTMLElement>('[data-testid="group-name"]')?.focus()
+}
+
+function restoreFocus() {
+  if (previousFocus?.isConnected) previousFocus.focus()
+  previousFocus = null
+}
+
+function requestClose() {
+  if (!props.pending) emit('close')
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!props.modelValue) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    requestClose()
+    return
+  }
+  if (event.key !== 'Tab') return
+  const elements = focusableElements()
+  const first = elements[0]
+  const last = elements[elements.length - 1]
+  const active = document.activeElement
+  const outside = !dialog.value?.contains(active)
+  if (!first || !last) {
+    event.preventDefault()
+    dialog.value?.focus()
+  } else if (event.shiftKey ? active === first || outside : active === last || outside) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : first).focus()
+  }
+}
 
 function resetForm() {
   const group = props.group
@@ -65,33 +112,42 @@ function resetForm() {
   form.dailyLimit = group?.daily_limit_usd ?? ''
   form.weeklyLimit = group?.weekly_limit_usd ?? ''
   form.monthlyLimit = group?.monthly_limit_usd ?? ''
+  validationError.value = ''
 }
 
-function nullablePositiveNumber(value: NumberInput): number | null {
-  if (value === '') return null
+function parseQuota(value: NumberInput): number | null | undefined {
+  if (value === '' || (typeof value === 'string' && !value.trim())) return null
   const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null
-}
-
-function nonNegativeNumber(value: NumberInput, fallback: number): number {
-  const parsed = Number(value)
-  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined
 }
 
 function submit() {
+  validationError.value = ''
   const name = form.name.trim()
   if (!name) return
+  const rateMultiplier = Number(form.rateMultiplier)
+  if (!Number.isFinite(rateMultiplier) || rateMultiplier <= 0) {
+    validationError.value = '计费倍率必须是大于 0 的有限数字。'
+    return
+  }
+  const dailyLimit = parseQuota(form.dailyLimit)
+  const weeklyLimit = parseQuota(form.weeklyLimit)
+  const monthlyLimit = parseQuota(form.monthlyLimit)
+  if (dailyLimit === undefined || weeklyLimit === undefined || monthlyLimit === undefined) {
+    validationError.value = '额度必须是有限的非负数字，或留空表示不限。'
+    return
+  }
   emit('save', {
     name,
     description: form.description.trim(),
     platform: form.platform,
-    rate_multiplier: nonNegativeNumber(form.rateMultiplier, 1),
-    rpm_limit: Math.round(nonNegativeNumber(form.rpmLimit, 0)),
+    rate_multiplier: rateMultiplier,
+    rpm_limit: Math.round(Number.isFinite(Number(form.rpmLimit)) && Number(form.rpmLimit) >= 0 ? Number(form.rpmLimit) : 0),
     is_exclusive: form.isExclusive,
     subscription_type: form.subscriptionType,
-    daily_limit_usd: nullablePositiveNumber(form.dailyLimit),
-    weekly_limit_usd: nullablePositiveNumber(form.weeklyLimit),
-    monthly_limit_usd: nullablePositiveNumber(form.monthlyLimit),
+    daily_limit_usd: dailyLimit,
+    weekly_limit_usd: weeklyLimit,
+    monthly_limit_usd: monthlyLimit,
   })
 }
 
@@ -101,18 +157,42 @@ watch(
     if (open) resetForm()
   },
 )
+
+watch(() => props.modelValue, (open) => {
+  if (!mounted) return
+  if (open) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    void focusInitialControl()
+  } else {
+    restoreFocus()
+  }
+})
+
+onMounted(() => {
+  mounted = true
+  document.addEventListener('keydown', handleKeydown)
+  if (props.modelValue) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    void focusInitialControl()
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  if (props.modelValue) restoreFocus()
+})
 </script>
 
 <template>
   <Transition name="fade">
-    <div v-if="modelValue" class="dialog-backdrop" :class="{ mobile }" @mousedown.self="emit('close')">
-      <section class="group-editor" :class="{ mobile }" role="dialog" aria-modal="true" :aria-label="group ? '编辑分组' : '新增分组'">
+    <div v-if="modelValue" class="dialog-backdrop" :class="{ mobile }" @mousedown.self="requestClose">
+      <section ref="dialog" class="group-editor" :class="{ mobile }" role="dialog" aria-modal="true" :aria-label="group ? '编辑分组' : '新增分组'" tabindex="-1">
         <header>
           <div>
             <span>{{ group ? 'GROUP SETTINGS' : 'NEW GROUP' }}</span>
             <h2>{{ group ? '编辑分组' : '新增分组' }}</h2>
           </div>
-          <button type="button" title="关闭" aria-label="关闭" data-testid="group-editor-close" @click="emit('close')"><X :size="18" /></button>
+          <button type="button" title="关闭" aria-label="关闭" data-testid="group-editor-close" @click="requestClose"><X :size="18" /></button>
         </header>
 
         <form data-testid="group-editor" @submit.prevent="submit">
@@ -179,7 +259,7 @@ watch(
           <p v-if="displayError" class="form-error" role="alert">{{ displayError }}</p>
 
           <footer>
-            <button type="button" @click="emit('close')">取消</button>
+            <button type="button" @click="requestClose">取消</button>
             <button class="save" type="submit" data-testid="group-editor-save" :disabled="pending || !form.name.trim()">{{ pending ? '正在保存' : '保存分组' }}</button>
           </footer>
         </form>

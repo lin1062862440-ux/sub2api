@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { KeyRound, LoaderCircle, Save, ServerCog, X } from '@lucide/vue'
 
 import { createAdminAccount, updateAdminAccount } from '@/api/admin/accounts'
@@ -34,8 +34,50 @@ const form = reactive({
 })
 const saving = ref(false)
 const error = ref('')
+const dialog = ref<HTMLElement | null>(null)
 const editing = computed(() => Boolean(props.account))
 const needsApiKey = computed(() => form.type === 'apikey' || form.type === 'upstream')
+let previousFocus: HTMLElement | null = null
+let mounted = false
+
+function focusableElements() {
+  if (!dialog.value) return []
+  return Array.from(dialog.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => !element.hasAttribute('hidden'))
+}
+
+async function focusInitialControl() {
+  await nextTick()
+  dialog.value?.querySelector<HTMLElement>('[data-testid="account-editor-name"]')?.focus()
+}
+
+function restoreFocus() {
+  if (previousFocus?.isConnected) previousFocus.focus()
+  previousFocus = null
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!props.modelValue) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    close()
+    return
+  }
+  if (event.key !== 'Tab') return
+  const elements = focusableElements()
+  const first = elements[0]
+  const last = elements[elements.length - 1]
+  const active = document.activeElement
+  const outside = !dialog.value?.contains(active)
+  if (!first || !last) {
+    event.preventDefault()
+    dialog.value?.focus()
+  } else if (event.shiftKey ? active === first || outside : active === last || outside) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : first).focus()
+  }
+}
 
 function resetForm() {
   form.name = props.account?.name ?? ''
@@ -54,11 +96,26 @@ watch(() => [props.modelValue, props.account] as const, ([open]) => {
   if (open) resetForm()
 }, { immediate: true })
 
+watch(() => props.modelValue, (open) => {
+  if (!mounted) return
+  if (open) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    void focusInitialControl()
+  } else {
+    restoreFocus()
+  }
+})
+
 function close() {
   if (!saving.value) emit('update:modelValue', false)
 }
 
+function isBlankNumber(value: unknown) {
+  return value === '' || (typeof value === 'string' && !value.trim())
+}
+
 async function submit() {
+  if (saving.value) return
   error.value = ''
   if (!form.name.trim()) {
     error.value = '请输入账号名称'
@@ -66,6 +123,22 @@ async function submit() {
   }
   if (!editing.value && needsApiKey.value && !form.apiKey.trim()) {
     error.value = '请输入 API Key'
+    return
+  }
+
+  const concurrency = Number(form.concurrency)
+  if (isBlankNumber(form.concurrency) || !Number.isFinite(concurrency) || !Number.isInteger(concurrency) || concurrency < 0) {
+    error.value = '并发上限必须是非负整数。'
+    return
+  }
+  const priority = Number(form.priority)
+  if (isBlankNumber(form.priority) || !Number.isFinite(priority) || !Number.isInteger(priority) || priority < 0) {
+    error.value = '优先级必须是非负整数。'
+    return
+  }
+  const rateMultiplier = Number(form.rateMultiplier)
+  if (isBlankNumber(form.rateMultiplier) || !Number.isFinite(rateMultiplier) || rateMultiplier < 0) {
+    error.value = '计费倍率必须是有限的非负数字。'
     return
   }
 
@@ -77,9 +150,9 @@ async function submit() {
         name: form.name.trim(),
         notes: form.notes.trim() || null,
         type: form.type,
-        concurrency: Math.max(1, Number(form.concurrency) || 1),
-        priority: Math.max(0, Number(form.priority) || 0),
-        rate_multiplier: Math.max(0, Number(form.rateMultiplier) || 0),
+        concurrency,
+        priority,
+        rate_multiplier: rateMultiplier,
       }
       if (form.apiKey.trim()) {
         payload.credentials = {
@@ -98,28 +171,46 @@ async function submit() {
           api_key: form.apiKey.trim(),
           ...(form.baseUrl.trim() ? { base_url: form.baseUrl.trim() } : {}),
         },
-        concurrency: Math.max(1, Number(form.concurrency) || 1),
-        priority: Math.max(0, Number(form.priority) || 0),
-        rate_multiplier: Math.max(0, Number(form.rateMultiplier) || 0),
+        concurrency,
+        priority,
+        rate_multiplier: rateMultiplier,
       }
       saved = await createAdminAccount(payload)
     }
+    if (!mounted) return
     emit('saved', saved)
     emit('update:modelValue', false)
   } catch (caught) {
-    error.value = props.mobile
-      ? '账号保存失败，请稍后重试。'
-      : caught instanceof Error && caught.message ? caught.message : '账号保存失败'
+    if (mounted) {
+      error.value = props.mobile
+        ? '账号保存失败，请稍后重试。'
+        : caught instanceof Error && caught.message ? caught.message : '账号保存失败'
+    }
   } finally {
-    saving.value = false
+    if (mounted) saving.value = false
   }
 }
+
+onMounted(() => {
+  mounted = true
+  document.addEventListener('keydown', handleKeydown)
+  if (props.modelValue) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    void focusInitialControl()
+  }
+})
+
+onBeforeUnmount(() => {
+  mounted = false
+  document.removeEventListener('keydown', handleKeydown)
+  if (props.modelValue) restoreFocus()
+})
 </script>
 
 <template>
   <Transition name="dialog-fade">
     <div v-if="modelValue" class="dialog-backdrop" :class="{ mobile }" @mousedown.self="close">
-      <section class="account-editor" :class="{ mobile }" role="dialog" aria-modal="true" aria-labelledby="account-editor-title">
+      <section ref="dialog" class="account-editor" :class="{ mobile }" role="dialog" aria-modal="true" aria-labelledby="account-editor-title" tabindex="-1">
         <header>
           <span><ServerCog :size="20" /></span>
           <div><h2 id="account-editor-title">{{ editing ? '编辑账号' : '新增账号' }}</h2><p>维护常用接入参数与调度容量</p></div>
@@ -132,7 +223,7 @@ async function submit() {
           <label><span>接入类型</span><select v-model="form.type"><option value="apikey">API Key</option><option value="upstream">上游中转</option><option value="oauth">OAuth</option><option value="setup-token">Setup Token</option><option value="bedrock">Bedrock</option><option value="service_account">Service Account</option></select></label>
           <label v-if="needsApiKey" class="wide"><span>{{ editing ? '替换 API Key（留空则保持不变）' : 'API Key' }}</span><div class="secret-input"><KeyRound :size="16" /><input v-model="form.apiKey" data-testid="account-editor-api-key" type="password" autocomplete="new-password" placeholder="输入平台凭据" /></div></label>
           <label v-if="needsApiKey" class="wide"><span>Base URL（可选）</span><input v-model="form.baseUrl" placeholder="https://api.example.com" /></label>
-          <label><span>并发上限</span><input v-model.number="form.concurrency" type="number" min="1" /></label>
+          <label><span>并发上限</span><input v-model.number="form.concurrency" type="number" min="0" /></label>
           <label><span>优先级</span><input v-model.number="form.priority" type="number" min="0" /></label>
           <label><span>计费倍率</span><input v-model.number="form.rateMultiplier" type="number" min="0" step="0.01" /></label>
           <label class="wide"><span>备注</span><textarea v-model="form.notes" rows="3" placeholder="内部说明，不会展示给用户" /></label>

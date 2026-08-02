@@ -66,8 +66,12 @@ const testModels = ref<AdminAccountModel[]>([])
 const selectedModel = ref('')
 const testModelsLoading = ref(false)
 const testError = ref('')
+const schedulableDialog = ref<HTMLElement | null>(null)
+const testDialog = ref<HTMLElement | null>(null)
 let mounted = false
 let loadGeneration = 0
+let feedbackGeneration = 0
+let viewDialogPreviousFocus: HTMLElement | null = null
 
 const pageCount = computed(() => Math.max(1, Math.ceil(safeNumber(result.value.total) / PAGE_SIZE)))
 const busy = computed(() => initialLoading.value || listLoading.value || Object.keys(pendingByAccount).length > 0)
@@ -91,6 +95,27 @@ function safeGroups(account: AdminAccount) {
   return (account.groups ?? []).slice(0, 3).filter((group) => group && Number.isFinite(group.id) && group.name)
 }
 
+function isCompleteAdminAccount(value: unknown): value is AdminAccount {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<AdminAccount>
+  return Number.isFinite(candidate.id)
+    && typeof candidate.name === 'string'
+    && ['anthropic', 'openai', 'gemini', 'antigravity', 'grok'].includes(candidate.platform ?? '')
+    && typeof candidate.type === 'string'
+    && Number.isFinite(candidate.concurrency)
+    && Number.isFinite(candidate.priority)
+    && ['active', 'inactive', 'error'].includes(candidate.status ?? '')
+    && typeof candidate.schedulable === 'boolean'
+    && (candidate.error_message === null || typeof candidate.error_message === 'string')
+    && typeof candidate.created_at === 'string'
+    && typeof candidate.updated_at === 'string'
+}
+
+function isMissingProjectWarning(value: unknown) {
+  return Boolean(value && typeof value === 'object'
+    && (value as { warning?: unknown }).warning === 'missing_project_id_temporary')
+}
+
 function listParams(page: number): AdminAccountListParams {
   return {
     page,
@@ -101,7 +126,18 @@ function listParams(page: number): AdminAccountListParams {
   }
 }
 
-async function loadAccounts(targetPage = result.value.page, background = loaded.value) {
+function claimFeedback() {
+  const token = ++feedbackGeneration
+  actionError.value = ''
+  actionMessage.value = ''
+  return token
+}
+
+function ownsFeedback(token: number) {
+  return mounted && token === feedbackGeneration
+}
+
+async function loadAccounts(targetPage = result.value.page, background = loaded.value, feedbackToken?: number) {
   const generation = ++loadGeneration
   const requestedPage = Math.min(pageCount.value, Math.max(1, Math.floor(targetPage) || 1))
   if (!loaded.value && !background) initialLoading.value = true
@@ -114,7 +150,7 @@ async function loadAccounts(targetPage = result.value.page, background = loaded.
     const total = safeNumber(response.total)
     const availablePages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (requestedPage > availablePages) {
-      await loadAccounts(availablePages, true)
+      await loadAccounts(availablePages, true, feedbackToken)
       return
     }
     result.value = {
@@ -127,7 +163,10 @@ async function loadAccounts(targetPage = result.value.page, background = loaded.
   } catch {
     if (!mounted || generation !== loadGeneration) return
     if (!loaded.value) fatalError.value = '账号列表加载失败，请检查网络后重试。'
-    else actionError.value = '账号列表刷新失败，已保留当前数据。'
+    else if (feedbackToken === undefined || ownsFeedback(feedbackToken)) {
+      actionMessage.value = ''
+      actionError.value = '账号列表刷新失败，已保留当前数据。'
+    }
   } finally {
     if (mounted && generation === loadGeneration) {
       initialLoading.value = false
@@ -178,17 +217,19 @@ async function mutateAccount(
   successMessage: string,
 ) {
   if (pendingByAccount[account.id]) return
+  const feedbackToken = claimFeedback()
   pendingByAccount[account.id] = action
-  actionError.value = ''
-  actionMessage.value = ''
   try {
     const updated = await operation()
     if (!mounted) return
     replaceAccount(updated)
-    actionMessage.value = successMessage
-    await loadAccounts(result.value.page, true)
+    if (ownsFeedback(feedbackToken)) actionMessage.value = successMessage
+    await loadAccounts(result.value.page, true, feedbackToken)
   } catch {
-    if (mounted) actionError.value = '操作失败，请稍后重试。当前账号列表未更改。'
+    if (ownsFeedback(feedbackToken)) {
+      actionMessage.value = ''
+      actionError.value = '操作失败，请稍后重试。当前账号列表未更改。'
+    }
   } finally {
     if (mounted) delete pendingByAccount[account.id]
   }
@@ -196,7 +237,45 @@ async function mutateAccount(
 
 function requestSchedulableChange(account: AdminAccount) {
   if (pendingByAccount[account.id]) return
+  viewDialogPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   schedulableTarget.value = account
+  void focusViewDialog('schedulable')
+}
+
+function focusableElements(container: HTMLElement | null) {
+  if (!container) return []
+  return Array.from(container.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => !element.hasAttribute('hidden'))
+}
+
+async function focusViewDialog(kind: 'schedulable' | 'test') {
+  await nextTick()
+  focusableElements(kind === 'schedulable' ? schedulableDialog.value : testDialog.value)[0]?.focus()
+}
+
+function restoreViewDialogFocus() {
+  if (viewDialogPreviousFocus?.isConnected) viewDialogPreviousFocus.focus()
+  viewDialogPreviousFocus = null
+}
+
+function closeSchedulableDialog() {
+  const account = schedulableTarget.value
+  if (account && pendingByAccount[account.id]) return
+  schedulableTarget.value = null
+  restoreViewDialogFocus()
+}
+
+function closeTestDialog() {
+  const account = testAccount.value
+  if (account && pendingByAccount[account.id]) return
+  testAccount.value = null
+  restoreViewDialogFocus()
+}
+
+function closeTestDialogAfterSuccess() {
+  testAccount.value = null
+  restoreViewDialogFocus()
 }
 
 async function confirmSchedulableChange() {
@@ -209,7 +288,7 @@ async function confirmSchedulableChange() {
     () => setAdminAccountSchedulable(account.id, nextValue),
     `${safeName(account.name)} 已${nextValue ? '加入' : '暂停'}调度`,
   )
-  if (mounted) schedulableTarget.value = null
+  if (mounted) closeSchedulableDialog()
 }
 
 function toggleMenu(accountId: number) {
@@ -226,6 +305,7 @@ function closeMenu() {
 }
 
 function editAccount(account: AdminAccount) {
+  document.querySelector<HTMLElement>(`[data-testid="account-menu-trigger-${account.id}"]`)?.focus()
   closeMenu()
   editorAccount.value = account
   editorOpen.value = true
@@ -236,8 +316,44 @@ function handleSaved(updated: AdminAccount) {
   void loadAccounts(result.value.page, true)
 }
 
+async function refreshAccount(account: AdminAccount) {
+  if (pendingByAccount[account.id]) return
+  const feedbackToken = claimFeedback()
+  pendingByAccount[account.id] = 'refresh'
+  let warningMessage = ''
+  try {
+    const response: unknown = await refreshAdminAccountCredentials(account.id)
+    if (!mounted) return
+    if (isCompleteAdminAccount(response) && response.id === account.id) {
+      replaceAccount(response)
+      if (ownsFeedback(feedbackToken)) actionMessage.value = `${safeName(account.name)} 已刷新凭据`
+    } else if (isMissingProjectWarning(response)) {
+      warningMessage = '凭据已刷新，但项目 ID 暂未获取，系统将自动重试。'
+      if (ownsFeedback(feedbackToken)) actionMessage.value = warningMessage
+    } else {
+      throw new Error('invalid refresh response')
+    }
+    await loadAccounts(result.value.page, true, feedbackToken)
+    if (ownsFeedback(feedbackToken) && warningMessage) {
+      actionError.value = ''
+      actionMessage.value = warningMessage
+    }
+  } catch {
+    if (ownsFeedback(feedbackToken)) {
+      actionMessage.value = ''
+      actionError.value = '操作失败，请稍后重试。当前账号列表未更改。'
+    }
+  } finally {
+    if (mounted) delete pendingByAccount[account.id]
+  }
+}
+
 function runMenuAction(account: AdminAccount, action: 'recover' | 'clear' | 'refresh') {
   closeMenu()
+  if (action === 'refresh') {
+    void refreshAccount(account)
+    return
+  }
   const contract = {
     recover: {
       operation: () => recoverAdminAccount(account.id),
@@ -247,20 +363,18 @@ function runMenuAction(account: AdminAccount, action: 'recover' | 'clear' | 'ref
       operation: () => clearAdminAccountError(account.id),
       message: `${safeName(account.name)} 已清除错误状态`,
     },
-    refresh: {
-      operation: () => refreshAdminAccountCredentials(account.id),
-      message: `${safeName(account.name)} 已刷新凭据`,
-    },
   }[action]
   void mutateAccount(account, action, contract.operation, contract.message)
 }
 
 async function openTest(account: AdminAccount) {
+  viewDialogPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   testAccount.value = account
   testModels.value = []
   selectedModel.value = ''
   testError.value = ''
   testModelsLoading.value = true
+  void focusViewDialog('test')
   try {
     const models = await getAdminAccountModels(account.id)
     if (!mounted || testAccount.value?.id !== account.id) return
@@ -278,15 +392,15 @@ async function submitTest() {
   const account = testAccount.value
   const modelId = selectedModel.value
   if (!account || !modelId || pendingByAccount[account.id]) return
+  const feedbackToken = claimFeedback()
   pendingByAccount[account.id] = 'test'
   testError.value = ''
-  actionError.value = ''
   try {
     const response = await testAdminAccount(account.id, { model_id: modelId, prompt: '' })
     if (!mounted) return
-    actionMessage.value = `${safeName(account.name)}：${response.message || '连接测试通过'}`
-    testAccount.value = null
-    await loadAccounts(result.value.page, true)
+    if (ownsFeedback(feedbackToken)) actionMessage.value = `${safeName(account.name)}：${response.message || '连接测试通过'}`
+    closeTestDialogAfterSuccess()
+    await loadAccounts(result.value.page, true, feedbackToken)
   } catch {
     if (mounted) testError.value = '连接测试失败，请检查账号状态后重试。'
   } finally {
@@ -295,6 +409,33 @@ async function submitTest() {
 }
 
 function handleDocumentKeydown(event: KeyboardEvent) {
+  const container = schedulableTarget.value ? schedulableDialog.value : testAccount.value ? testDialog.value : null
+  if (container) {
+    const account = schedulableTarget.value ?? testAccount.value
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      if (!account || !pendingByAccount[account.id]) {
+        if (schedulableTarget.value) closeSchedulableDialog()
+        else closeTestDialog()
+      }
+      return
+    }
+    if (event.key === 'Tab') {
+      const elements = focusableElements(container)
+      const first = elements[0]
+      const last = elements[elements.length - 1]
+      const active = document.activeElement
+      const outside = !container.contains(active)
+      if (!first || !last) {
+        event.preventDefault()
+        container.focus()
+      } else if (event.shiftKey ? active === first || outside : active === last || outside) {
+        event.preventDefault()
+        ;(event.shiftKey ? last : first).focus()
+      }
+      return
+    }
+  }
   if (event.key === 'Escape') closeMenu()
 }
 
@@ -318,6 +459,7 @@ onMounted(() => {
 onUnmounted(() => {
   mounted = false
   loadGeneration += 1
+  restoreViewDialogFocus()
   document.removeEventListener('keydown', handleDocumentKeydown)
   document.removeEventListener('mousedown', handleDocumentPointer)
 })
@@ -413,20 +555,20 @@ onUnmounted(() => {
       <template #footer><button class="sheet-secondary" type="button" @click="resetFilters">重置</button><button class="sheet-primary" type="button" data-testid="account-filter-apply" @click="applyFilters">应用</button></template>
     </MobileBottomSheet>
 
-    <div v-if="schedulableTarget" class="confirm-backdrop" @mousedown.self="schedulableTarget = null">
-      <section class="confirm-dialog" data-testid="account-schedulable-dialog" role="dialog" aria-modal="true" aria-label="确认调度状态">
+    <div v-if="schedulableTarget" class="confirm-backdrop" @mousedown.self="closeSchedulableDialog">
+      <section ref="schedulableDialog" class="confirm-dialog" data-testid="account-schedulable-dialog" role="dialog" aria-modal="true" aria-label="确认调度状态" tabindex="-1">
         <h2>{{ schedulableTarget.schedulable ? '暂停调度' : '加入调度' }}</h2>
         <p>确认{{ schedulableTarget.schedulable ? '暂停' : '恢复' }}“{{ safeName(schedulableTarget.name) }}”的请求调度？</p>
-        <footer><button type="button" data-testid="cancel-account-schedulable" :disabled="Boolean(pendingByAccount[schedulableTarget.id])" @click="schedulableTarget = null">取消</button><button class="danger" type="button" data-testid="confirm-account-schedulable" :disabled="Boolean(pendingByAccount[schedulableTarget.id])" @click="confirmSchedulableChange">确认</button></footer>
+        <footer><button type="button" data-testid="cancel-account-schedulable" :disabled="Boolean(pendingByAccount[schedulableTarget.id])" @click="closeSchedulableDialog">取消</button><button class="danger" type="button" data-testid="confirm-account-schedulable" :disabled="Boolean(pendingByAccount[schedulableTarget.id])" @click="confirmSchedulableChange">确认</button></footer>
       </section>
     </div>
 
-    <div v-if="testAccount" class="confirm-backdrop" @mousedown.self="!pendingByAccount[testAccount.id] && (testAccount = null)">
-      <section class="test-dialog" role="dialog" aria-modal="true" aria-label="测试账号连接">
+    <div v-if="testAccount" class="confirm-backdrop" @mousedown.self="closeTestDialog">
+      <section ref="testDialog" class="test-dialog" role="dialog" aria-modal="true" aria-label="测试账号连接" tabindex="-1">
         <h2>测试连接</h2><p>{{ safeName(testAccount.name) }}</p>
         <label><span>测试模型</span><select v-model="selectedModel" data-testid="account-test-model" :disabled="testModelsLoading || Boolean(pendingByAccount[testAccount.id])"><option value="" disabled>{{ testModelsLoading ? '正在读取模型' : '请选择模型' }}</option><option v-for="model in testModels" :key="model.id" :value="model.id">{{ model.display_name || model.id }}</option></select></label>
         <p v-if="testError" class="test-error" role="alert">{{ testError }}</p>
-        <footer><button type="button" :disabled="Boolean(pendingByAccount[testAccount.id])" @click="testAccount = null">取消</button><button class="primary" type="button" data-testid="account-test-submit" :disabled="!selectedModel || testModelsLoading || Boolean(pendingByAccount[testAccount.id])" @click="submitTest">开始测试</button></footer>
+        <footer><button type="button" :disabled="Boolean(pendingByAccount[testAccount.id])" @click="closeTestDialog">取消</button><button class="primary" type="button" data-testid="account-test-submit" :disabled="!selectedModel || testModelsLoading || Boolean(pendingByAccount[testAccount.id])" @click="submitTest">开始测试</button></footer>
       </section>
     </div>
 
@@ -436,5 +578,5 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.icon-button,.filter-button,.menu-trigger{display:grid;width:44px;min-height:44px;padding:0;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);place-items:center}.icon-button:disabled{opacity:.5}.spinning{animation:account-spin 700ms linear infinite}.accounts-content{display:grid;min-width:0;gap:14px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.search-row label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.search-row input{min-width:0;width:100%;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.search-row>button[type=submit]{min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.filter-button{position:relative}.filter-button span{position:absolute;top:-5px;right:-5px;display:grid;min-width:18px;height:18px;border-radius:9px;background:#bd4d40;color:#fff;font-size:10px;place-items:center}.action-message,.action-error{display:flex;min-width:0;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border-radius:6px;font-size:13px;line-height:1.45}.action-message{border:1px solid #cce6d8;background:#eef9f3;color:#287154}.action-error{border:1px solid #eccfc9;background:#fff5f2;color:#9e493c}.list-busy{padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.account-list{display:grid;gap:10px}.account-card{position:relative;display:grid;min-width:0;gap:12px;padding:14px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.account-card>header{display:grid;grid-template-columns:38px minmax(0,1fr) 44px;align-items:center;gap:9px}.provider-mark{display:grid;width:38px;height:38px;border-radius:7px;background:var(--bg-base);place-items:center}.identity{display:grid;min-width:0;gap:3px;padding:3px 0;border:0;background:transparent;color:var(--text-primary);text-align:left}.identity strong,.identity span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.identity strong{font-size:15px}.identity span{color:var(--text-tertiary);font-size:11px}.menu-owner{position:relative}.menu-trigger{border:0}.account-menu{position:absolute;z-index:25;top:46px;right:0;display:grid;width:178px;padding:5px;border:1px solid var(--border-strong);border-radius:7px;background:var(--bg-surface);box-shadow:0 12px 32px rgba(26,40,60,.18)}.account-menu button{display:flex;min-height:44px;align-items:center;gap:9px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text-primary);font:inherit;text-align:left}.account-menu button:focus,.account-menu button:hover{background:var(--bg-base);outline:0}.status-row{display:flex;flex-wrap:wrap;gap:7px}.status-row span{padding:4px 7px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:11px}.status-row .status.active{background:#eaf7f0;color:#287755}.status-row .status.error{background:#fff0ed;color:#a14639}.health-warning{display:flex;align-items:center;gap:7px;margin:0;padding:8px 9px;border:1px solid #efd4ce;border-radius:6px;background:#fff7f5;color:#9c493d;font-size:12px}.account-card dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;border-block:1px solid var(--border-subtle)}.account-card dl>div{display:grid;min-width:0;gap:4px;padding:10px 7px}.account-card dt{color:var(--text-tertiary);font-size:10px}.account-card dd{overflow:hidden;margin:0;color:var(--text-primary);font-family:var(--font-data);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.group-row{display:flex;min-width:0;flex-wrap:wrap;gap:6px}.group-row span{max-width:100%;overflow:hidden;padding:4px 7px;border:1px solid #d6e2f4;border-radius:5px;background:#eef4fc;color:#41689e;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.group-row em{color:var(--text-tertiary);font-size:11px;font-style:normal}.account-card>footer{display:grid;grid-template-columns:1fr 1fr;gap:8px}.account-card>footer button{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;gap:6px;padding:0 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;font-size:13px}.account-card>footer button:disabled{opacity:.5}.schedule-button{color:var(--text-secondary)!important}.filter-fields{display:grid;gap:14px}.filter-fields label{display:grid;gap:6px}.filter-fields span,.test-dialog label span{color:var(--text-secondary);font-size:12px}.filter-fields select,.test-dialog select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-secondary,.sheet-primary{min-height:44px;padding:0 16px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-primary{border-color:var(--accent);background:var(--accent);color:#fff}.confirm-backdrop{position:fixed;z-index:170;inset:0;display:grid;padding:16px;background:rgba(24,35,50,.28);backdrop-filter:blur(8px);place-items:center}.confirm-dialog,.test-dialog{width:min(100%,420px);padding:18px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 24px 60px rgba(28,43,63,.24)}.confirm-dialog h2,.test-dialog h2{margin:0;font-size:17px}.confirm-dialog p,.test-dialog>p{margin:8px 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.confirm-dialog footer,.test-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.confirm-dialog footer button,.test-dialog footer button{min-height:44px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.confirm-dialog footer .danger{border-color:#b84d40;background:#b84d40;color:#fff}.test-dialog label{display:grid;gap:6px;margin-top:15px}.test-dialog footer .primary{border-color:var(--accent);background:var(--accent);color:#fff}.test-error{color:#a14639!important}.mobile-pagination{margin-top:2px}@keyframes account-spin{to{transform:rotate(360deg)}}@media(max-width:360px){.search-row{grid-template-columns:minmax(0,1fr) 44px}.search-row>button[type=submit]{grid-column:1/-1;grid-row:2}.account-card dl{grid-template-columns:1fr}.account-card dl>div+div{border-top:1px solid var(--border-subtle)}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+.icon-button,.filter-button,.menu-trigger{display:grid;width:44px;min-height:44px;padding:0;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);place-items:center}.icon-button:disabled{opacity:.5}.spinning{animation:account-spin 700ms linear infinite}.accounts-content{display:grid;min-width:0;gap:14px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.search-row label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.search-row input{min-width:0;width:100%;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.search-row>button[type=submit]{min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.filter-button{position:relative}.filter-button span{position:absolute;top:-5px;right:-5px;display:grid;min-width:18px;height:18px;border-radius:9px;background:#bd4d40;color:#fff;font-size:10px;place-items:center}.action-message,.action-error{display:flex;min-width:0;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border-radius:6px;font-size:13px;line-height:1.45}.action-message{border:1px solid #cce6d8;background:#eef9f3;color:#287154}.action-error{border:1px solid #eccfc9;background:#fff5f2;color:#9e493c}.list-busy{padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.account-list{display:grid;gap:10px}.account-card{position:relative;display:grid;min-width:0;gap:12px;padding:14px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.account-card>header{display:grid;grid-template-columns:38px minmax(0,1fr) 44px;align-items:center;gap:9px}.provider-mark{display:grid;width:38px;height:38px;border-radius:7px;background:var(--bg-base);place-items:center}.identity{display:grid;min-width:0;min-height:44px;gap:3px;padding:3px 0;border:0;background:transparent;color:var(--text-primary);text-align:left}.identity strong,.identity span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.identity strong{font-size:15px}.identity span{color:var(--text-tertiary);font-size:11px}.menu-owner{position:relative}.menu-trigger{border:0}.account-menu{position:absolute;z-index:25;top:46px;right:0;display:grid;width:178px;padding:5px;border:1px solid var(--border-strong);border-radius:7px;background:var(--bg-surface);box-shadow:0 12px 32px rgba(26,40,60,.18)}.account-menu button{display:flex;min-height:44px;align-items:center;gap:9px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text-primary);font:inherit;text-align:left}.account-menu button:focus,.account-menu button:hover{background:var(--bg-base);outline:0}.status-row{display:flex;flex-wrap:wrap;gap:7px}.status-row span{padding:4px 7px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:11px}.status-row .status.active{background:#eaf7f0;color:#287755}.status-row .status.error{background:#fff0ed;color:#a14639}.health-warning{display:flex;align-items:center;gap:7px;margin:0;padding:8px 9px;border:1px solid #efd4ce;border-radius:6px;background:#fff7f5;color:#9c493d;font-size:12px}.account-card dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;border-block:1px solid var(--border-subtle)}.account-card dl>div{display:grid;min-width:0;gap:4px;padding:10px 7px}.account-card dt{color:var(--text-tertiary);font-size:10px}.account-card dd{overflow:hidden;margin:0;color:var(--text-primary);font-family:var(--font-data);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.group-row{display:flex;min-width:0;flex-wrap:wrap;gap:6px}.group-row span{max-width:100%;overflow:hidden;padding:4px 7px;border:1px solid #d6e2f4;border-radius:5px;background:#eef4fc;color:#41689e;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.group-row em{color:var(--text-tertiary);font-size:11px;font-style:normal}.account-card>footer{display:grid;grid-template-columns:1fr 1fr;gap:8px}.account-card>footer button{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;gap:6px;padding:0 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;font-size:13px}.account-card>footer button:disabled{opacity:.5}.schedule-button{color:var(--text-secondary)!important}.filter-fields{display:grid;gap:14px}.filter-fields label{display:grid;gap:6px}.filter-fields span,.test-dialog label span{color:var(--text-secondary);font-size:12px}.filter-fields select,.test-dialog select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-secondary,.sheet-primary{min-height:44px;padding:0 16px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-primary{border-color:var(--accent);background:var(--accent);color:#fff}.confirm-backdrop{position:fixed;z-index:170;inset:0;display:grid;padding:16px;background:rgba(24,35,50,.28);backdrop-filter:blur(8px);place-items:center}.confirm-dialog,.test-dialog{width:min(100%,420px);padding:18px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 24px 60px rgba(28,43,63,.24)}.confirm-dialog h2,.test-dialog h2{margin:0;font-size:17px}.confirm-dialog p,.test-dialog>p{margin:8px 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.confirm-dialog footer,.test-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.confirm-dialog footer button,.test-dialog footer button{min-height:44px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.confirm-dialog footer .danger{border-color:#b84d40;background:#b84d40;color:#fff}.test-dialog label{display:grid;gap:6px;margin-top:15px}.test-dialog footer .primary{border-color:var(--accent);background:var(--accent);color:#fff}.test-error{color:#a14639!important}.mobile-pagination{margin-top:2px}@keyframes account-spin{to{transform:rotate(360deg)}}@media(max-width:360px){.search-row{grid-template-columns:minmax(0,1fr) 44px}.search-row>button[type=submit]{grid-column:1/-1;grid-row:2}.account-card dl{grid-template-columns:1fr}.account-card dl>div+div{border-top:1px solid var(--border-subtle)}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>

@@ -1,11 +1,58 @@
 <script setup lang="ts">
 import { AlertTriangle, CalendarClock, Server, ShieldCheck, X } from '@lucide/vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { AdminAccount } from '@/api/admin/types'
 import { formatDateTime, formatPlatform } from '@/lib/format'
 
 const props = withDefaults(defineProps<{ account: AdminAccount | null; mobile?: boolean }>(), { mobile: false })
 const emit = defineEmits<{ close: [] }>()
+const dialog = ref<HTMLElement | null>(null)
+let previousFocus: HTMLElement | null = null
+let mounted = false
+
+function focusableElements() {
+  if (!dialog.value) return []
+  return Array.from(dialog.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => !element.hasAttribute('hidden'))
+}
+
+async function focusInitialControl() {
+  await nextTick()
+  focusableElements()[0]?.focus()
+}
+
+function restoreFocus() {
+  if (previousFocus?.isConnected) previousFocus.focus()
+  previousFocus = null
+}
+
+function requestClose() {
+  emit('close')
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!props.account) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    requestClose()
+    return
+  }
+  if (event.key !== 'Tab') return
+  const elements = focusableElements()
+  const first = elements[0]
+  const last = elements[elements.length - 1]
+  const active = document.activeElement
+  const outside = !dialog.value?.contains(active)
+  if (!first || !last) {
+    event.preventDefault()
+    dialog.value?.focus()
+  } else if (event.shiftKey ? active === first || outside : active === last || outside) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : first).focus()
+  }
+}
 
 function formatExpiry(value: number | null) {
   if (props.mobile && !Number.isFinite(value)) return '永不过期'
@@ -17,13 +64,37 @@ function safeNumber(value: unknown, fallback = 0) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : fallback
 }
+
+watch(() => props.account, (account, previousAccount) => {
+  if (!mounted) return
+  if (account && !previousAccount) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    void focusInitialControl()
+  } else if (!account && previousAccount) {
+    restoreFocus()
+  }
+})
+
+onMounted(() => {
+  mounted = true
+  document.addEventListener('keydown', handleKeydown)
+  if (props.account) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    void focusInitialControl()
+  }
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeydown)
+  if (props.account) restoreFocus()
+})
 </script>
 
 <template>
   <Transition name="drawer">
-    <div v-if="account" class="drawer-backdrop" @mousedown.self="emit('close')">
-      <aside class="account-detail" :class="{ mobile }" data-testid="account-detail">
-        <header><span><Server :size="20" /></span><div><h2>{{ account.name }}</h2><p>{{ formatPlatform(account.platform) }} · {{ account.type }}</p></div><button type="button" title="关闭" aria-label="关闭" @click="emit('close')"><X :size="18" /></button></header>
+    <div v-if="account" class="drawer-backdrop" @mousedown.self="requestClose">
+      <aside ref="dialog" class="account-detail" :class="{ mobile }" data-testid="account-detail" role="dialog" aria-modal="true" aria-label="账号详情" tabindex="-1">
+        <header><span><Server :size="20" /></span><div><h2>{{ account.name }}</h2><p>{{ formatPlatform(account.platform) }} · {{ account.type }}</p></div><button type="button" title="关闭" aria-label="关闭" @click="requestClose"><X :size="18" /></button></header>
         <section class="detail-status" :class="account.status"><ShieldCheck v-if="account.status === 'active'" :size="18" /><AlertTriangle v-else :size="18" /><div><strong>{{ account.status === 'active' ? '账号运行正常' : account.status === 'error' ? '账号存在错误' : '账号已停用' }}</strong><span>{{ account.schedulable ? '已加入调度' : '未参与调度' }}</span></div></section>
         <section v-if="account.error_message" class="error-box"><span>最近错误</span><p>{{ mobile ? '错误详情已隐藏，请在受控日志中查看。' : account.error_message }}</p></section>
         <section class="detail-grid"><div><span>当前并发</span><strong>{{ safeNumber(account.current_concurrency) }} / {{ safeNumber(account.concurrency) }}</strong></div><div><span>优先级</span><strong>{{ safeNumber(account.priority) }}</strong></div><div><span>计费倍率</span><strong>{{ safeNumber(account.rate_multiplier, 1) }}x</strong></div><div><span>代理</span><strong>{{ account.proxy_id ? `#${safeNumber(account.proxy_id)}` : '直连' }}</strong></div></section>

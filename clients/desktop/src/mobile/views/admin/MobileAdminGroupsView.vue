@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AlertCircle, Check, Filter, Pencil, Plus, Power, Search } from '@lucide/vue'
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import {
   createAdminGroup,
@@ -50,9 +50,12 @@ const saving = ref(false)
 const savingGroupId = ref<number | null>(null)
 const editorError = ref('')
 const statusTarget = ref<AdminGroup | null>(null)
+const statusDialog = ref<HTMLElement | null>(null)
 const pendingByGroup = reactive<Record<number, string>>({})
 let mounted = false
 let loadGeneration = 0
+let feedbackGeneration = 0
+let statusPreviousFocus: HTMLElement | null = null
 
 const pageCount = computed(() => Math.max(1, Math.ceil(safeNumber(result.value.total) / PAGE_SIZE)))
 const busy = computed(() => initialLoading.value || listLoading.value || saving.value || Object.keys(pendingByGroup).length > 0)
@@ -96,7 +99,18 @@ function listParams(page: number): AdminGroupListParams {
   }
 }
 
-async function loadGroups(targetPage = result.value.page, background = loaded.value) {
+function claimFeedback() {
+  const token = ++feedbackGeneration
+  actionError.value = ''
+  actionMessage.value = ''
+  return token
+}
+
+function ownsFeedback(token: number) {
+  return mounted && token === feedbackGeneration
+}
+
+async function loadGroups(targetPage = result.value.page, background = loaded.value, feedbackToken?: number) {
   const generation = ++loadGeneration
   const requestedPage = Math.min(pageCount.value, Math.max(1, Math.floor(targetPage) || 1))
   if (!loaded.value && !background) initialLoading.value = true
@@ -109,7 +123,7 @@ async function loadGroups(targetPage = result.value.page, background = loaded.va
     const total = safeNumber(response.total)
     const availablePages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (requestedPage > availablePages) {
-      await loadGroups(availablePages, true)
+      await loadGroups(availablePages, true, feedbackToken)
       return
     }
     result.value = {
@@ -122,7 +136,10 @@ async function loadGroups(targetPage = result.value.page, background = loaded.va
   } catch {
     if (!mounted || generation !== loadGeneration) return
     if (!loaded.value) fatalError.value = '分组列表加载失败，请检查网络后重试。'
-    else actionError.value = '分组列表刷新失败，已保留当前数据。'
+    else if (feedbackToken === undefined || ownsFeedback(feedbackToken)) {
+      actionMessage.value = ''
+      actionError.value = '分组列表刷新失败，已保留当前数据。'
+    }
   } finally {
     if (mounted && generation === loadGeneration) {
       initialLoading.value = false
@@ -179,25 +196,24 @@ function closeEditor() {
 
 async function saveGroup(payload: CreateAdminGroupRequest) {
   if (saving.value) return
+  const feedbackToken = claimFeedback()
   const target = editingGroup.value
   saving.value = true
   savingGroupId.value = target?.id ?? null
   if (target) pendingByGroup[target.id] = 'save'
-  actionError.value = ''
-  actionMessage.value = ''
   editorError.value = ''
   try {
     if (target) {
       await updateAdminGroup(target.id, payload)
-      actionMessage.value = `已更新分组“${safeName(payload.name)}”`
+      if (ownsFeedback(feedbackToken)) actionMessage.value = `已更新分组“${safeName(payload.name)}”`
     } else {
       await createAdminGroup(payload)
-      actionMessage.value = `已创建分组“${safeName(payload.name)}”`
+      if (ownsFeedback(feedbackToken)) actionMessage.value = `已创建分组“${safeName(payload.name)}”`
     }
     if (!mounted) return
     editorOpen.value = false
     editingGroup.value = null
-    await loadGroups(result.value.page, true)
+    await loadGroups(result.value.page, true, feedbackToken)
   } catch {
     if (mounted) editorError.value = '分组保存失败，请稍后重试。'
   } finally {
@@ -210,16 +226,70 @@ async function saveGroup(payload: CreateAdminGroupRequest) {
 }
 
 function requestStatusChange(group: AdminGroup) {
-  if (!pendingByGroup[group.id]) statusTarget.value = group
+  if (pendingByGroup[group.id]) return
+  statusPreviousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  statusTarget.value = group
+  void focusStatusDialog()
+}
+
+function statusFocusableElements() {
+  if (!statusDialog.value) return []
+  return Array.from(statusDialog.value.querySelectorAll<HTMLElement>(
+    'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => !element.hasAttribute('hidden'))
+}
+
+async function focusStatusDialog() {
+  await nextTick()
+  statusFocusableElements()[0]?.focus()
+}
+
+function restoreStatusFocus() {
+  const target = statusPreviousFocus
+  statusPreviousFocus = null
+  if (target) {
+    void nextTick(() => {
+      if (target.isConnected) target.focus()
+    })
+  }
+}
+
+function closeStatusDialog() {
+  const group = statusTarget.value
+  if (group && pendingByGroup[group.id]) return
+  statusTarget.value = null
+  restoreStatusFocus()
+}
+
+function handleDocumentKeydown(event: KeyboardEvent) {
+  const group = statusTarget.value
+  if (!group || !statusDialog.value) return
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeStatusDialog()
+    return
+  }
+  if (event.key !== 'Tab') return
+  const elements = statusFocusableElements()
+  const first = elements[0]
+  const last = elements[elements.length - 1]
+  const active = document.activeElement
+  const outside = !statusDialog.value.contains(active)
+  if (!first || !last) {
+    event.preventDefault()
+    statusDialog.value.focus()
+  } else if (event.shiftKey ? active === first || outside : active === last || outside) {
+    event.preventDefault()
+    ;(event.shiftKey ? last : first).focus()
+  }
 }
 
 async function confirmStatusChange() {
   const group = statusTarget.value
   if (!group || pendingByGroup[group.id]) return
+  const feedbackToken = claimFeedback()
   const nextStatus: AdminGroup['status'] = group.status === 'active' ? 'inactive' : 'active'
   pendingByGroup[group.id] = 'status'
-  actionError.value = ''
-  actionMessage.value = ''
   try {
     await updateAdminGroupStatus(group.id, nextStatus)
     if (!mounted) return
@@ -227,14 +297,17 @@ async function confirmStatusChange() {
       ...result.value,
       items: result.value.items.map((item) => item.id === group.id ? { ...item, status: nextStatus } : item),
     }
-    actionMessage.value = `已${nextStatus === 'active' ? '启用' : '停用'}分组“${safeName(group.name)}”`
-    await loadGroups(result.value.page, true)
+    if (ownsFeedback(feedbackToken)) actionMessage.value = `已${nextStatus === 'active' ? '启用' : '停用'}分组“${safeName(group.name)}”`
+    await loadGroups(result.value.page, true, feedbackToken)
   } catch {
-    if (mounted) actionError.value = '操作失败，请稍后重试。当前分组列表未更改。'
+    if (ownsFeedback(feedbackToken)) {
+      actionMessage.value = ''
+      actionError.value = '操作失败，请稍后重试。当前分组列表未更改。'
+    }
   } finally {
     if (mounted) {
       delete pendingByGroup[group.id]
-      statusTarget.value = null
+      closeStatusDialog()
     }
   }
 }
@@ -246,12 +319,15 @@ function changePage(page: number) {
 
 onMounted(() => {
   mounted = true
+  document.addEventListener('keydown', handleDocumentKeydown)
   void loadGroups(1, false)
 })
 
 onUnmounted(() => {
   mounted = false
   loadGeneration += 1
+  restoreStatusFocus()
+  document.removeEventListener('keydown', handleDocumentKeydown)
 })
 </script>
 
@@ -316,11 +392,11 @@ onUnmounted(() => {
 
     <GroupEditorDialog :model-value="editorOpen" :group="editingGroup" :pending="saving" :error="editorError" mobile @close="closeEditor" @save="saveGroup" />
 
-    <div v-if="statusTarget" class="confirm-backdrop" @mousedown.self="!pendingByGroup[statusTarget.id] && (statusTarget = null)">
-      <section class="status-dialog" data-testid="group-status-dialog" role="dialog" aria-modal="true" aria-label="确认分组状态">
+    <div v-if="statusTarget" class="confirm-backdrop" @mousedown.self="closeStatusDialog">
+      <section ref="statusDialog" class="status-dialog" data-testid="group-status-dialog" role="dialog" aria-modal="true" aria-label="确认分组状态" tabindex="-1">
         <h2>{{ statusTarget.status === 'active' ? '停用分组' : '启用分组' }}</h2>
         <p>确认{{ statusTarget.status === 'active' ? '停用' : '启用' }}“{{ safeName(statusTarget.name) }}”？</p>
-        <footer><button type="button" data-testid="cancel-group-status" :disabled="Boolean(pendingByGroup[statusTarget.id])" @click="statusTarget = null">取消</button><button class="primary" type="button" data-testid="confirm-group-status" :disabled="Boolean(pendingByGroup[statusTarget.id])" @click="confirmStatusChange">确认</button></footer>
+        <footer><button type="button" data-testid="cancel-group-status" :disabled="Boolean(pendingByGroup[statusTarget.id])" @click="closeStatusDialog">取消</button><button class="primary" type="button" data-testid="confirm-group-status" :disabled="Boolean(pendingByGroup[statusTarget.id])" @click="confirmStatusChange">确认</button></footer>
       </section>
     </div>
   </MobilePage>

@@ -200,6 +200,34 @@ describe('MobileAdminGroupsView', () => {
     expect(groupEditorSource).toMatch(/\.group-editor\.mobile footer button\s*\{[^}]*min-height:\s*44px/)
   })
 
+  it('traps group editor focus, blocks pending dismissal and restores the create trigger', async () => {
+    const pending = deferred<AdminGroup>()
+    mocks.create.mockReturnValueOnce(pending.promise)
+    const wrapper = mount(MobileAdminGroupsView, { attachTo: document.body })
+    await flushPromises()
+
+    const createTrigger = wrapper.get('[data-testid="create-group"]')
+    ;(createTrigger.element as HTMLElement).focus()
+    await createTrigger.trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="group-name"]').element)
+    const close = wrapper.get('[data-testid="group-editor-close"]')
+    ;(close.element as HTMLElement).focus()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true }))
+    expect(document.activeElement).toBe(wrapper.get('.group-editor footer button[type="button"]').element)
+
+    await wrapper.get('[data-testid="group-name"]').setValue('Pending Group')
+    await wrapper.get('[data-testid="group-editor"]').trigger('submit')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.get('.dialog-backdrop').trigger('mousedown')
+    expect(wrapper.find('.group-editor').exists()).toBe(true)
+    pending.resolve(group({ name: 'Pending Group' }))
+    await flushPromises()
+    expect(wrapper.find('.group-editor').exists()).toBe(false)
+    expect(document.activeElement).toBe(createTrigger.element)
+    wrapper.unmount()
+  })
+
   it('edits the exact group through its primary card action', async () => {
     const wrapper = mount(MobileAdminGroupsView)
     await flushPromises()
@@ -219,6 +247,58 @@ describe('MobileAdminGroupsView', () => {
     }))
   })
 
+  it('preserves zero quota limits when editing only the group name', async () => {
+    const zeroQuotaGroup = group({
+      daily_limit_usd: 0,
+      weekly_limit_usd: 0,
+      monthly_limit_usd: 0,
+    })
+    mocks.list.mockResolvedValueOnce(response([zeroQuotaGroup]))
+    mocks.update.mockResolvedValueOnce({ ...zeroQuotaGroup, name: 'Zero Quota Renamed' })
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="edit-group-8"]').trigger('click')
+    await wrapper.get('[data-testid="group-name"]').setValue('Zero Quota Renamed')
+    await wrapper.get('[data-testid="group-editor"]').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.update).toHaveBeenCalledWith(8, expect.objectContaining({
+      name: 'Zero Quota Renamed',
+      daily_limit_usd: 0,
+      weekly_limit_usd: 0,
+      monthly_limit_usd: 0,
+    }))
+  })
+
+  it.each([
+    ['rate multiplier zero', 'group-rate-multiplier', '0', '计费倍率必须是大于 0 的有限数字。'],
+    ['negative rate multiplier', 'group-rate-multiplier', '-1', '计费倍率必须是大于 0 的有限数字。'],
+    ['infinite rate multiplier', 'group-rate-multiplier', 'Infinity', '计费倍率必须是大于 0 的有限数字。'],
+    ['NaN rate multiplier', 'group-rate-multiplier', 'NaN', '计费倍率必须是大于 0 的有限数字。'],
+    ['negative daily quota', 'group-daily-limit', '-1', '额度必须是有限的非负数字，或留空表示不限。'],
+    ['infinite weekly quota', 'group-weekly-limit', 'Infinity', '额度必须是有限的非负数字，或留空表示不限。'],
+    ['NaN monthly quota', 'group-monthly-limit', 'NaN', '额度必须是有限的非负数字，或留空表示不限。'],
+  ])('rejects %s without submitting or leaking the raw value', async (_caseName, testId, value, expectedError) => {
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="edit-group-8"]').trigger('click')
+    const input = wrapper.get(`[data-testid="${testId}"]`)
+    if (value === 'Infinity' || value === 'NaN') input.element.setAttribute('type', 'text')
+    await input.setValue(value)
+    await wrapper.get('[data-testid="group-editor"]').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.update).not.toHaveBeenCalled()
+    expect(mocks.create).not.toHaveBeenCalled()
+    expect(wrapper.find('.group-editor').exists()).toBe(true)
+    expect(wrapper.get('.group-editor [role="alert"]').text()).toBe(expectedError)
+    if (value === 'Infinity' || value === 'NaN') {
+      expect(wrapper.get('.group-editor [role="alert"]').text()).not.toContain(value)
+    }
+  })
+
   it('cancels then confirms enable-disable with the exact id and next status', async () => {
     const wrapper = mount(MobileAdminGroupsView)
     await flushPromises()
@@ -235,6 +315,35 @@ describe('MobileAdminGroupsView', () => {
     expect(mocks.status).toHaveBeenCalledWith(8, 'inactive')
   })
 
+  it('traps group status focus, blocks pending dismissal and restores the card trigger', async () => {
+    const pending = deferred<AdminGroup>()
+    mocks.status.mockReturnValueOnce(pending.promise)
+    const wrapper = mount(MobileAdminGroupsView, { attachTo: document.body })
+    await flushPromises()
+
+    const statusTrigger = wrapper.get('[data-testid="toggle-group-8"]')
+    ;(statusTrigger.element as HTMLElement).focus()
+    await statusTrigger.trigger('click')
+    await flushPromises()
+    const cancel = wrapper.get('[data-testid="cancel-group-status"]')
+    const confirm = wrapper.get('[data-testid="confirm-group-status"]')
+    expect(document.activeElement).toBe(cancel.element)
+    ;(confirm.element as HTMLElement).focus()
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }))
+    expect(document.activeElement).toBe(cancel.element)
+
+    ;(confirm.element as HTMLElement).focus()
+    await confirm.trigger('click')
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+    await wrapper.get('.confirm-backdrop').trigger('mousedown')
+    expect(wrapper.find('[data-testid="group-status-dialog"]').exists()).toBe(true)
+    pending.resolve({ ...activeGroup, status: 'inactive' })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="group-status-dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(statusTrigger.element)
+    wrapper.unmount()
+  })
+
   it('keeps the list, redacts mutation failures and releases only the failed group', async () => {
     mocks.status.mockRejectedValueOnce(new Error('token=private api_key=hidden'))
     const wrapper = mount(MobileAdminGroupsView)
@@ -248,6 +357,27 @@ describe('MobileAdminGroupsView', () => {
     expect(wrapper.get('[data-testid="group-action-error"]').text()).toContain('操作失败')
     expect(wrapper.text()).not.toContain('private')
     expect(wrapper.get('[data-testid="toggle-group-8"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('keeps feedback owned by the latest group mutation when operations finish out of order', async () => {
+    const olderStatus = deferred<AdminGroup>()
+    const newerStatus = deferred<AdminGroup>()
+    mocks.status.mockReturnValueOnce(olderStatus.promise).mockReturnValueOnce(newerStatus.promise)
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="toggle-group-8"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-group-status"]').trigger('click')
+    await wrapper.get('[data-testid="toggle-group-14"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-group-status"]').trigger('click')
+    newerStatus.resolve({ ...inactiveGroup, status: 'active' })
+    await flushPromises()
+    olderStatus.reject(new Error('credential=older-group-secret'))
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="group-action-message"]').text()).toContain(`已启用分组“${inactiveGroup.name}”`)
+    expect(wrapper.find('[data-testid="group-action-error"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('older-group-secret')
   })
 
   it('shows loading, retryable private errors and empty results', async () => {
@@ -303,5 +433,56 @@ describe('MobileAdminGroupsView', () => {
     await flushPromises()
     expect(mocks.list).toHaveBeenLastCalledWith({ page: 3, page_size: 20 })
     expect(wrapper.get('[data-testid="mobile-pagination-next"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('keeps the previous group page and releases busy when a shrink fallback request fails', async () => {
+    const oldPageGroup = group({ id: 42, name: 'Retained Page Two Group' })
+    mocks.list
+      .mockResolvedValueOnce(response([activeGroup], { total: 41, page: 1 }))
+      .mockResolvedValueOnce(response([oldPageGroup], { total: 41, page: 2 }))
+      .mockResolvedValueOnce(response([], { total: 1, page: 2 }))
+      .mockRejectedValueOnce(new Error('token=fallback-group-secret'))
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="mobile-pagination-next"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain(oldPageGroup.name)
+    await wrapper.get('[data-testid="mobile-pagination-next"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.list).toHaveBeenLastCalledWith({ page: 1, page_size: 20 })
+    expect(wrapper.text()).toContain(oldPageGroup.name)
+    expect(wrapper.get('[data-testid="group-action-error"]').text()).toContain('已保留当前数据')
+    expect(wrapper.text()).not.toContain('fallback-group-secret')
+    expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('false')
+  })
+
+  it('ignores pending group list and mutation settlements after unmount', async () => {
+    const unhandled = vi.fn()
+    window.addEventListener('unhandledrejection', unhandled)
+
+    const pendingList = deferred<AdminGroupListResponse>()
+    mocks.list.mockReturnValueOnce(pendingList.promise)
+    const listWrapper = mount(MobileAdminGroupsView, { attachTo: document.body })
+    listWrapper.unmount()
+    pendingList.reject(new Error('token=unmounted-group-list-secret'))
+    await flushPromises()
+
+    mocks.list.mockResolvedValueOnce(response())
+    const pendingStatus = deferred<AdminGroup>()
+    mocks.status.mockReturnValueOnce(pendingStatus.promise)
+    const mutationWrapper = mount(MobileAdminGroupsView, { attachTo: document.body })
+    await flushPromises()
+    await mutationWrapper.get('[data-testid="toggle-group-8"]').trigger('click')
+    await mutationWrapper.get('[data-testid="confirm-group-status"]').trigger('click')
+    mutationWrapper.unmount()
+    pendingStatus.reject(new Error('credential=unmounted-group-mutation-secret'))
+    await flushPromises()
+
+    expect(unhandled).not.toHaveBeenCalled()
+    expect(document.body.textContent).not.toContain('unmounted-group-list-secret')
+    expect(document.body.textContent).not.toContain('unmounted-group-mutation-secret')
+    window.removeEventListener('unhandledrejection', unhandled)
   })
 })
