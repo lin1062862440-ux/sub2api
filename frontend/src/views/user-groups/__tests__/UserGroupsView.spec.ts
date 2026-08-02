@@ -15,6 +15,15 @@ const mocks = vi.hoisted(() => ({
   replaceViewers: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
+  route: { name: 'UserGroups', query: {} as Record<string, string> },
+}))
+
+vi.mock('vue-router', () => ({
+  useRoute: () => mocks.route,
+  RouterLink: {
+    props: ['to'],
+    template: '<a><slot /></a>',
+  },
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -76,6 +85,10 @@ function mountView() {
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
         Icon: { template: '<i />' },
+        RouterLink: {
+          props: ['to'],
+          template: '<a><slot /></a>',
+        },
         UserGroupPeopleDialog: true,
         Teleport: true,
         ConfirmDialog: {
@@ -100,26 +113,37 @@ describe('UserGroupsView', () => {
     mocks.archive.mockResolvedValue(undefined)
   })
 
-  it('renders granted users as read-only with the selected group roster', async () => {
+  it('renders granted groups as a full-width read-only directory with report links', async () => {
     const wrapper = mountView()
     await flushPromises()
 
-    expect(wrapper.get('[data-test="read-only-badge"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="workspace-read-only"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="group-directory"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="group-roster-panel"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('研发一组')
-    expect(wrapper.text()).toContain('alice@example.com')
+    expect(wrapper.get('[data-test="open-subscriptions-7"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="open-usage-7"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="create-group"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="edit-group"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="manage-members-7"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="archive-group"]').exists()).toBe(false)
+    expect(mocks.getMembers).not.toHaveBeenCalled()
     expect(mocks.getViewers).not.toHaveBeenCalled()
   })
 
-  it('delays the split roster layout until the content area is wide enough', async () => {
+  it('loads group people only when an administrator opens a management action', async () => {
+    mocks.canManage = true
     const wrapper = mountView()
     await flushPromises()
 
-    const layout = wrapper.get('section.grid.min-w-0')
-    const classes = String(layout.attributes('class')).split(/\s+/)
-    expect(classes.some(className => className.startsWith('2xl:grid-cols-'))).toBe(true)
-    expect(classes.some(className => className.startsWith('xl:grid-cols-'))).toBe(false)
+    expect(mocks.getMembers).not.toHaveBeenCalled()
+    expect(mocks.getViewers).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-test="manage-members-7"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.getMembers).toHaveBeenCalledWith(7)
+    expect(mocks.getViewers).not.toHaveBeenCalled()
   })
 
   it('lets administrators create, edit, and archive groups', async () => {
