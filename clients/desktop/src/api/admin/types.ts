@@ -584,7 +584,24 @@ export interface AdminSubscription {
   id:number;user_id:number;group_id:number;status:'active'|'expired'|'revoked'|'suspended';starts_at:string;expires_at:string|null;daily_usage_usd:number;weekly_usage_usd:number;monthly_usage_usd:number;created_at:string;updated_at:string;revoked_at?:string|null
   user?:{id:number;email:string;username:string};group?:{id:number;name:string;platform?:string;daily_limit_usd?:number|null;weekly_limit_usd?:number|null;monthly_limit_usd?:number|null}
 }
-export interface AdminSubscriptionProgress {subscription_id:number;daily:{used:number;limit:number|null;percentage:number;reset_in_seconds:number|null}|null;weekly:{used:number;limit:number|null;percentage:number;reset_in_seconds:number|null}|null;monthly:{used:number;limit:number|null;percentage:number;reset_in_seconds:number|null}|null;expires_at:string|null;days_remaining:number|null}
+export interface AdminSubscriptionQuotaWindow {
+  limit_usd: number
+  used_usd: number
+  remaining_usd: number
+  percentage: number
+  window_start?: string
+  resets_at?: string
+  resets_in_seconds?: number | null
+}
+export interface AdminSubscriptionProgress {
+  id: number
+  group_name: string
+  daily?: AdminSubscriptionQuotaWindow | null
+  weekly?: AdminSubscriptionQuotaWindow | null
+  monthly?: AdminSubscriptionQuotaWindow | null
+  expires_at: string | null
+  expires_in_days: number
+}
 export interface AdminBulkAssignResult {
   success_count: number
   created_count: number

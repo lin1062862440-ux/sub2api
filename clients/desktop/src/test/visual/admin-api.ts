@@ -231,7 +231,16 @@ export async function listAdminAuditLogs() { return { items: [auditLog], total: 
 export async function getAdminAuditLog() { return auditLog }
 
 export async function listAdminSubscriptions() { return { items: [subscription], total: 1, page: 1, page_size: 20 } }
-export async function getAdminSubscriptionProgress() { return { subscription_id: 3, daily: { used: 4, limit: 10, percentage: 40 }, weekly: { used: 12, limit: 50, percentage: 24 }, monthly: { used: 20, limit: 100, percentage: 20 }, days_remaining: 30 } }
+export async function getAdminSubscriptionProgress() {
+  return {
+    id: 3,
+    group_name: 'Claude Code',
+    daily: { used_usd: 32.05, limit_usd: 400, remaining_usd: 367.95, percentage: 8.009257707, resets_in_seconds: 21_600 },
+    weekly: { used_usd: 113.24, limit_usd: 500, remaining_usd: 386.76, percentage: 22.6459541288, resets_in_seconds: 360_000 },
+    expires_at: '2026-09-01T00:00:00Z',
+    expires_in_days: 30,
+  }
+}
 export async function assignAdminSubscription() { return subscription }
 export async function bulkAssignAdminSubscriptions() { return { success_count: 2, created_count: 2, reused_count: 0, failed_count: 0, subscriptions: [subscription], errors: [] } }
 export async function extendAdminSubscription() { return subscription }

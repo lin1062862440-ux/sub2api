@@ -49,11 +49,12 @@ describe('AdminSubscriptionsView', () => {
     mocks.list.mockResolvedValue({ items: [subscription], total: 1, page: 1, page_size: 20 })
     mocks.groups.mockResolvedValue([{ id: 2, name: 'Claude Code' }])
     mocks.progress.mockResolvedValue({
-      subscription_id: 3,
-      daily: { used: 4, limit: 10, percentage: 40 },
-      weekly: { used: 12, limit: 50, percentage: 24 },
-      monthly: { used: 20, limit: 100, percentage: 20 },
-      days_remaining: 30,
+      id: 3,
+      group_name: 'Claude Code',
+      daily: { used_usd: 32.05, limit_usd: 400, remaining_usd: 367.95, percentage: 8.009257707, resets_in_seconds: 21_600 },
+      weekly: { used_usd: 113.24, limit_usd: 500, remaining_usd: 386.76, percentage: 22.6459541288, resets_in_seconds: 360_000 },
+      expires_at: '2026-09-01',
+      expires_in_days: 30,
     })
     mocks.assign.mockResolvedValue(subscription)
     mocks.bulkAssign.mockResolvedValue({
@@ -76,7 +77,14 @@ describe('AdminSubscriptionsView', () => {
 
     expect(wrapper.get('h1').text()).toBe('订阅管理')
     expect(wrapper.text()).toContain('lin@example.com')
-    expect(wrapper.text()).toContain('40%')
+    const dailyQuota = wrapper.get('[data-testid="subscription-quota-daily-3"]')
+    expect(dailyQuota.get('.quota-amount strong').text()).toBe('$32.05')
+    expect(dailyQuota.get('.quota-amount span').text()).toBe('/ $400.00')
+    expect(dailyQuota.text()).toContain('8%')
+    expect(dailyQuota.text()).toContain('6 小时后重置')
+    expect(wrapper.get('[data-testid="subscription-quota-weekly-3"]').text()).toContain('22.6%')
+    expect(wrapper.find('[data-testid="subscription-quota-monthly-3"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('8.009257707%')
     await wrapper.get('[data-testid="extend-subscription-3"]').trigger('click')
     expect(mocks.extend).not.toHaveBeenCalled()
     await wrapper.get('[data-testid="subscription-extend-days"]').setValue('45')
