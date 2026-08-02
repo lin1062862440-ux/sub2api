@@ -2,6 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AdminAccount, AdminAccountListResponse } from '@/api/admin/types'
+import AccountEditorDialog from '@/components/admin/AccountEditorDialog.vue'
+import accountEditorSource from '@/components/admin/AccountEditorDialog.vue?raw'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -209,7 +211,38 @@ describe('MobileAdminAccountsView', () => {
 
     await openMenu(wrapper, 17)
     await wrapper.get('[data-testid="edit-account-17"]').trigger('click')
+    expect(wrapper.get('.dialog-backdrop').classes()).toContain('mobile')
+    expect(wrapper.get('.account-editor').classes()).toContain('mobile')
+    expect(wrapper.get('[data-testid="account-editor-close"]').attributes('data-testid')).toBe('account-editor-close')
     expect(wrapper.get('[data-testid="account-editor-name"]').element).toHaveProperty('value', healthy.name)
+  })
+
+  it('keeps the mobile editor open and redacts an account update rejection', async () => {
+    mocks.update.mockRejectedValueOnce(new Error('api_key=editor-secret credential=raw-message'))
+    const wrapper = mount(MobileAdminAccountsView)
+    await flushPromises()
+
+    await openMenu(wrapper, 17)
+    await wrapper.get('[data-testid="edit-account-17"]').trigger('click')
+    await wrapper.get('[data-testid="account-editor-submit"]').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.update).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.account-editor').exists()).toBe(true)
+    expect(wrapper.get('.form-error').text()).toBe('账号保存失败，请稍后重试。')
+    expect(wrapper.text()).not.toContain('editor-secret')
+    expect(wrapper.findAll('[data-testid="mobile-account-card"]')).toHaveLength(2)
+    expect(wrapper.get('[data-testid="account-editor-save"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('scopes 44px account editor controls to explicit mobile mode', () => {
+    const desktop = mount(AccountEditorDialog, { props: { modelValue: true, account: healthy } })
+    expect(desktop.get('.dialog-backdrop').classes()).not.toContain('mobile')
+    expect(desktop.get('.account-editor').classes()).not.toContain('mobile')
+
+    expect(accountEditorSource).toMatch(/\.account-editor\.mobile header button\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/)
+    expect(accountEditorSource).toMatch(/\.account-editor\.mobile (?:input|input,select,textarea)[^{]*\{[^}]*min-height:\s*44px/)
+    expect(accountEditorSource).toMatch(/\.account-editor\.mobile footer button\s*\{[^}]*min-height:\s*44px/)
   })
 
   it('closes the per-card menu with Escape and an outside click', async () => {

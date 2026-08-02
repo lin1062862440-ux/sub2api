@@ -8,6 +8,7 @@ import {
   resolveBalanceRanges,
   resolveQuotaSummary,
   truncateTraySource,
+  usedPercentFromRemaining,
   type ResolvedUsageQuota,
   type UsageQuotaInput,
 } from './format'
@@ -16,6 +17,7 @@ import * as format from './format'
 type ShortestQuotaFormatters = {
   orderUsageQuotasShortestFirst?: (quotas: readonly ResolvedUsageQuota[]) => ResolvedUsageQuota[]
   resolveShortestUsageQuota?: (quotas: readonly ResolvedUsageQuota[]) => ResolvedUsageQuota | null
+  usageRiskLevel?: (usedPercent: number) => 'healthy' | 'warning' | 'danger'
 }
 
 const shortestQuotaFormatters = format as typeof format & ShortestQuotaFormatters
@@ -104,6 +106,25 @@ describe('usage display formatting', () => {
     expect(remainingPercent(12, 10)).toBe(0)
   })
 
+  it('converts remaining capacity to the used display percentage', () => {
+    expect(usedPercentFromRemaining(90)).toBe(10)
+    expect(usedPercentFromRemaining(76)).toBe(24)
+    expect(usedPercentFromRemaining(-10)).toBe(100)
+    expect(usedPercentFromRemaining(120)).toBe(0)
+  })
+
+  it('classifies used percentages as healthy, warning, or danger', () => {
+    const classify = shortestQuotaFormatters.usageRiskLevel
+    expect(classify).toBeTypeOf('function')
+    if (!classify) return
+    expect(classify(10)).toBe('healthy')
+    expect(classify(59)).toBe('healthy')
+    expect(classify(60)).toBe('warning')
+    expect(classify(79)).toBe('warning')
+    expect(classify(80)).toBe('danger')
+    expect(classify(100)).toBe('danger')
+  })
+
   it('rejects non-finite quota limits', () => {
     expect(() => remainingPercent(1, 0)).toThrow('额度上限必须大于 0')
     expect(() => remainingPercent(1, Number.POSITIVE_INFINITY)).toThrow('额度上限必须大于 0')
@@ -119,8 +140,8 @@ describe('usage display formatting', () => {
 
   it('formats compact balance, subscription, unlimited, and unavailable titles', () => {
     expect(formatUsageTrayTitle({ kind: 'balance', balance: 128.6 })).toBe('$128.60')
-    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude Pro', remainingPercent: 73 })).toBe('73%')
-    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude 专业旗舰订阅', remainingPercent: 73 })).toBe('73%')
+    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude Pro', remainingPercent: 73 })).toBe('27%')
+    expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude 专业旗舰订阅', remainingPercent: 73 })).toBe('27%')
     expect(formatUsageTrayTitle({ kind: 'subscription', name: 'Claude Pro', remainingPercent: null })).toBe('∞')
     expect(formatUsageTrayTitle({ kind: 'unavailable' })).toBe('--')
   })
@@ -128,7 +149,7 @@ describe('usage display formatting', () => {
   it('formats stable compact values for the floating orb', () => {
     expect(formatUsageOrbValue({ kind: 'balance', balance: 128.6 })).toBe('$129')
     expect(formatUsageOrbValue({ kind: 'balance', balance: 1234 })).toBe('$1.2K')
-    expect(formatUsageOrbValue({ kind: 'subscription', remainingPercent: 26, unlimited: false })).toBe('26%')
+    expect(formatUsageOrbValue({ kind: 'subscription', remainingPercent: 26, unlimited: false })).toBe('74%')
     expect(formatUsageOrbValue({ kind: 'subscription', remainingPercent: null, unlimited: true })).toBe('∞')
     expect(formatUsageOrbValue({ kind: 'unavailable' })).toBe('--')
   })

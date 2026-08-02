@@ -431,7 +431,7 @@ onUnmounted(() => {
     </div>
 
     <AccountDetailDrawer :account="detailAccount" mobile @close="detailAccount = null" />
-    <AccountEditorDialog v-model="editorOpen" :account="editorAccount" @saved="handleSaved" />
+    <AccountEditorDialog v-model="editorOpen" :account="editorAccount" mobile @saved="handleSaved" />
   </MobilePage>
 </template>
 

@@ -58,7 +58,7 @@ describe('FloatingUsageCard', () => {
     })
 
     expect(wrapper.text()).toContain('Claude Pro')
-    expect(wrapper.text()).toContain('42%')
+    expect(wrapper.text()).toContain('58%')
     expect(wrapper.findAll('[data-testid="usage-quota-row"]')).toHaveLength(1)
     expect(wrapper.find('svg').exists()).toBe(false)
   })
@@ -100,6 +100,8 @@ describe('FloatingUsageCard', () => {
     expect(wrapper.get('[data-testid="external-usage-detail-card"]').classes()).toContain('native-landscape')
     expect(wrapper.findAll('[data-testid="usage-quota-row"]')).toHaveLength(2)
     expect(wrapper.findAll('.quota-head strong').map((item) => item.text())).toEqual(['周额度', '月额度'])
+    expect(wrapper.get('[data-testid="native-primary-metric"]').text()).toContain('已使用')
+    expect(wrapper.get('[data-testid="native-primary-metric"]').text()).toContain('58%')
   })
 
   it('renders daily weekly and monthly quotas as equal rows from shortest to longest', () => {
@@ -154,16 +156,16 @@ describe('FloatingUsageCard', () => {
     expect(rows).toHaveLength(3)
     expect(rows.map((row) => row.get('.quota-head strong').text())).toEqual(['日额度', '周额度', '月额度'])
     expect(rows.map((row) => row.get('.quota-track span').attributes('style'))).toEqual([
-      'width: 80%;',
-      'width: 42%;',
-      'width: 76%;',
+      'width: 20%;',
+      'width: 58%;',
+      'width: 24%;',
     ])
-    expect(rows.map((row) => row.get('.quota-track').text())).toEqual(['80%', '42%', '76%'])
+    expect(rows.map((row) => row.get('.quota-track').text())).toEqual(['20%', '58%', '24%'])
     expect(rows.every((row) => row.find('.quota-meta').exists())).toBe(true)
     expect(wrapper.get('[data-testid="floating-subscription-expiry"]').text()).toBe('有效期至 8月31日')
   })
 
-  it('keeps a full remaining track for an unused shortest quota', () => {
+  it('keeps an empty used track for an unused shortest quota', () => {
     const wrapper = mount(FloatingUsageCard, {
       props: props({
         source: 'subscription',
@@ -197,8 +199,32 @@ describe('FloatingUsageCard', () => {
     const rows = wrapper.findAll('[data-testid="usage-quota-row"]')
     expect(rows).toHaveLength(2)
     expect(rows[0].text()).toContain('周额度')
-    expect(rows[0].get('.quota-track span').attributes('style')).toContain('width: 100%')
+    expect(rows[0].classes()).toContain('compact-value')
+    expect(rows[0].get('.quota-track span').attributes('style')).toContain('width: 0%')
     expect(rows[1].text()).toContain('月额度')
     expect(wrapper.get('[data-testid="floating-subscription-expiry"]').text()).toBe('长期有效')
+  })
+
+  it('colors used quota progress from healthy green to warning orange and danger red', () => {
+    const wrapper = mount(FloatingUsageCard, {
+      props: props({
+        source: 'subscription',
+        subscription: { id: 45, expires_at: null, group: { name: '45 订阅' } },
+        quotaSummary: {
+          remainingPercent: 20,
+          constrainedKey: 'monthly',
+          unlimited: false,
+          quotas: [
+            { key: 'daily', label: '日额度', used: 10, limit: 100, remainingPercent: 90, resetAt: null },
+            { key: 'weekly', label: '周额度', used: 60, limit: 100, remainingPercent: 40, resetAt: null },
+            { key: 'monthly', label: '月额度', used: 80, limit: 100, remainingPercent: 20, resetAt: null },
+          ],
+        },
+      }) as never,
+    })
+
+    expect(wrapper.findAll('[data-testid="usage-quota-row"]')
+      .map((row) => row.attributes('data-usage-risk')))
+      .toEqual(['healthy', 'warning', 'danger'])
   })
 })

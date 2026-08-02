@@ -13,6 +13,7 @@ function readPermissions(file: string): unknown[] {
 describe('external URL opener capability', () => {
   it.each([
     'src-tauri/capabilities/default.json',
+    'src-tauri/capabilities/android.json',
   ])('allows standard web URLs in %s', (file) => {
     expect(readPermissions(file)).toContain('opener:allow-default-urls')
   })

@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-import type { ResolvedUsageQuota } from '@/features/usage-display/core/format'
+import {
+  usageRiskLevel,
+  usedPercentFromRemaining,
+  type ResolvedUsageQuota,
+} from '@/features/usage-display/core/format'
 
-const props = withDefaults(defineProps<{
+const props = defineProps<{
   quota: ResolvedUsageQuota
-  fillMode?: 'used' | 'remaining'
-}>(), { fillMode: 'used' })
+}>()
+const usedPercent = computed(() => usedPercentFromRemaining(props.quota.remainingPercent))
+const riskLevel = computed(() => usageRiskLevel(usedPercent.value))
 const progressStyle = computed(() => ({
-  width: `${props.fillMode === 'remaining'
-    ? props.quota.remainingPercent
-    : 100 - props.quota.remainingPercent}%`,
+  width: `${usedPercent.value}%`,
 }))
 
 function resetLabel(value: Date | null) {
@@ -25,18 +28,18 @@ function resetLabel(value: Date | null) {
 <template>
   <div
     class="quota-row"
+    :data-usage-risk="riskLevel"
     :class="{
-      constrained: quota.remainingPercent <= 20,
-      'compact-value': quota.remainingPercent < 20,
+      'compact-value': usedPercent < 20,
     }"
     data-testid="usage-quota-row"
   >
     <div class="quota-head">
       <strong>{{ quota.label }}</strong>
-      <span>{{ quota.remainingPercent }}%</span>
+      <span>{{ usedPercent }}%</span>
     </div>
     <div class="quota-track" aria-hidden="true">
-      <span :style="progressStyle"><b>{{ quota.remainingPercent }}%</b></span>
+      <span :style="progressStyle"><b>{{ usedPercent }}%</b></span>
     </div>
     <div class="quota-meta">
       <span>${{ quota.used.toFixed(2) }} / ${{ quota.limit.toFixed(2) }}</span>

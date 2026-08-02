@@ -2,6 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AdminGroup, AdminGroupListResponse } from '@/api/admin/types'
+import GroupEditorDialog from '@/components/admin/GroupEditorDialog.vue'
+import groupEditorSource from '@/components/admin/GroupEditorDialog.vue?raw'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -138,6 +140,9 @@ describe('MobileAdminGroupsView', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="create-group"]').trigger('click')
+    expect(wrapper.get('.dialog-backdrop').classes()).toContain('mobile')
+    expect(wrapper.get('.group-editor').classes()).toContain('mobile')
+    expect(wrapper.get('[data-testid="group-editor-close"]').attributes('data-testid')).toBe('group-editor-close')
     await wrapper.get('[data-testid="group-name"]').setValue('Gemini Monthly')
     await wrapper.get('[data-testid="group-description"]').setValue('Gemini subscription')
     await wrapper.get('[data-testid="group-platform"]').setValue('gemini')
@@ -165,6 +170,34 @@ describe('MobileAdminGroupsView', () => {
       monthly_limit_usd: 240,
     })
     expect(mocks.list).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the mobile editor open and redacts a group create rejection', async () => {
+    mocks.create.mockRejectedValueOnce(new Error('token=group-editor-secret raw upstream failure'))
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="create-group"]').trigger('click')
+    await wrapper.get('[data-testid="group-name"]').setValue('Rejected Group')
+    await wrapper.get('[data-testid="group-editor"]').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.create).toHaveBeenCalledTimes(1)
+    expect(wrapper.find('.group-editor').exists()).toBe(true)
+    expect(wrapper.get('.group-editor [role="alert"]').text()).toBe('分组保存失败，请稍后重试。')
+    expect(wrapper.text()).not.toContain('group-editor-secret')
+    expect(wrapper.findAll('[data-testid="mobile-group-card"]')).toHaveLength(2)
+    expect(wrapper.get('[data-testid="group-editor-save"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('scopes 44px group editor controls to explicit mobile mode', () => {
+    const desktop = mount(GroupEditorDialog, { props: { modelValue: true, group: activeGroup } })
+    expect(desktop.get('.dialog-backdrop').classes()).not.toContain('mobile')
+    expect(desktop.get('.group-editor').classes()).not.toContain('mobile')
+
+    expect(groupEditorSource).toMatch(/\.group-editor\.mobile header button\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px/)
+    expect(groupEditorSource).toMatch(/\.group-editor\.mobile \.form-grid (?:input|input,select,textarea)[^{]*\{[^}]*min-height:\s*44px/)
+    expect(groupEditorSource).toMatch(/\.group-editor\.mobile footer button\s*\{[^}]*min-height:\s*44px/)
   })
 
   it('edits the exact group through its primary card action', async () => {

@@ -179,7 +179,7 @@ function toggle() {
         class="floating-preview bar-preview"
         :data-appearance="config.appearance"
         data-testid="usage-floating-bar-preview"
-      ><span>{{ config.source === 'balance' ? '可用余额' : '剩余额度' }}</span><b>{{ orbValue }}</b></strong>
+      ><span>{{ config.source === 'balance' ? '可用余额' : '已使用' }}</span><b>{{ orbValue }}</b></strong>
     </div>
   </div>
 </template>

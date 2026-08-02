@@ -167,7 +167,7 @@
   position: relative;
   display: block;
   height: 100%;
-  background: var(--external-accent);
+  background: linear-gradient(90deg, rgba(98, 183, 128, 0.84), rgba(63, 158, 105, 0.9));
   border-radius: inherit;
   transition: width 220ms ease-out;
 }
@@ -184,7 +184,15 @@
 }
 .external-usage-detail-card .quota-row.compact-value .quota-track span { overflow: visible; }
 .external-usage-detail-card .quota-row.compact-value .quota-track b { right: auto; left: calc(100% + 6px); color: var(--external-text); }
-.external-usage-detail-card .quota-row.constrained .quota-track span { background: var(--external-alert); }
+.external-usage-detail-card .quota-row[data-usage-risk='healthy'] .quota-track span {
+  background: linear-gradient(90deg, rgba(98, 183, 128, 0.84), rgba(63, 158, 105, 0.9));
+}
+.external-usage-detail-card .quota-row[data-usage-risk='warning'] .quota-track span {
+  background: linear-gradient(90deg, rgba(239, 176, 75, 0.86), rgba(224, 139, 47, 0.92));
+}
+.external-usage-detail-card .quota-row[data-usage-risk='danger'] .quota-track span {
+  background: linear-gradient(90deg, rgba(227, 112, 93, 0.87), rgba(207, 70, 66, 0.93));
+}
 .external-usage-detail-card .quota-meta { display: flex; min-width: 0; align-items: center; justify-content: space-between; gap: 12px; margin-top: 7px; color: var(--external-muted); font-size: 10px; line-height: 1.2; }
 .external-usage-detail-card .quota-meta span,
 .external-usage-detail-card .quota-meta small { overflow: hidden; font: inherit; text-overflow: ellipsis; white-space: nowrap; }

@@ -65,4 +65,10 @@ describe('macOS external soft glass themes', () => {
     expect(detailThemeCss).toContain('.external-usage-detail-card.native-landscape')
     expect(detailThemeCss).not.toContain('backdrop-filter')
   })
+
+  it('maps used quota progress to green, orange, and red risk colors', () => {
+    expect(detailThemeCss).toContain(".quota-row[data-usage-risk='healthy'] .quota-track span")
+    expect(detailThemeCss).toContain(".quota-row[data-usage-risk='warning'] .quota-track span")
+    expect(detailThemeCss).toContain(".quota-row[data-usage-risk='danger'] .quota-track span")
+  })
 })

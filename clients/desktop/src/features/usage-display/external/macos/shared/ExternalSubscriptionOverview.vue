@@ -40,7 +40,6 @@ const expiryLabel = computed(() => {
           v-for="quota in quotas"
           :key="quota.key"
           :quota="quota"
-          fill-mode="remaining"
         />
       </div>
       <div v-else class="unlimited-state">

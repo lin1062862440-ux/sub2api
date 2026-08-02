@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { X } from '@lucide/vue'
 
 import type {
@@ -9,11 +9,13 @@ import type {
   CreateAdminGroupRequest,
 } from '@/api/admin/types'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue: boolean
   group: AdminGroup | null
   pending?: boolean
-}>()
+  mobile?: boolean
+  error?: string
+}>(), { pending: false, mobile: false, error: '' })
 
 const emit = defineEmits<{
   close: []
@@ -47,6 +49,9 @@ const form = reactive<GroupForm>({
   weeklyLimit: '',
   monthlyLimit: '',
 })
+const displayError = computed(() => props.mobile && props.error
+  ? '分组保存失败，请稍后重试。'
+  : props.error)
 
 function resetForm() {
   const group = props.group
@@ -100,14 +105,14 @@ watch(
 
 <template>
   <Transition name="fade">
-    <div v-if="modelValue" class="dialog-backdrop" @mousedown.self="emit('close')">
-      <section class="group-editor" role="dialog" aria-modal="true" :aria-label="group ? '编辑分组' : '新增分组'">
+    <div v-if="modelValue" class="dialog-backdrop" :class="{ mobile }" @mousedown.self="emit('close')">
+      <section class="group-editor" :class="{ mobile }" role="dialog" aria-modal="true" :aria-label="group ? '编辑分组' : '新增分组'">
         <header>
           <div>
             <span>{{ group ? 'GROUP SETTINGS' : 'NEW GROUP' }}</span>
             <h2>{{ group ? '编辑分组' : '新增分组' }}</h2>
           </div>
-          <button type="button" title="关闭" aria-label="关闭" @click="emit('close')"><X :size="18" /></button>
+          <button type="button" title="关闭" aria-label="关闭" data-testid="group-editor-close" @click="emit('close')"><X :size="18" /></button>
         </header>
 
         <form data-testid="group-editor" @submit.prevent="submit">
@@ -171,9 +176,11 @@ watch(
             </div>
           </div>
 
+          <p v-if="displayError" class="form-error" role="alert">{{ displayError }}</p>
+
           <footer>
             <button type="button" @click="emit('close')">取消</button>
-            <button class="save" type="submit" :disabled="pending || !form.name.trim()">{{ pending ? '正在保存' : '保存分组' }}</button>
+            <button class="save" type="submit" data-testid="group-editor-save" :disabled="pending || !form.name.trim()">{{ pending ? '正在保存' : '保存分组' }}</button>
           </footer>
         </form>
       </section>
@@ -182,5 +189,5 @@ watch(
 </template>
 
 <style scoped>
-.dialog-backdrop{position:fixed;z-index:140;inset:0;display:grid;padding:24px;background:rgba(25,37,54,.25);backdrop-filter:blur(10px);place-items:center}.group-editor{width:min(640px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto;background:#fff;border:1px solid var(--border-subtle);border-radius:8px;box-shadow:0 28px 76px rgba(29,44,65,.25)}.group-editor>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;padding:20px 22px;border-bottom:1px solid var(--border-subtle);background:rgba(255,255,255,.96)}.group-editor header span{display:block;margin-bottom:4px;color:var(--accent);font-size:10px;font-weight:750}.group-editor h2{font-size:18px}.group-editor header button{display:grid;width:32px;height:32px;border:0;border-radius:6px;background:transparent;color:var(--text-tertiary);place-items:center}.group-editor form{display:grid}.form-section{padding:18px 22px;border-bottom:1px solid var(--border-subtle)}.section-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:13px}.section-heading strong{font-size:12px}.section-heading span{color:var(--text-tertiary);font-size:10px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.form-grid label,.quota-grid label{display:grid;gap:6px}.form-grid label>span,.quota-grid label>span{color:var(--text-secondary);font-size:11px;font-weight:650}.form-grid input,.form-grid select,.form-grid textarea,.quota-grid input{width:100%;border:1px solid var(--border-subtle);border-radius:7px;background:#fbfcfe;color:var(--text-primary);font:inherit;outline:0}.form-grid input,.form-grid select{height:38px;padding:0 10px}.form-grid textarea{padding:9px 10px;resize:vertical;line-height:1.5}.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus,.quota-grid input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(69,112,184,.1)}.form-grid small{color:var(--text-tertiary);font-size:9px}.wide{grid-column:1/-1}.toggle-row{display:flex!important;min-height:50px;align-items:center;justify-content:space-between;padding:9px 11px;border:1px solid var(--border-subtle);border-radius:7px;background:#f8fafc}.toggle-row>span{display:grid;gap:3px}.toggle-row input{width:34px;height:18px;accent-color:var(--accent)}.quota-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.quota-grid label>div{display:grid;grid-template-columns:26px minmax(0,1fr);height:38px;overflow:hidden;border:1px solid var(--border-subtle);border-radius:7px;background:#fbfcfe}.quota-grid i{display:grid;border-right:1px solid var(--border-subtle);color:var(--text-tertiary);font-style:normal;place-items:center}.quota-grid input{height:100%;padding:0 8px;border:0;border-radius:0}.group-editor footer{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:8px;padding:14px 22px;background:#f7f9fc;border-top:1px solid var(--border-subtle)}.group-editor footer button{height:36px;padding:0 14px;border:1px solid var(--border-subtle);border-radius:7px;background:#fff;color:var(--text-secondary)}.group-editor footer .save{border-color:var(--accent);background:var(--accent);color:#fff}.group-editor footer button:disabled{opacity:.5}.fade-enter-active,.fade-leave-active{transition:opacity 160ms}.fade-enter-from,.fade-leave-to{opacity:0}@media(max-width:620px){.dialog-backdrop{padding:12px}.form-grid,.quota-grid{grid-template-columns:1fr}.form-grid>*{grid-column:1}.section-heading{align-items:flex-start;flex-direction:column;gap:3px}}
+.dialog-backdrop{position:fixed;z-index:140;inset:0;display:grid;padding:24px;background:rgba(25,37,54,.25);backdrop-filter:blur(10px);place-items:center}.group-editor{width:min(640px,100%);max-height:min(760px,calc(100vh - 48px));overflow:auto;background:#fff;border:1px solid var(--border-subtle);border-radius:8px;box-shadow:0 28px 76px rgba(29,44,65,.25)}.group-editor>header{position:sticky;z-index:2;top:0;display:flex;align-items:flex-start;justify-content:space-between;padding:20px 22px;border-bottom:1px solid var(--border-subtle);background:rgba(255,255,255,.96)}.group-editor header span{display:block;margin-bottom:4px;color:var(--accent);font-size:10px;font-weight:750}.group-editor h2{font-size:18px}.group-editor header button{display:grid;width:32px;height:32px;border:0;border-radius:6px;background:transparent;color:var(--text-tertiary);place-items:center}.group-editor form{display:grid}.form-section{padding:18px 22px;border-bottom:1px solid var(--border-subtle)}.section-heading{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:13px}.section-heading strong{font-size:12px}.section-heading span{color:var(--text-tertiary);font-size:10px}.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.form-grid label,.quota-grid label{display:grid;gap:6px}.form-grid label>span,.quota-grid label>span{color:var(--text-secondary);font-size:11px;font-weight:650}.form-grid input,.form-grid select,.form-grid textarea,.quota-grid input{width:100%;border:1px solid var(--border-subtle);border-radius:7px;background:#fbfcfe;color:var(--text-primary);font:inherit;outline:0}.form-grid input,.form-grid select{height:38px;padding:0 10px}.form-grid textarea{padding:9px 10px;resize:vertical;line-height:1.5}.form-grid input:focus,.form-grid select:focus,.form-grid textarea:focus,.quota-grid input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(69,112,184,.1)}.form-grid small{color:var(--text-tertiary);font-size:9px}.wide{grid-column:1/-1}.toggle-row{display:flex!important;min-height:50px;align-items:center;justify-content:space-between;padding:9px 11px;border:1px solid var(--border-subtle);border-radius:7px;background:#f8fafc}.toggle-row>span{display:grid;gap:3px}.toggle-row input{width:34px;height:18px;accent-color:var(--accent)}.quota-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.quota-grid label>div{display:grid;grid-template-columns:26px minmax(0,1fr);height:38px;overflow:hidden;border:1px solid var(--border-subtle);border-radius:7px;background:#fbfcfe}.quota-grid i{display:grid;border-right:1px solid var(--border-subtle);color:var(--text-tertiary);font-style:normal;place-items:center}.quota-grid input{height:100%;padding:0 8px;border:0;border-radius:0}.form-error{margin:0;padding:11px 22px;border-bottom:1px solid #efd5cf;background:#fff7f5;color:#a14639;font-size:12px;line-height:1.5;overflow-wrap:anywhere}.group-editor footer{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:8px;padding:14px 22px;background:#f7f9fc;border-top:1px solid var(--border-subtle)}.group-editor footer button{height:36px;padding:0 14px;border:1px solid var(--border-subtle);border-radius:7px;background:#fff;color:var(--text-secondary)}.group-editor footer .save{border-color:var(--accent);background:var(--accent);color:#fff}.group-editor footer button:disabled{opacity:.5}.fade-enter-active,.fade-leave-active{transition:opacity 160ms}.fade-enter-from,.fade-leave-to{opacity:0}@media(max-width:620px){.dialog-backdrop{padding:12px}.form-grid,.quota-grid{grid-template-columns:1fr}.form-grid>*{grid-column:1}.section-heading{align-items:flex-start;flex-direction:column;gap:3px}}.dialog-backdrop.mobile{padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left));align-items:center}.group-editor.mobile{width:100%;max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 24px);overscroll-behavior:contain}.group-editor.mobile>header{padding:14px 16px}.group-editor.mobile h2,.group-editor.mobile .section-heading span,.group-editor.mobile label>span,.group-editor.mobile small{overflow-wrap:anywhere}.group-editor.mobile header button{width:44px;height:44px}.group-editor.mobile .form-section{padding:16px}.group-editor.mobile .form-error{padding:11px 16px}.group-editor.mobile .form-grid,.group-editor.mobile .quota-grid{grid-template-columns:minmax(0,1fr)}.group-editor.mobile .form-grid>*{grid-column:1}.group-editor.mobile .form-grid input{min-height:44px;height:auto}.group-editor.mobile .form-grid select{min-height:44px;height:auto}.group-editor.mobile .form-grid textarea{min-height:88px}.group-editor.mobile .quota-grid label>div{height:44px}.group-editor.mobile .toggle-row{min-height:56px}.group-editor.mobile footer{flex-wrap:wrap;padding:12px 16px max(12px,env(safe-area-inset-bottom))}.group-editor.mobile footer button{min-height:44px;height:auto;flex:1 1 120px;white-space:normal}
 </style>

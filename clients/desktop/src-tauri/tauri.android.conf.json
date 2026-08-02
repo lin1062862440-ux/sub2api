@@ -1,0 +1,17 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "identifier": "ai.lin.android",
+  "app": {
+    "macOSPrivateApi": false
+  },
+  "plugins": {
+    "deep-link": {
+      "mobile": [
+        {
+          "scheme": ["linai"],
+          "appLink": false
+        }
+      ]
+    }
+  }
+}

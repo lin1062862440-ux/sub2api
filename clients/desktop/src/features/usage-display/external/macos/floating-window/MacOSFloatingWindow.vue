@@ -123,7 +123,7 @@ onBeforeUnmount(() => cancelCollapse())
     <FloatingUsageBar
       v-else
       :value="orbValue"
-      :label="state.config.source === 'balance' ? '可用余额' : '剩余额度'"
+      :label="state.config.source === 'balance' ? '可用余额' : '已使用'"
       :appearance="state.config.appearance"
       :native-error="nativeError"
       @enter="expand"

@@ -45,9 +45,11 @@ struct TrayMetricPresentation {
 }
 
 fn quota_metric_color(percent: u8) -> (u8, u8, u8) {
-    let ratio = percent.min(100) as f64 / 100.0;
-    let mix = |low: u8, high: u8| (low as f64 + (high as f64 - low as f64) * ratio).round() as u8;
-    (mix(205, 50), mix(76, 154), mix(67, 105))
+    match percent.min(100) {
+        0..=59 => (67, 168, 112),
+        60..=79 => (230, 145, 49),
+        _ => (218, 75, 69),
+    }
 }
 
 fn tray_metric_presentation(title: &str) -> TrayMetricPresentation {
@@ -582,14 +584,16 @@ mod tests {
     }
 
     #[test]
-    fn usage_display_interpolates_subscription_color_from_red_to_green() {
-        let low = quota_metric_color(0);
-        let middle = quota_metric_color(50);
-        let high = quota_metric_color(100);
+    fn usage_display_colors_used_quota_from_green_to_orange_and_red() {
+        let healthy = quota_metric_color(10);
+        let warning = quota_metric_color(60);
+        let danger = quota_metric_color(80);
 
-        assert!(low.0 > low.1);
-        assert!(high.1 > high.0);
-        assert_ne!(middle, low);
-        assert_ne!(middle, high);
+        assert!(healthy.1 > healthy.0);
+        assert!(warning.0 > warning.1 && warning.1 > warning.2);
+        assert!(danger.0 > danger.1);
+        assert_eq!(quota_metric_color(59), healthy);
+        assert_eq!(quota_metric_color(79), warning);
+        assert_eq!(quota_metric_color(100), danger);
     }
 }

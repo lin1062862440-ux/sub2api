@@ -1,7 +1,7 @@
 {
   "name": "linai-desktop",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,6 +11,9 @@
     "test": "vitest",
     "test:run": "vitest run",
     "brand:sync": "node scripts/sync-brand.mjs",
+    "android:init": "tauri android init --ci --skip-targets-install",
+    "android:dev": "tauri android dev",
+    "android:apk": "tauri android build --debug --apk --target aarch64 --ci",
     "bundle:macos": "pnpm brand:sync && APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} tauri build --bundles app,dmg"
   },
   "dependencies": {

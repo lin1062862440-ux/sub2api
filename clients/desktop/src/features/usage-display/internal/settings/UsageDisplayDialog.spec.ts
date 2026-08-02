@@ -178,6 +178,17 @@ describe('UsageDisplayDialog', () => {
     expect(preview.text()).toContain('可用余额')
   })
 
+  it('labels the subscription floating preview as used', async () => {
+    mocks.state.config.source = 'subscription'
+    mocks.state.config.subscriptionId = 9
+    mocks.state.config.surface = 'floating-window'
+    mocks.state.config.floatingStyle = 'bar'
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="usage-floating-bar-preview"]').text()).toContain('已使用')
+  })
+
   it('closes from the title action and completion action', async () => {
     const titleClose = mountDialog()
     await titleClose.get('[data-testid="close-usage-display-dialog"]').trigger('click')

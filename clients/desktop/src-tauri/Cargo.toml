@@ -1,6 +1,6 @@
 [package]
 name = "linai-desktop"
-version = "0.1.0"
+version = "0.1.2"
 description = "LinAI desktop client"
 authors = ["LinAI"]
 license = ""
@@ -24,19 +24,23 @@ sha2 = "0.10"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.11.3", features = ["macos-private-api", "tray-icon"] }
+tauri = { version = "2.11.3", features = ["macos-private-api"] }
 tauri-plugin-log = "2"
 tauri-plugin-http = "2"
 tauri-plugin-store = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-os = "2"
 tauri-plugin-deep-link = "2.4.9"
-tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
 tempfile = "3"
 toml_edit = "0.22"
 uuid = { version = "1.11", features = ["v4"] }
 
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri = { version = "2.11.3", features = ["tray-icon"] }
+tauri-plugin-single-instance = { version = "2.4.3", features = ["deep-link"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
+tauri = { version = "2.11.3", features = ["macos-private-api", "tray-icon"] }
 objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSAttributedString", "NSButton", "NSColor", "NSControl", "NSResponder", "NSStatusBarButton", "NSStatusItem", "NSView"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSAttributedString", "NSDictionary", "NSObject", "NSString"] }

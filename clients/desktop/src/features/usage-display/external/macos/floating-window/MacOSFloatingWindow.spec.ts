@@ -190,13 +190,13 @@ describe('MacOSFloatingWindow', () => {
     await nextTick()
 
     const orb = wrapper.get('[data-testid="floating-usage-orb"]')
-    expect(orb.get('[data-testid="floating-metric-number"]').text()).toBe('80')
+    expect(orb.get('[data-testid="floating-metric-number"]').text()).toBe('20')
     expect(orb.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
 
     mocks.state.config.floatingStyle = 'bar'
     await nextTick()
     const bar = wrapper.get('[data-testid="floating-usage-bar"]')
-    expect(bar.get('[data-testid="floating-metric-number"]').text()).toBe('80')
+    expect(bar.get('[data-testid="floating-metric-number"]').text()).toBe('20')
     expect(bar.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
   })
 
@@ -249,8 +249,8 @@ describe('MacOSFloatingWindow', () => {
 
     const bar = wrapper.get('[data-testid="floating-usage-bar"]')
     expect(bar.attributes('data-appearance')).toBe('native')
-    expect(bar.text()).toContain('剩余额度')
-    expect(bar.get('[data-testid="floating-metric-number"]').text()).toBe('42')
+    expect(bar.text()).toContain('已使用')
+    expect(bar.get('[data-testid="floating-metric-number"]').text()).toBe('58')
     expect(bar.get('[data-testid="floating-metric-suffix"]').text()).toBe('%')
   })
 

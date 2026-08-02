@@ -131,7 +131,7 @@ describe('usage display store', () => {
 
     expect(store.state.subscription?.id).toBe(9)
     expect(store.state.quotaSummary).toMatchObject({ remainingPercent: 20, constrainedKey: 'weekly' })
-    expect(store.state.trayTitle).toBe('80%')
+    expect(store.state.trayTitle).toBe('20%')
     expect(deps.configureDisplay).toHaveBeenCalledWith({
       enabled: true,
       surface: 'menu-bar',
@@ -139,7 +139,7 @@ describe('usage display store', () => {
       appearance: 'sky',
       floatingStyle: 'orb',
     })
-    expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('80%')
+    expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('20%')
   })
 
   it('does not switch when the fixed subscription becomes unavailable', async () => {
@@ -217,7 +217,7 @@ describe('usage display store', () => {
     await store.updateConfig(config({ enabled: false, source: 'subscription', subscriptionId: 9 }))
 
     expect(store.state.subscription?.id).toBe(9)
-    expect(store.state.trayTitle).toBe('80%')
+    expect(store.state.trayTitle).toBe('20%')
   })
 
   it('loads a settings preview without owning tray setup or background refresh', async () => {
@@ -235,7 +235,7 @@ describe('usage display store', () => {
     expect(deps.configureDisplay).not.toHaveBeenCalled()
     expect(deps.setInterval).not.toHaveBeenCalled()
     expect(store.state.subscription?.id).toBe(9)
-    expect(store.state.trayTitle).toBe('80%')
+    expect(store.state.trayTitle).toBe('20%')
   })
 
   it('removes the tray and clears private runtime data on detach', async () => {

@@ -1,0 +1,23 @@
+{
+  "$schema": "../gen/schemas/android-schema.json",
+  "identifier": "android",
+  "description": "Permissions for the LinAI Android companion",
+  "platforms": ["android"],
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "deep-link:default",
+    "store:default",
+    "os:default",
+    "opener:allow-open-url",
+    "opener:allow-default-urls",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://lynn.lat/**"
+        }
+      ]
+    }
+  ]
+}

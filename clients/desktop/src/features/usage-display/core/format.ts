@@ -2,6 +2,7 @@ import type { UsageFilters } from '@/api'
 import { resolveUsageRange } from '@/lib/usage-range'
 
 export type UsageQuotaKey = 'daily' | 'weekly' | 'monthly'
+export type UsageRiskLevel = 'healthy' | 'warning' | 'danger'
 
 export interface UsageQuotaInput {
   key: UsageQuotaKey
@@ -64,6 +65,19 @@ export function remainingPercent(used: number, limit: number): number {
   return Math.min(100, Math.max(0, value))
 }
 
+export function usedPercentFromRemaining(value: number): number {
+  return Math.min(100, Math.max(0, 100 - Math.round(value)))
+}
+
+export function usageRiskLevel(usedPercent: number): UsageRiskLevel {
+  const value = Number.isFinite(usedPercent)
+    ? Math.min(100, Math.max(0, usedPercent))
+    : 0
+  if (value >= 80) return 'danger'
+  if (value >= 60) return 'warning'
+  return 'healthy'
+}
+
 export function quotaResetAt(windowStart: string | null, windowHours: number): Date | null {
   if (!windowStart) return null
   const start = new Date(windowStart)
@@ -119,7 +133,7 @@ export function truncateTraySource(value: string, maxWidth = 11): string {
 export function formatUsageTrayTitle(input: UsageTrayTitleInput): string {
   if (input.kind === 'unavailable') return '--'
   if (input.kind === 'balance') return `$${input.balance.toFixed(2)}`
-  return input.remainingPercent === null ? '∞' : `${Math.min(100, Math.max(0, input.remainingPercent))}%`
+  return input.remainingPercent === null ? '∞' : `${usedPercentFromRemaining(input.remainingPercent)}%`
 }
 
 export function formatUsageOrbValue(input: UsageOrbValueInput): string {
@@ -127,7 +141,7 @@ export function formatUsageOrbValue(input: UsageOrbValueInput): string {
   if (input.kind === 'subscription') {
     if (input.unlimited) return '∞'
     if (input.remainingPercent === null) return '--'
-    return `${Math.min(100, Math.max(0, Math.round(input.remainingPercent)))}%`
+    return `${usedPercentFromRemaining(input.remainingPercent)}%`
   }
   if (input.balance === null || !Number.isFinite(input.balance)) return '--'
   const value = Math.max(0, input.balance)

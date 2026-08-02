@@ -2,6 +2,7 @@
 import { watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { notifyUsageSessionChanged } from '@/features/usage-display/core/host'
+import { appCapabilities } from '@/lib/platform-capabilities'
 import { session } from '@/stores/session'
 
 const router = useRouter()
@@ -19,13 +20,16 @@ watch(
 
 watch(
   () => session.user?.id ?? null,
-  (userId) => void notifyUsageSessionChanged(userId),
+  (userId) => {
+    if (appCapabilities.externalUsageDisplay) void notifyUsageSessionChanged(userId)
+  },
   { immediate: true },
 )
 </script>
 
 <template>
   <div
+    v-if="!appCapabilities.mobile"
     class="window-drag-region"
     data-testid="window-drag-region"
     data-tauri-drag-region

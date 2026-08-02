@@ -140,7 +140,7 @@ describe('MacOSMenuBarPopover', () => {
     const rows = wrapper.findAll('[data-testid="usage-quota-row"]')
     expect(rows).toHaveLength(2)
     expect(rows.map((row) => row.get('.quota-head strong').text())).toEqual(['日额度', '周额度'])
-    expect(rows.map((row) => row.get('.quota-track').text())).toEqual(['80%', '20%'])
+    expect(rows.map((row) => row.get('.quota-track').text())).toEqual(['20%', '80%'])
     expect(rows[1].text()).toContain('$8.00 / $10.00')
   })
 

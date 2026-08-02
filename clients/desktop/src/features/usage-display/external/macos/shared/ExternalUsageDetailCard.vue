@@ -2,7 +2,10 @@
 import { computed } from 'vue'
 
 import type { UserSubscription } from '@/api'
-import type { UsageQuotaSummary } from '@/features/usage-display/core/format'
+import {
+  usedPercentFromRemaining,
+  type UsageQuotaSummary,
+} from '@/features/usage-display/core/format'
 import type { BalanceDisplaySnapshot } from '@/features/usage-display/core/store'
 import type { UsageDisplayAppearance } from '@/features/usage-display/core/storage'
 import BalanceOverview from './BalanceOverview.vue'
@@ -33,6 +36,9 @@ const updateLabel = computed(() => {
 const nativePrimaryQuota = computed(() => props.appearance === 'native' && props.source === 'subscription'
   ? resolveExternalQuotaPresentation(props.quotaSummary).primary
   : null)
+const nativePrimaryUsedPercent = computed(() => nativePrimaryQuota.value
+  ? usedPercentFromRemaining(nativePrimaryQuota.value.remainingPercent)
+  : null)
 
 function startDrag() {
   if (props.draggable) emit('drag')
@@ -53,8 +59,8 @@ function startDrag() {
         <span><i :class="{ stale: error }" />{{ error ? '数据可能已过期' : updateLabel }}</span>
       </div>
       <div v-if="nativePrimaryQuota" class="native-primary-metric" data-testid="native-primary-metric">
-        <span>剩余额度</span>
-        <strong>{{ nativePrimaryQuota.remainingPercent }}<small>%</small></strong>
+        <span>已使用</span>
+        <strong>{{ nativePrimaryUsedPercent }}<small>%</small></strong>
       </div>
     </header>
 

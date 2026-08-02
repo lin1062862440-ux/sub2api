@@ -48,6 +48,7 @@ const editorOpen = ref(false)
 const editingGroup = ref<AdminGroup | null>(null)
 const saving = ref(false)
 const savingGroupId = ref<number | null>(null)
+const editorError = ref('')
 const statusTarget = ref<AdminGroup | null>(null)
 const pendingByGroup = reactive<Record<number, string>>({})
 let mounted = false
@@ -159,11 +160,13 @@ function resetFilters() {
 
 function openCreate() {
   editingGroup.value = null
+  editorError.value = ''
   editorOpen.value = true
 }
 
 function openEdit(group: AdminGroup) {
   editingGroup.value = group
+  editorError.value = ''
   editorOpen.value = true
 }
 
@@ -171,6 +174,7 @@ function closeEditor() {
   if (saving.value) return
   editorOpen.value = false
   editingGroup.value = null
+  editorError.value = ''
 }
 
 async function saveGroup(payload: CreateAdminGroupRequest) {
@@ -181,6 +185,7 @@ async function saveGroup(payload: CreateAdminGroupRequest) {
   if (target) pendingByGroup[target.id] = 'save'
   actionError.value = ''
   actionMessage.value = ''
+  editorError.value = ''
   try {
     if (target) {
       await updateAdminGroup(target.id, payload)
@@ -194,7 +199,7 @@ async function saveGroup(payload: CreateAdminGroupRequest) {
     editingGroup.value = null
     await loadGroups(result.value.page, true)
   } catch {
-    if (mounted) actionError.value = '操作失败，请稍后重试。当前分组列表未更改。'
+    if (mounted) editorError.value = '分组保存失败，请稍后重试。'
   } finally {
     if (mounted) {
       if (target) delete pendingByGroup[target.id]
@@ -309,7 +314,7 @@ onUnmounted(() => {
       <template #footer><button class="sheet-secondary" type="button" @click="resetFilters">重置</button><button class="sheet-primary" type="button" data-testid="group-filter-apply" @click="applyFilters">应用</button></template>
     </MobileBottomSheet>
 
-    <GroupEditorDialog :model-value="editorOpen" :group="editingGroup" :pending="saving" @close="closeEditor" @save="saveGroup" />
+    <GroupEditorDialog :model-value="editorOpen" :group="editingGroup" :pending="saving" :error="editorError" mobile @close="closeEditor" @save="saveGroup" />
 
     <div v-if="statusTarget" class="confirm-backdrop" @mousedown.self="!pendingByGroup[statusTarget.id] && (statusTarget = null)">
       <section class="status-dialog" data-testid="group-status-dialog" role="dialog" aria-modal="true" aria-label="确认分组状态">
