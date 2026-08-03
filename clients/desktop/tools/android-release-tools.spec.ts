@@ -53,6 +53,29 @@ describe('Android release signing policy', () => {
     expect(wrapper).toContain('LINAI_ANDROID_KEYSTORE_PATH')
     expect(wrapper).not.toContain('GITEE_TOKEN')
   })
+
+  it('passes an explicit empty updater-key password for non-interactive signing', async () => {
+    const generator = await source('tools/write-android-updater-manifest.mjs')
+
+    expect(generator).toContain("env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ??= ''")
+  })
+
+  it('unwraps Tauri signature files for the Android streaming verifier', async () => {
+    const moduleUrl = pathToFileURL(resolve(
+      process.cwd(),
+      'tools/write-android-updater-manifest.mjs',
+    )).href
+    const { unwrapTauriSignature } = await import(moduleUrl)
+    const raw = [
+      'untrusted comment: signature',
+      'RWQfixture',
+      'trusted comment: timestamp:0',
+      'RWQglobal',
+    ].join('\n')
+
+    expect(unwrapTauriSignature(Buffer.from(raw).toString('base64'))).toBe(raw)
+    expect(() => unwrapTauriSignature('not a signature')).toThrow('invalid-tauri-signature')
+  })
 })
 
 describe('Android updater manifest and publication', () => {

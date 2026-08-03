@@ -65,6 +65,21 @@ function minisignParts(text) {
   return lines
 }
 
+export function unwrapTauriSignature(value) {
+  const encoded = String(value).trim()
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(encoded) || encoded.length % 4 !== 0) {
+    throw new Error('invalid-tauri-signature')
+  }
+  const decoded = Buffer.from(encoded, 'base64').toString('utf8').trim()
+  const lines = decoded.split(/\r?\n/)
+  if (
+    lines.length !== 4
+    || !lines[0].startsWith('untrusted comment: ')
+    || !lines[2].startsWith('trusted comment: ')
+  ) throw new Error('invalid-tauri-signature')
+  return decoded
+}
+
 export function verifyMinisign(bytes, signatureText, encodedPublicKey) {
   const publicLines = minisignParts(decodeTextKey(encodedPublicKey))
   const signatureLines = minisignParts(signatureText)
@@ -153,6 +168,7 @@ async function keychainSecret(account) {
 
 async function signApk(apkPath) {
   const env = { ...process.env }
+  env.TAURI_SIGNING_PRIVATE_KEY_PASSWORD ??= ''
   const defaultPath = join(homedir(), '.tauri', 'linai-updater.key')
   if (!env.TAURI_SIGNING_PRIVATE_KEY && !env.TAURI_SIGNING_PRIVATE_KEY_PATH) {
     try {
@@ -167,7 +183,10 @@ async function signApk(apkPath) {
     ['exec', 'tauri', 'signer', 'sign', apkPath],
     { cwd: projectRoot, env, maxBuffer: 1024 * 1024 },
   )
-  return readFile(`${apkPath}.sig`, 'utf8')
+  const signaturePath = `${apkPath}.sig`
+  const signature = unwrapTauriSignature(await readFile(signaturePath, 'utf8'))
+  await writeFile(signaturePath, `${signature}\n`)
+  return signature
 }
 
 async function locateApk(version) {
