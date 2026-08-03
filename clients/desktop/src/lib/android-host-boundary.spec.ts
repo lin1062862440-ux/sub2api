@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest'
 
 const lib = readFileSync(resolve(process.cwd(), 'src-tauri/src/lib.rs'), 'utf8').replace(/\r\n/g, '\n')
 const cargo = readFileSync(resolve(process.cwd(), 'src-tauri/Cargo.toml'), 'utf8').replace(/\r\n/g, '\n')
+const build = readFileSync(resolve(process.cwd(), 'src-tauri/build.rs'), 'utf8').replace(/\r\n/g, '\n')
+const androidCapability = JSON.parse(
+  readFileSync(resolve(process.cwd(), 'src-tauri/capabilities/android.json'), 'utf8'),
+) as { permissions: unknown[] }
 
 describe('Android Rust host boundary', () => {
   it('compiles desktop-only modules and plugins behind desktop cfg', () => {
@@ -24,6 +28,22 @@ describe('Android Rust host boundary', () => {
   it('registers the native updater only for Android mobile builds', () => {
     expect(lib).toContain('#[cfg(target_os = "android")]\nmod android_plugin;')
     expect(lib).toContain('#[cfg(target_os = "android")]\n    let builder = builder.plugin(android_plugin::init());')
+  })
+
+  it('allows every inline Android updater command through the Tauri ACL', () => {
+    for (const command of [
+      'installed_version',
+      'download',
+      'cancel_download',
+      'validate_archive',
+      'request_install_permission',
+      'install',
+      'cleanup',
+    ]) {
+      expect(build).toContain(`"${command}"`)
+    }
+    expect(build).toContain('DefaultPermissionRule::AllowAllCommands')
+    expect(androidCapability.permissions).toContain('android-updater:default')
   })
 
   it('keeps macOS-only Tauri features out of the mobile dependency graph', () => {
