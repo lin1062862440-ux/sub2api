@@ -117,6 +117,15 @@
       @close="peopleOpen = false"
       @save="savePeople"
     />
+    <UserGroupPromptSettingsDialog
+      :show="promptSettingsOpen"
+      :group-name="promptSettingsTarget?.name || ''"
+      :capture-enabled="Boolean(promptSettingsTarget?.prompt_capture_enabled)"
+      :selected-ids="promptViewers.map(item => item.user_id)"
+      :saving="savingPromptSettings"
+      @close="promptSettingsOpen = false"
+      @save="savePromptSettings"
+    />
     <ConfirmDialog
       :show="archiveTarget !== null"
       :title="t('userGroups.groups.archive')"
@@ -142,6 +151,7 @@ import type { UserGroup, UserGroupMember, UserGroupMutation, UserGroupViewer } f
 import UserGroupWorkspaceShell from './components/UserGroupWorkspaceShell.vue'
 import UserGroupEditorDialog from './components/UserGroupEditorDialog.vue'
 import UserGroupPeopleDialog from './components/UserGroupPeopleDialog.vue'
+import UserGroupPromptSettingsDialog from './components/UserGroupPromptSettingsDialog.vue'
 
 const { t, locale } = useI18n()
 const authStore = useAuthStore()
@@ -162,6 +172,10 @@ const peopleTarget = ref<UserGroup | null>(null)
 const peopleOpen = ref(false)
 const peopleMode = ref<'members' | 'viewers'>('members')
 const savingPeople = ref(false)
+const promptSettingsTarget = ref<UserGroup | null>(null)
+const promptSettingsOpen = ref(false)
+const promptViewers = ref<UserGroupViewer[]>([])
+const savingPromptSettings = ref(false)
 
 const filteredGroups = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
@@ -189,6 +203,7 @@ const GroupActions = defineComponent({
       ...(canManage.value ? [
         actionButton('users', t('userGroups.groups.manageMembers'), `manage-members-${props.group.id}`, () => openPeople(props.group, 'members')),
         actionButton('eye', t('userGroups.groups.manageViewers'), `manage-viewers-${props.group.id}`, () => openPeople(props.group, 'viewers')),
+        actionButton('shield', t('userGroups.promptSettings.open'), `manage-prompt-${props.group.id}`, () => openPromptSettings(props.group), false, Boolean(props.group.prompt_capture_enabled)),
         actionButton('edit', t('common.edit'), 'edit-group', () => openEdit(props.group)),
         actionButton('trash', t('userGroups.groups.archive'), 'archive-group', () => requestArchive(props.group), true),
       ] : []),
@@ -196,13 +211,13 @@ const GroupActions = defineComponent({
   },
 })
 
-function actionButton(icon: 'users' | 'eye' | 'edit' | 'trash', label: string, dataTest: string, action: () => void, danger = false) {
+function actionButton(icon: 'users' | 'eye' | 'shield' | 'edit' | 'trash', label: string, dataTest: string, action: () => void, danger = false, active = false) {
   return h('button', {
     type: 'button',
     title: label,
     'aria-label': label,
     'data-test': dataTest,
-    class: ['btn btn-ghost btn-sm !px-2', danger ? 'text-red-600 dark:text-red-400' : ''],
+    class: ['btn btn-ghost btn-sm !px-2', danger ? 'text-red-600 dark:text-red-400' : '', active ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : ''],
     onClick: action,
   }, [h(Icon, { name: icon, size: 'sm' })])
 }
@@ -296,6 +311,35 @@ async function savePeople(userIds: number[]) {
     appStore.showError(errorMessage(error))
   } finally {
     savingPeople.value = false
+  }
+}
+
+async function openPromptSettings(group: UserGroup) {
+  promptSettingsTarget.value = group
+  try {
+    promptViewers.value = await userGroupAPI.getPromptViewers(group.id)
+    promptSettingsOpen.value = true
+  } catch (error) {
+    promptViewers.value = []
+    appStore.showError(errorMessage(error))
+  }
+}
+
+async function savePromptSettings(payload: { enabled: boolean; userIds: number[] }) {
+  if (!promptSettingsTarget.value) return
+  savingPromptSettings.value = true
+  try {
+    await Promise.all([
+      userGroupAPI.setPromptCapture(promptSettingsTarget.value.id, payload.enabled),
+      userGroupAPI.replacePromptViewers(promptSettingsTarget.value.id, payload.userIds),
+    ])
+    promptSettingsOpen.value = false
+    appStore.showSuccess(t('userGroups.promptSettings.saveSuccess'))
+    await loadGroups()
+  } catch (error) {
+    appStore.showError(errorMessage(error))
+  } finally {
+    savingPromptSettings.value = false
   }
 }
 

@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   getViewers: vi.fn(),
   replaceMembers: vi.fn(),
   replaceViewers: vi.fn(),
+  getPromptViewers: vi.fn(),
+  setPromptCapture: vi.fn(),
+  replacePromptViewers: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
   route: { name: 'UserGroups', query: {} as Record<string, string> },
@@ -56,6 +59,9 @@ vi.mock('@/api/userGroups', () => ({
     getViewers: mocks.getViewers,
     replaceMembers: mocks.replaceMembers,
     replaceViewers: mocks.replaceViewers,
+    getPromptViewers: mocks.getPromptViewers,
+    setPromptCapture: mocks.setPromptCapture,
+    replacePromptViewers: mocks.replacePromptViewers,
   },
 }))
 
@@ -66,6 +72,8 @@ const group = {
   status: 'active' as const,
   member_count: 1,
   viewer_count: 2,
+  prompt_capture_enabled: false,
+  can_view_prompt: false,
   created_at: '2026-08-01T00:00:00Z',
   updated_at: '2026-08-02T00:00:00Z',
 }
@@ -108,9 +116,12 @@ describe('UserGroupsView', () => {
     mocks.list.mockResolvedValue([group])
     mocks.getMembers.mockResolvedValue([member])
     mocks.getViewers.mockResolvedValue([])
+    mocks.getPromptViewers.mockResolvedValue([])
     mocks.create.mockResolvedValue(group)
     mocks.update.mockResolvedValue(group)
     mocks.archive.mockResolvedValue(undefined)
+    mocks.setPromptCapture.mockResolvedValue(undefined)
+    mocks.replacePromptViewers.mockResolvedValue(undefined)
   })
 
   it('renders granted groups as a full-width read-only directory with report links', async () => {
@@ -168,6 +179,32 @@ describe('UserGroupsView', () => {
     await wrapper.get('[data-test="confirm-archive"]').trigger('click')
     await flushPromises()
     expect(mocks.archive).toHaveBeenCalledWith(7)
+  })
+
+  it('shows prompt security settings only to administrators and saves independent viewers', async () => {
+    const ordinary = mountView()
+    await flushPromises()
+    expect(ordinary.find('[data-test="manage-prompt-7"]').exists()).toBe(false)
+    ordinary.unmount()
+
+    mocks.canManage = true
+    mocks.getPromptViewers.mockResolvedValue([{ ...member, granted_at: member.joined_at }])
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-test="manage-prompt-7"]').trigger('click')
+    await flushPromises()
+    expect(mocks.getPromptViewers).toHaveBeenCalledWith(7)
+    expect(wrapper.get('[data-test="prompt-capture-toggle"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('userGroups.promptSettings.retention')
+
+    await wrapper.get('[data-test="prompt-capture-toggle"]').trigger('click')
+    await wrapper.get('[data-test="save-prompt-settings"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.setPromptCapture).toHaveBeenCalledWith(7, true)
+    expect(mocks.replacePromptViewers).toHaveBeenCalledWith(7, [11])
+    expect(mocks.replaceViewers).not.toHaveBeenCalled()
   })
 
   it('shows a focused error and retry action when groups cannot load', async () => {

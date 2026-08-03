@@ -11,6 +11,8 @@ export interface UserGroup {
   status: 'active' | 'archived'
   member_count: number
   viewer_count: number
+  prompt_capture_enabled?: boolean
+  can_view_prompt: boolean
   created_by?: number | null
   created_at: string
   updated_at: string
@@ -109,6 +111,20 @@ export interface UserGroupUsageItem {
   actual_cost: number
   billing_type: 0 | 1
   created_at: string
+  prompt_available?: boolean
+}
+
+export interface UserGroupPromptDetail {
+  id: number
+  request_id: string
+  protocol: string
+  model: string
+  stage: string
+  redacted_prompt: string
+  prompt_length: number
+  truncated: boolean
+  captured_at: string
+  expires_at: string
 }
 
 export interface UserGroupUsageResult {

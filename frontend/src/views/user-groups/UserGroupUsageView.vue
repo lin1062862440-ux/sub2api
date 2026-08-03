@@ -143,17 +143,18 @@
               <div v-if="loadingData" class="px-5 py-12 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('common.loading') }}</div>
               <div v-else-if="result.items.length === 0" class="px-5 py-12 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.noUsage') }}</div>
               <template v-else>
-                <div class="hidden grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_110px_110px_150px] gap-4 bg-gray-50 px-5 py-3 text-xs font-medium uppercase text-gray-500 dark:bg-dark-800 dark:text-gray-400 xl:grid">
+                <div class="hidden grid-cols-[minmax(150px,1fr)_minmax(150px,1fr)_100px_100px_140px_44px] gap-4 bg-gray-50 px-5 py-3 text-xs font-medium uppercase text-gray-500 dark:bg-dark-800 dark:text-gray-400 xl:grid">
                   <span>{{ t('userGroups.usage.member') }}</span>
                   <span>{{ t('userGroups.usage.modelName') }}</span>
                   <span class="text-right">{{ t('userGroups.usage.tokens') }}</span>
                   <span class="text-right">{{ t('userGroups.usage.cost') }}</span>
                   <span class="text-right">{{ t('userGroups.usage.time') }}</span>
+                  <span class="sr-only">{{ t('userGroups.usage.viewPrompt') }}</span>
                 </div>
                 <article
                   v-for="item in result.items"
                   :key="item.id"
-                  class="grid gap-3 border-t border-gray-100 px-5 py-4 first:border-t-0 dark:border-dark-700 xl:grid-cols-[minmax(160px,1fr)_minmax(160px,1fr)_110px_110px_150px] xl:items-center xl:gap-4"
+                  class="grid gap-3 border-t border-gray-100 px-5 py-4 first:border-t-0 dark:border-dark-700 xl:grid-cols-[minmax(150px,1fr)_minmax(150px,1fr)_100px_100px_140px_44px] xl:items-center xl:gap-4"
                 >
                   <div class="min-w-0">
                     <p class="truncate text-sm font-medium text-gray-950 dark:text-white">{{ item.username || item.email }}</p>
@@ -168,6 +169,19 @@
                   <MetricPair :label="t('userGroups.usage.tokens')" :value="formatNumber(item.total_tokens)" />
                   <MetricPair :label="t('userGroups.usage.cost')" :value="formatCurrency(item.actual_cost)" />
                   <MetricPair :label="t('userGroups.usage.time')" :value="formatDateTime(item.created_at)" />
+                  <div class="flex justify-end">
+                    <button
+                      v-if="selectedGroup?.can_view_prompt && item.prompt_available"
+                      :data-test="`prompt-details-${item.id}`"
+                      type="button"
+                      class="btn btn-ghost btn-sm !px-2 text-primary-700 dark:text-primary-300"
+                      :title="t('userGroups.usage.viewPrompt')"
+                      :aria-label="t('userGroups.usage.viewPrompt')"
+                      @click="openPromptDetails(item.id)"
+                    >
+                      <Icon name="eye" size="sm" />
+                    </button>
+                  </div>
                 </article>
               </template>
               <Pagination
@@ -185,6 +199,15 @@
         <div v-else-if="loadingData" class="px-5 py-16 text-center text-sm text-gray-500 dark:text-gray-400">{{ t('common.loading') }}</div>
       </template>
     </UserGroupWorkspaceShell>
+    <UserGroupPromptDetailDialog
+      :show="promptDialogOpen"
+      :prompts="promptDetails"
+      :loading="loadingPromptDetails"
+      :error="promptDetailError"
+      :forbidden="promptDetailForbidden"
+      @close="promptDialogOpen = false"
+      @retry="retryPromptDetails"
+    />
   </AppLayout>
 </template>
 
@@ -197,10 +220,11 @@ import Icon from '@/components/icons/Icon.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import { userGroupAPI } from '@/api/userGroups'
 import { useAuthStore } from '@/stores/auth'
-import type { UserGroup, UserGroupMember, UserGroupUsageParams, UserGroupUsageResult } from '@/types/userGroups'
+import type { UserGroup, UserGroupMember, UserGroupPromptDetail, UserGroupUsageParams, UserGroupUsageResult } from '@/types/userGroups'
 import GroupContextRail from './components/GroupContextRail.vue'
 import GroupUsageSummary from './components/GroupUsageSummary.vue'
 import UserGroupWorkspaceShell from './components/UserGroupWorkspaceShell.vue'
+import UserGroupPromptDetailDialog from './components/UserGroupPromptDetailDialog.vue'
 
 const MetricPair = defineComponent({
   props: { label: { type: String, required: true }, value: { type: String, required: true } },
@@ -225,6 +249,13 @@ const groupsError = ref('')
 const loadingData = ref(false)
 const dataError = ref('')
 const result = ref<UserGroupUsageResult | null>(null)
+const selectedGroup = computed(() => groups.value.find(group => group.id === selectedGroupId.value) ?? null)
+const promptDialogOpen = ref(false)
+const promptDetails = ref<UserGroupPromptDetail[]>([])
+const loadingPromptDetails = ref(false)
+const promptDetailError = ref('')
+const promptDetailForbidden = ref(false)
+const promptTargetUsageId = ref<number | null>(null)
 
 const endDate = ref(formatLocalDate(new Date()))
 const startDate = ref(formatLocalDate(addDays(new Date(), -6)))
@@ -347,11 +378,36 @@ async function loadUsage() {
 }
 
 async function handleGroupChange(groupId: number) {
+  promptDialogOpen.value = false
   selectedGroupId.value = groupId
   memberFilter.value = ''
   page.value = 1
   await syncGroupQuery(groupId)
   await loadGroupData()
+}
+
+async function openPromptDetails(usageLogId: number) {
+  if (!selectedGroupId.value) return
+  promptTargetUsageId.value = usageLogId
+  promptDialogOpen.value = true
+  promptDetails.value = []
+  promptDetailError.value = ''
+  promptDetailForbidden.value = false
+  loadingPromptDetails.value = true
+  try {
+    promptDetails.value = await userGroupAPI.getUsagePrompts(selectedGroupId.value, usageLogId)
+  } catch (error) {
+    const status = (error as { status?: number; response?: { status?: number } })?.status
+      ?? (error as { response?: { status?: number } })?.response?.status
+    if (status === 403) promptDetailForbidden.value = true
+    else promptDetailError.value = errorMessage(error)
+  } finally {
+    loadingPromptDetails.value = false
+  }
+}
+
+function retryPromptDetails() {
+  if (promptTargetUsageId.value) void openPromptDetails(promptTargetUsageId.value)
 }
 
 function applyFilters() {

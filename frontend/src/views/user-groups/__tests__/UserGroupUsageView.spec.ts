@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   list: vi.fn(),
   getMembers: vi.fn(),
   getUsage: vi.fn(),
+  getUsagePrompts: vi.fn(),
   route: { name: 'UserGroupUsage', query: { group_id: '7' } as Record<string, string> },
   replace: vi.fn(),
 }))
@@ -22,7 +23,7 @@ vi.mock('vue-i18n', () => ({
 }))
 
 vi.mock('@/api/userGroups', () => ({
-  userGroupAPI: { list: mocks.list, getMembers: mocks.getMembers, getUsage: mocks.getUsage },
+  userGroupAPI: { list: mocks.list, getMembers: mocks.getMembers, getUsage: mocks.getUsage, getUsagePrompts: mocks.getUsagePrompts },
 }))
 
 vi.mock('@/stores/auth', () => ({
@@ -30,8 +31,8 @@ vi.mock('@/stores/auth', () => ({
 }))
 
 const groups = [
-  { id: 7, name: '研发一组', description: '', status: 'active', member_count: 2, viewer_count: 1, created_at: '', updated_at: '' },
-  { id: 8, name: '运营组', description: '', status: 'active', member_count: 1, viewer_count: 0, created_at: '', updated_at: '' },
+  { id: 7, name: '研发一组', description: '', status: 'active', member_count: 2, viewer_count: 1, can_view_prompt: true, created_at: '', updated_at: '' },
+  { id: 8, name: '运营组', description: '', status: 'active', member_count: 1, viewer_count: 0, can_view_prompt: false, created_at: '', updated_at: '' },
 ]
 const members = [
   { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', balance: 30, joined_at: '' },
@@ -52,7 +53,7 @@ const usageResult = {
     { user_id: 11, email: 'alice@example.com', username: 'Alice', total_requests: 8, total_tokens: 1750, total_actual_cost: 13.25, balance_consumption: 3.25, subscription_consumption: 10 },
   ],
   items: [
-    { id: 1, user_id: 11, email: 'alice@example.com', username: 'Alice', request_id: 'req-safe-1', model: 'claude-sonnet-4', input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 100, cache_read_tokens: 150, total_tokens: 1750, actual_cost: 13.25, billing_type: 1, created_at: '2026-08-02T08:00:00Z' },
+    { id: 1, user_id: 11, email: 'alice@example.com', username: 'Alice', request_id: 'req-safe-1', model: 'claude-sonnet-4', input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 100, cache_read_tokens: 150, total_tokens: 1750, actual_cost: 13.25, billing_type: 1, prompt_available: true, created_at: '2026-08-02T08:00:00Z' },
   ],
   total: 1,
   page: 1,
@@ -66,6 +67,7 @@ function mountView() {
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
         Icon: { template: '<i />' },
+        Teleport: true,
         RouterLink: {
           props: ['to'],
           template: '<a><slot /></a>',
@@ -89,6 +91,18 @@ describe('UserGroupUsageView', () => {
     mocks.list.mockResolvedValue(groups)
     mocks.getMembers.mockResolvedValue(members)
     mocks.getUsage.mockResolvedValue(usageResult)
+    mocks.getUsagePrompts.mockResolvedValue([{
+      id: 91,
+      request_id: 'req-safe-1',
+      protocol: 'anthropic_messages',
+      model: 'claude-sonnet-4',
+      stage: 'http',
+      redacted_prompt: 'Please review [REDACTED_EMAIL]',
+      prompt_length: 30,
+      truncated: true,
+      captured_at: '2026-08-02T08:00:00Z',
+      expires_at: '2026-08-16T08:00:00Z',
+    }])
   })
 
   afterEach(() => vi.useRealTimers())
@@ -144,6 +158,28 @@ describe('UserGroupUsageView', () => {
     expect(wrapper.text()).toContain('claude-sonnet-4')
     expect(wrapper.text()).toContain('req-safe-1')
     expect(mocks.getUsage).toHaveBeenCalledTimes(requestCount)
+  })
+
+  it('shows and loads prompt details only for authorized available rows', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-test="usage-view-details"]').trigger('click')
+
+    await wrapper.get('[data-test="prompt-details-1"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.getUsagePrompts).toHaveBeenCalledWith(7, 1)
+    expect(wrapper.text()).toContain('Please review [REDACTED_EMAIL]')
+    expect(wrapper.text()).toContain('userGroups.usage.promptTruncated')
+  })
+
+  it('hides prompt controls when permission or capture availability is absent', async () => {
+    mocks.list.mockResolvedValue([{ ...groups[0], can_view_prompt: false }])
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-test="usage-view-details"]').trigger('click')
+
+    expect(wrapper.find('[data-test="prompt-details-1"]').exists()).toBe(false)
   })
 
   it('uses the route group and updates the query when the group changes', async () => {

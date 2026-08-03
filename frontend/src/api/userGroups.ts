@@ -4,6 +4,7 @@ import type {
   UserGroupCapabilities,
   UserGroupMember,
   UserGroupMutation,
+  UserGroupPromptDetail,
   UserGroupSubscriptionParams,
   UserGroupSubscriptionResult,
   UserGroupUsageParams,
@@ -54,6 +55,19 @@ export const userGroupAPI = {
     await apiClient.put(`/user-groups/${groupId}/viewers`, { user_ids: userIds })
   },
 
+  async setPromptCapture(groupId: number, enabled: boolean): Promise<void> {
+    await apiClient.put(`/user-groups/${groupId}/prompt-capture`, { enabled })
+  },
+
+  async getPromptViewers(groupId: number): Promise<UserGroupViewer[]> {
+    const { data } = await apiClient.get<UserGroupViewer[]>(`/user-groups/${groupId}/prompt-viewers`)
+    return data
+  },
+
+  async replacePromptViewers(groupId: number, userIds: number[]): Promise<void> {
+    await apiClient.put(`/user-groups/${groupId}/prompt-viewers`, { user_ids: userIds })
+  },
+
   async getSubscriptions(groupId: number, params: UserGroupSubscriptionParams = {}): Promise<UserGroupSubscriptionResult> {
     const { data } = await apiClient.get<UserGroupSubscriptionResult>(`/user-groups/${groupId}/subscriptions`, { params })
     return data
@@ -61,6 +75,11 @@ export const userGroupAPI = {
 
   async getUsage(groupId: number, params: UserGroupUsageParams = {}): Promise<UserGroupUsageResult> {
     const { data } = await apiClient.get<UserGroupUsageResult>(`/user-groups/${groupId}/usage`, { params })
+    return data
+  },
+
+  async getUsagePrompts(groupId: number, usageLogId: number): Promise<UserGroupPromptDetail[]> {
+    const { data } = await apiClient.get<UserGroupPromptDetail[]>(`/user-groups/${groupId}/usage/${usageLogId}/prompts`)
     return data
   },
 }

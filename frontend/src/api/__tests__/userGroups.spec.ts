@@ -41,6 +41,27 @@ describe('user group API', () => {
     expect(put).toHaveBeenNthCalledWith(2, '/user-groups/5/viewers', { user_ids: [12] })
   })
 
+  it('uses independent prompt capture and viewer endpoints', async () => {
+    put.mockResolvedValue({ data: { message: 'ok' } })
+    get.mockResolvedValueOnce({ data: [{ user_id: 12 }] })
+
+    await userGroupAPI.setPromptCapture(5, true)
+    await expect(userGroupAPI.getPromptViewers(5)).resolves.toEqual([{ user_id: 12 }])
+    await userGroupAPI.replacePromptViewers(5, [12, 18])
+
+    expect(put).toHaveBeenNthCalledWith(1, '/user-groups/5/prompt-capture', { enabled: true })
+    expect(get).toHaveBeenCalledWith('/user-groups/5/prompt-viewers')
+    expect(put).toHaveBeenNthCalledWith(2, '/user-groups/5/prompt-viewers', { user_ids: [12, 18] })
+  })
+
+  it('loads prompts for one scoped usage record', async () => {
+    get.mockResolvedValueOnce({ data: [{ id: 91, redacted_prompt: 'safe' }] })
+
+    await expect(userGroupAPI.getUsagePrompts(7, 42)).resolves.toEqual([{ id: 91, redacted_prompt: 'safe' }])
+
+    expect(get).toHaveBeenCalledWith('/user-groups/7/usage/42/prompts')
+  })
+
   it('serializes subscription and usage filters', async () => {
     get.mockResolvedValue({ data: { items: [] } })
 
