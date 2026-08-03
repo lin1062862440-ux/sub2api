@@ -1,3 +1,5 @@
+import fs from 'node:fs'
+import path from 'node:path'
 import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -6,6 +8,15 @@ import MobileBottomSheet from './MobileBottomSheet.vue'
 import mobileBottomSheetSource from './MobileBottomSheet.vue?raw'
 import MobilePage from './MobilePage.vue'
 import MobilePagination from './MobilePagination.vue'
+
+const mobileStyles = fs.readFileSync(path.resolve(process.cwd(), 'src/mobile/mobile.css'), 'utf8')
+
+describe('mobile form contrast', () => {
+  it('uses an explicit mobile-only placeholder color with AA margin', () => {
+    expect(mobileStyles).toMatch(/html\[data-mobile='true'\][^{}]*::placeholder\s*\{[^}]*color:\s*#5e6877;/s)
+    expect(mobileStyles).toMatch(/html\[data-mobile='true'\][^{}]*::placeholder\s*\{[^}]*opacity:\s*1;/s)
+  })
+})
 
 const wrappers: Array<{ unmount: () => void }> = []
 

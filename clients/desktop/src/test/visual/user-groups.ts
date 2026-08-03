@@ -1,10 +1,10 @@
+import { previewRouteFlag } from './preview-query'
+
 const now = '2026-08-02T08:00:00Z'
 const visualQuery = new URLSearchParams(window.location.search)
 
 function previewFlag(name: 'empty' | 'error') {
-  return visualQuery.getAll(name).some((value) =>
-    value.split(',').some((entry) => ['1', 'true', 'all', 'user-groups'].includes(entry.trim())),
-  )
+  return previewRouteFlag(visualQuery, name, 'user-groups')
 }
 
 let groups = [

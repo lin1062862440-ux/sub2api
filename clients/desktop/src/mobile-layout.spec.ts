@@ -54,8 +54,12 @@ describe('Android mobile layout contract', () => {
   })
 
   it('keeps fixed chrome clearance in the shell and local padding in the neutral page primitive', () => {
-    expect(mobileAppLayout).toContain('padding-top: calc(56px + env(safe-area-inset-top))')
-    expect(mobileAppLayout).toContain('padding-bottom: calc(64px + env(safe-area-inset-bottom))')
+    expect(mobileAppLayout).toContain('.mobile-content {\n  position: fixed')
+    expect(mobileAppLayout).toContain('top: calc(56px + env(safe-area-inset-top))')
+    expect(mobileAppLayout).toContain('bottom: calc(64px + env(safe-area-inset-bottom))')
+    expect(mobileAppLayout).toContain('scroll-padding-block: 12px')
+    expect(mobileAppLayout).not.toContain('padding-top: calc(56px + env(safe-area-inset-top))')
+    expect(mobileAppLayout).not.toContain('padding-bottom: calc(64px + env(safe-area-inset-bottom))')
     expect(mobilePage).not.toContain('<main')
     expect(mobilePage).toContain('<div class="mobile-page-scroll">')
     expect(mobilePage).toContain('padding: 16px var(--mobile-gutter, 16px)')

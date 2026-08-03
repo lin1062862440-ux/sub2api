@@ -33,6 +33,7 @@ vi.mock('@/stores/session', async () => {
 
 import { ADMIN_WORKSPACE_STORAGE_KEY } from '@/lib/admin-workspace'
 import MobileAppLayout from './MobileAppLayout.vue'
+import mobileAppLayoutSource from './MobileAppLayout.vue?raw'
 
 const RouteView = defineComponent({ template: '<div data-testid="route-view" />' })
 const routes = [
@@ -206,7 +207,7 @@ describe('MobileAppLayout', () => {
     expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
   })
 
-  it('closes the account disclosure outside and restores avatar focus on Escape', async () => {
+  it('closes the account disclosure on blank space and restores avatar focus', async () => {
     const { wrapper } = await mountLayout('/dashboard')
     const trigger = wrapper.get<HTMLButtonElement>('[data-testid="mobile-account-trigger"]')
 
@@ -214,6 +215,27 @@ describe('MobileAppLayout', () => {
     document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     await nextTick()
     expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger.element)
+  })
+
+  it('allows an outside focusable pointer target to receive focus when account closes', async () => {
+    const { wrapper } = await mountLayout('/dashboard')
+    const outside = document.createElement('button')
+    outside.type = 'button'
+    document.body.appendChild(outside)
+
+    await wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    outside.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    outside.focus()
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(outside)
+  })
+
+  it('restores avatar focus when Escape closes the account disclosure', async () => {
+    const { wrapper } = await mountLayout('/dashboard')
+    const trigger = wrapper.get<HTMLButtonElement>('[data-testid="mobile-account-trigger"]')
 
     await trigger.trigger('click')
     wrapper.get<HTMLButtonElement>('[data-testid="password-menu-item"]').element.focus()
@@ -401,16 +423,25 @@ describe('MobileAppLayout', () => {
   })
 
   it('removes account and layer listeners after unmount', async () => {
+    const addDocument = vi.spyOn(document, 'addEventListener')
     const removeDocument = vi.spyOn(document, 'removeEventListener')
     const removeWindow = vi.spyOn(window, 'removeEventListener')
     const { wrapper } = await mountLayout('/dashboard')
 
     wrapper.unmount()
 
+    expect(addDocument.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1)
     expect(removeDocument).toHaveBeenCalledWith('keydown', expect.any(Function))
     expect(removeDocument).toHaveBeenCalledWith('pointerdown', expect.any(Function))
     expect(removeWindow).toHaveBeenCalledWith('popstate', expect.any(Function))
     expect(mocks.adminDeniedListener).toBeNull()
+  })
+
+  it('keeps the scrolling content viewport between the fixed mobile bars', () => {
+    expect(mobileAppLayoutSource).toMatch(/\.mobile-content\s*\{[^}]*position:\s*fixed;/s)
+    expect(mobileAppLayoutSource).toMatch(/\.mobile-content\s*\{[^}]*top:\s*calc\(56px \+ env\(safe-area-inset-top\)\);/s)
+    expect(mobileAppLayoutSource).toMatch(/\.mobile-content\s*\{[^}]*bottom:\s*calc\(64px \+ env\(safe-area-inset-bottom\)\);/s)
+    expect(mobileAppLayoutSource).toMatch(/\.mobile-content\s*\{[^}]*scroll-padding-block:\s*12px;/s)
   })
 
   it('returns to personal navigation when administrator access is denied or role is lost', async () => {

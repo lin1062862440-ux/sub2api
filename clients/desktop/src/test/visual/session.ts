@@ -4,13 +4,9 @@ import type { User } from '@/api/types'
 const visualQuery = new URLSearchParams(window.location.search)
 const showLogin = visualQuery.get('screen') === 'login'
 const requestedRole = visualQuery.get('role')
-const visualRole = requestedRole === 'user' ? 'user' : 'admin'
+const visualRole = requestedRole === 'admin' ? 'admin' : 'user'
 const requestedWorkspace = visualQuery.get('workspace')
-const visualWorkspace = visualRole === 'admin' && requestedWorkspace === 'personal'
-  ? 'personal'
-  : visualRole === 'admin'
-    ? 'admin'
-    : 'personal'
+const visualWorkspace = visualRole === 'admin' && requestedWorkspace === 'admin' ? 'admin' : 'personal'
 
 // This module is loaded while the router is created, before bootstrap runs.
 // Persisting here makes the first route guard and shell render deterministic.

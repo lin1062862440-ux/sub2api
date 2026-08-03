@@ -35,6 +35,7 @@ vi.mock('@/api/admin/users', () => ({ listAdminUsers: mocks.users }))
 vi.mock('@/stores/session', () => ({ session: mocks.session, refreshUser: mocks.refreshUser }))
 
 import MobileUserGroupsView from './MobileUserGroupsView.vue'
+import mobileUserGroupsSource from './MobileUserGroupsView.vue?raw'
 
 function group(overrides: Partial<UserGroup> = {}): UserGroup {
   return {
@@ -148,6 +149,12 @@ describe('MobileUserGroupsView', () => {
     expect(wrapper.text()).not.toContain('Infinity')
     expect(wrapper.text()).not.toContain('订阅')
     expect(wrapper.text()).not.toContain('用量')
+  })
+
+  it('renders member counts as a compact unframed summary', () => {
+    expect(mobileUserGroupsSource).toContain('class="group-summary"')
+    expect(mobileUserGroupsSource).not.toMatch(/<dl>[\s\S]*?<\/dl>/)
+    expect(mobileUserGroupsSource).toMatch(/\.group-summary\{[^}]*border:\s*0/)
   })
 
   it('normalizes list records to unique positive IDs and canonical statuses', async () => {

@@ -139,6 +139,13 @@ describe('MobileAdminUsersView', () => {
     expect(mobileAdminUsersSource).toMatch(/\.list-state button\{[^}]*min-height:44px/)
   })
 
+  it('keeps core user facts in compact unframed summary rows', () => {
+    expect(mobileAdminUsersSource).toContain('class="identity-meta"')
+    expect(mobileAdminUsersSource).toContain('class="user-summary"')
+    expect(mobileAdminUsersSource).not.toContain('<p class="last-active">')
+    expect(mobileAdminUsersSource).toMatch(/\.user-summary\{[^}]*border:\s*0/)
+  })
+
   it('renders safe mobile user cards and requests the exact fixed page contract', async () => {
     const unsafe = adminUser({
       id: 10,

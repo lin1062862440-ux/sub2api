@@ -1,11 +1,25 @@
+import { previewInteger, previewIntegerSet, previewRouteFlag } from './preview-query'
+
 const now = '2026-08-02T08:00:00Z'
 const visualQuery = new URLSearchParams(window.location.search)
 const longChineseLabel = '跨区域模型推理与超长上下文联合调度'
+const progressDelay = previewInteger(visualQuery, 'progress_delay', 2_000)
+const progressFailures = previewIntegerSet(visualQuery, 'progress_error')
+
+export const visualProgressTelemetry = {
+  calls: [] as number[],
+  completed: [] as number[],
+  failed: [] as number[],
+  active: 0,
+  peakActive: 0,
+}
+
+;(globalThis as typeof globalThis & {
+  __linaiVisualProgressTelemetry?: typeof visualProgressTelemetry
+}).__linaiVisualProgressTelemetry = visualProgressTelemetry
 
 function previewFlag(name: 'empty' | 'error', route: string) {
-  return visualQuery.getAll(name).some((value) =>
-    value.split(',').some((entry) => ['1', 'true', 'all', route].includes(entry.trim())),
-  )
+  return previewRouteFlag(visualQuery, name, route)
 }
 
 function assertPreviewRoute(route: string) {
@@ -337,14 +351,30 @@ export async function listAdminSubscriptions(params: { page?: number; page_size?
   return pageRows(previewFlag('empty', 'admin-subscriptions') ? [] : subscriptions, params)
 }
 export async function getAdminSubscriptionProgress(id = 3) {
-  return {
-    id,
-    group_name: id === 3 ? longChineseLabel : `Claude Code ${id - 2}`,
-    daily: { used_usd: 32.05, limit_usd: 400, remaining_usd: 367.95, percentage: 8.009257707, window_start: '2026-08-02T00:00:00Z', resets_at: '2026-08-03T00:00:00Z', resets_in_seconds: 21_600 },
-    weekly: { used_usd: 113.24, limit_usd: 500, remaining_usd: 386.76, percentage: 22.6459541288, window_start: '2026-07-27T00:00:00Z', resets_at: '2026-08-03T00:00:00Z', resets_in_seconds: 360_000 },
-    monthly: { used_usd: 180.12, limit_usd: 800, remaining_usd: 619.88, percentage: 22.515, window_start: '2026-08-01T00:00:00Z', resets_at: '2026-09-01T00:00:00Z', resets_in_seconds: 2_419_200 },
-    expires_at: '2026-09-01T00:00:00Z',
-    expires_in_days: 30,
+  visualProgressTelemetry.calls.push(id)
+  visualProgressTelemetry.active += 1
+  visualProgressTelemetry.peakActive = Math.max(
+    visualProgressTelemetry.peakActive,
+    visualProgressTelemetry.active,
+  )
+  try {
+    if (progressDelay) await new Promise((resolve) => window.setTimeout(resolve, progressDelay))
+    if (progressFailures.has(id)) {
+      visualProgressTelemetry.failed.push(id)
+      throw new Error('visual preview progress error')
+    }
+    visualProgressTelemetry.completed.push(id)
+    return {
+      id,
+      group_name: id === 3 ? longChineseLabel : `Claude Code ${id - 2}`,
+      daily: { used_usd: 32.05, limit_usd: 400, remaining_usd: 367.95, percentage: 8.009257707, window_start: '2026-08-02T00:00:00Z', resets_at: '2026-08-03T00:00:00Z', resets_in_seconds: 21_600 },
+      weekly: { used_usd: 113.24, limit_usd: 500, remaining_usd: 386.76, percentage: 22.6459541288, window_start: '2026-07-27T00:00:00Z', resets_at: '2026-08-03T00:00:00Z', resets_in_seconds: 360_000 },
+      monthly: { used_usd: 180.12, limit_usd: 800, remaining_usd: 619.88, percentage: 22.515, window_start: '2026-08-01T00:00:00Z', resets_at: '2026-09-01T00:00:00Z', resets_in_seconds: 2_419_200 },
+      expires_at: '2026-09-01T00:00:00Z',
+      expires_in_days: 30,
+    }
+  } finally {
+    visualProgressTelemetry.active -= 1
   }
 }
 export async function assignAdminSubscription() { return subscription }

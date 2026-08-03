@@ -1,18 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import path from 'node:path'
+import { resolveConfig } from 'vite'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { workspaceDestination } from '@/lib/admin-workspace'
 import { isMobileRouteAllowed } from '@/mobile/navigation'
-
-const visualSources = import.meta.glob(
-  [
-    '../test/visual/session.ts',
-    '../test/visual/api.ts',
-    '../test/visual/admin-api.ts',
-    '../test/visual/user-groups.ts',
-    '../../vite.config.ts',
-  ],
-  { eager: true, query: '?raw', import: 'default' },
-) as Record<string, string>
 
 function setSearch(search = '') {
   window.history.replaceState({}, '', `/${search ? `?${search}` : ''}`)
@@ -43,6 +34,11 @@ describe('visual preview contract', () => {
     vi.resetModules()
   })
 
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllEnvs()
+  })
+
   it('sets the requested visual role and workspace before bootstrap', async () => {
     const admin = await loadVisualSession('platform=android&role=admin&workspace=personal')
 
@@ -55,13 +51,65 @@ describe('visual preview contract', () => {
     expect(localStorage.getItem('linai.desktop.workspace')).toBe('personal')
   })
 
-  it('keeps preview aliases restricted to visual mode', () => {
-    const configSource = visualSources['../../vite.config.ts']
+  it('resolves complete visual aliases while production keeps real modules', async () => {
+    vi.stubEnv('LINAI_VISUAL_PREVIEW', '')
+    const configFile = path.resolve(process.cwd(), 'vite.config.ts')
+    const production = await resolveConfig({ configFile, mode: 'production' }, 'serve')
+    const visual = await resolveConfig({ configFile, mode: 'visual' }, 'serve')
+    const productionAliases = production.resolve.alias
+    const visualAliases = visual.resolve.alias
+    const visualReplacements = visualAliases
+      .map((alias) => alias.replacement)
+      .filter((replacement) => replacement.includes('/src/test/visual/'))
 
-    expect(configSource).toContain("mode === 'visual'")
-    expect(configSource).toContain("find: /^@\\/stores\\/session$/")
-    expect(configSource).toContain("find: /^@\\/api$/")
-    expect(configSource).toContain('new RegExp(`^@/api/admin/${module}$`)')
+    expect(productionAliases.some((alias) => alias.replacement.includes('/src/test/visual/'))).toBe(false)
+    expect(visualReplacements).toHaveLength(16)
+    expect(visualReplacements.some((replacement) => replacement.endsWith('/api.ts'))).toBe(true)
+    expect(visualReplacements.some((replacement) => replacement.endsWith('/session.ts'))).toBe(true)
+    expect(visualReplacements.some((replacement) => replacement.endsWith('/platform.ts'))).toBe(true)
+    expect(visualReplacements.filter((replacement) => replacement.endsWith('/admin-api.ts'))).toHaveLength(10)
+  })
+
+  it('degrades invalid role and workspace combinations to user personal', async () => {
+    for (const search of [
+      'platform=android&role=owner&workspace=admin',
+      'platform=android&role=&workspace=admin',
+      'platform=android&workspace=admin',
+      'platform=beos&role=user&workspace=ops',
+    ]) {
+      const visual = await loadVisualSession(search)
+      expect(visual.session.user?.role).toBe('user')
+      expect(localStorage.getItem('linai.desktop.workspace')).toBe('personal')
+    }
+
+    const invalidAdminWorkspace = await loadVisualSession('platform=android&role=admin&workspace=ops')
+    expect(invalidAdminWorkspace.session.user?.role).toBe('admin')
+    expect(localStorage.getItem('linai.desktop.workspace')).toBe('personal')
+  })
+
+  it('parses boolean preview flags explicitly, including slow=false', async () => {
+    expect((await (await loadVisualApi('empty=')).getUsageRecords()).items).toEqual([])
+    expect((await (await loadVisualApi('empty=1')).getUsageRecords()).items).toEqual([])
+    expect((await (await loadVisualApi('empty=false')).getUsageRecords()).items.length).toBeGreaterThan(0)
+
+    vi.useFakeTimers()
+    const notSlow = await loadVisualApi('slow=false')
+    const request = notSlow.getDashboardStats()
+    expect(vi.getTimerCount()).toBe(0)
+    await request
+    vi.useRealTimers()
+  })
+
+  it('offers controlled progress delay, selected failures, and redacted call telemetry', async () => {
+    const adminApi = await loadVisualAdminApi('progress_delay=5&progress_error=4')
+
+    await expect(adminApi.getAdminSubscriptionProgress(3)).resolves.toMatchObject({ id: 3 })
+    await expect(adminApi.getAdminSubscriptionProgress(4)).rejects.toThrow('visual preview progress error')
+    expect(adminApi.visualProgressTelemetry.calls).toEqual([3, 4])
+    expect(adminApi.visualProgressTelemetry.completed).toEqual([3])
+    expect(adminApi.visualProgressTelemetry.failed).toEqual([4])
+    expect(adminApi.visualProgressTelemetry.peakActive).toBe(1)
+    expect(JSON.stringify(adminApi.visualProgressTelemetry)).not.toContain('token')
   })
 
   it('provides data for every retained mobile route', async () => {

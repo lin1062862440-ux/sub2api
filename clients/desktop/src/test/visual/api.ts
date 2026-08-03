@@ -5,15 +5,14 @@ import type {
   UpdateApiKeyRequest,
   User,
 } from '@/api/types'
+import { previewBoolean, previewRouteFlag } from './preview-query'
 
 const today = new Date()
 const visualQuery = new URLSearchParams(window.location.search)
-const slowPreview = visualQuery.has('slow')
+const slowPreview = previewBoolean(visualQuery, 'slow')
 
 function previewFlag(name: 'empty' | 'error', route: string) {
-  return visualQuery.getAll(name).some((value) =>
-    value.split(',').some((entry) => ['1', 'true', 'all', route].includes(entry.trim())),
-  )
+  return previewRouteFlag(visualQuery, name, route)
 }
 
 function assertPreviewRoute(route: string) {

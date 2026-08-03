@@ -23,6 +23,11 @@ html[data-mobile='true'] textarea {
   font-size: 16px;
 }
 
+html[data-mobile='true'] :is(input, textarea)::placeholder {
+  color: #5e6877;
+  opacity: 1;
+}
+
 html[data-mobile='true'] .auth-window,
 html[data-mobile='true'] .auth-shell {
   min-width: 0;

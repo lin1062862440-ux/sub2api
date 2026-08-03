@@ -197,7 +197,12 @@ function handleDocumentKeydown(event: KeyboardEvent) {
 
 function handleDocumentPointerDown(event: PointerEvent) {
   const target = event.target as Node
-  if (accountOpen.value && !accountArea.value?.contains(target)) closeAccount(false)
+  if (accountOpen.value && !accountArea.value?.contains(target)) {
+    const focusable = target instanceof Element && Boolean(target.closest(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    ))
+    closeAccount(!focusable)
+  }
   if (moreOpen.value && !moreArea.value?.contains(target)) closeMore(true)
 }
 
@@ -554,11 +559,15 @@ onBeforeUnmount(() => {
 }
 
 .mobile-content {
-  height: 100%;
+  position: fixed;
+  top: calc(56px + env(safe-area-inset-top));
+  right: 0;
+  bottom: calc(64px + env(safe-area-inset-bottom));
+  left: 0;
+  height: auto;
   min-width: 0;
   overflow-y: auto;
-  padding-top: calc(56px + env(safe-area-inset-top));
-  padding-bottom: calc(64px + env(safe-area-inset-bottom));
+  scroll-padding-block: 12px;
   background: var(--bg-base);
   container-name: app-content;
   container-type: inline-size;
