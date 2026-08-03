@@ -40,6 +40,9 @@ import MobilePage from '@/mobile/components/MobilePage.vue'
 import MobilePagination from '@/mobile/components/MobilePagination.vue'
 
 const PAGE_SIZE = 20
+const accountPlatforms: AdminAccountPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok']
+const accountTypes: AdminAccount['type'][] = ['oauth', 'setup-token', 'apikey', 'upstream', 'bedrock', 'service_account']
+const accountStatuses: AdminAccountStatus[] = ['active', 'inactive', 'error']
 
 const result = ref<AdminAccountListResponse>({ items: [], total: 0, page: 1, page_size: PAGE_SIZE })
 const loaded = ref(false)
@@ -93,6 +96,76 @@ function safeName(value: unknown) {
 
 function safeGroups(account: AdminAccount) {
   return (account.groups ?? []).slice(0, 3).filter((group) => group && Number.isFinite(group.id) && group.name)
+}
+
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function strictId(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
+function strictNonNegativeInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+}
+
+function validOptionalAccountGroups(value: unknown) {
+  if (value === undefined) return true
+  if (!Array.isArray(value)) return false
+  const seen = new Set<number>()
+  return value.every((rawGroup) => {
+    const group = plainRecord(rawGroup)
+    const id = strictId(group?.id)
+    if (!group || id === null || seen.has(id) || typeof group.name !== 'string') return false
+    seen.add(id)
+    return group.platform === undefined || typeof group.platform === 'string'
+  })
+}
+
+function validAdminAccountRow(value: unknown): value is AdminAccount {
+  const account = plainRecord(value)
+  if (!account) return false
+  return strictId(account.id) !== null
+    && typeof account.name === 'string'
+    && accountPlatforms.includes(account.platform as AdminAccountPlatform)
+    && accountTypes.includes(account.type as AdminAccount['type'])
+    && accountStatuses.includes(account.status as AdminAccountStatus)
+    && typeof account.concurrency === 'number'
+    && typeof account.priority === 'number'
+    && typeof account.schedulable === 'boolean'
+    && (account.proxy_id === null || strictId(account.proxy_id) !== null)
+    && (account.error_message === null || typeof account.error_message === 'string')
+    && typeof account.created_at === 'string'
+    && typeof account.updated_at === 'string'
+    && (account.current_concurrency === undefined || typeof account.current_concurrency === 'number')
+    && (account.rate_multiplier === undefined || typeof account.rate_multiplier === 'number')
+    && (account.last_used_at === null || typeof account.last_used_at === 'string')
+    && (account.expires_at === null || typeof account.expires_at === 'number')
+    && validOptionalAccountGroups(account.groups)
+}
+
+function decodeAccountListResponse(value: unknown, requestedPage: number): AdminAccountListResponse | null {
+  const response = plainRecord(value)
+  if (!response || !Array.isArray(response.items)) return null
+  const total = strictNonNegativeInteger(response.total)
+  if (
+    total === null
+    || response.page !== requestedPage
+    || response.page_size !== PAGE_SIZE
+    || response.items.length > PAGE_SIZE
+    || total < response.items.length
+  ) return null
+  const seen = new Set<number>()
+  const items: AdminAccount[] = []
+  for (const item of response.items) {
+    if (!validAdminAccountRow(item) || seen.has(item.id)) return null
+    seen.add(item.id)
+    items.push(item)
+  }
+  return { items, total, page: requestedPage, page_size: PAGE_SIZE }
 }
 
 function isCompleteAdminAccount(value: unknown): value is AdminAccount {
@@ -150,8 +223,12 @@ async function loadAccounts(
   fatalError.value = ''
 
   try {
-    const response = await listAdminAccounts(listParams(requestedPage))
+    const response = decodeAccountListResponse(
+      await listAdminAccounts(listParams(requestedPage)),
+      requestedPage,
+    )
     if (!mounted || generation !== loadGeneration) return
+    if (!response) throw new Error('invalid accounts response')
     const total = safeNumber(response.total)
     const availablePages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (requestedPage > availablePages) {
@@ -159,7 +236,7 @@ async function loadAccounts(
       return
     }
     result.value = {
-      items: Array.isArray(response.items) ? response.items : [],
+      items: response.items,
       total,
       page: requestedPage,
       page_size: PAGE_SIZE,

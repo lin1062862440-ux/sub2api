@@ -438,6 +438,31 @@ describe('MobileAdminGroupsView', () => {
     expect(wrapper.get('[data-testid="mobile-page-empty"]').text()).toContain('暂无分组')
   })
 
+  it.each([
+    ['null row', { ...response(), items: [null], total: 1, diagnostic: 'credential=null-row-secret' }],
+    ['duplicate id', response([activeGroup, { ...activeGroup, name: 'credential=duplicate-id-secret' }])],
+    ['invalid status', { ...response(), items: [{ ...activeGroup, status: 'credential=invalid-status-secret' }], total: 1 }],
+    ['invalid pagination', { ...response(), page_size: 0, diagnostic: 'credential=page-secret' }],
+  ])('rejects a malformed group list with %s and recovers on retry', async (_caseName, payload) => {
+    mocks.list
+      .mockResolvedValueOnce(payload as unknown as AdminGroupListResponse)
+      .mockResolvedValueOnce(response([activeGroup]))
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="mobile-page-error"]').text()).toContain(
+      '分组列表加载失败，请检查网络后重试。',
+    )
+    expect(wrapper.findAll('[data-testid="mobile-group-card"]')).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('credential=')
+
+    await wrapper.get('[data-testid="mobile-page-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="mobile-page-error"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid="mobile-group-card"]')).toHaveLength(1)
+    expect(wrapper.text()).toContain(activeGroup.name)
+  })
+
   it('ignores stale search responses and always releases the busy state', async () => {
     const older = deferred<AdminGroupListResponse>()
     const newer = deferred<AdminGroupListResponse>()
@@ -482,7 +507,7 @@ describe('MobileAdminGroupsView', () => {
     mocks.list
       .mockResolvedValueOnce(response([activeGroup], { total: 41, page: 1 }))
       .mockResolvedValueOnce(response([oldPageGroup], { total: 41, page: 2 }))
-      .mockResolvedValueOnce(response([], { total: 1, page: 2 }))
+      .mockResolvedValueOnce(response([], { total: 1, page: 3 }))
       .mockRejectedValueOnce(new Error('token=fallback-group-secret'))
     const wrapper = mount(MobileAdminGroupsView)
     await flushPromises()

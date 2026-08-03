@@ -595,6 +595,31 @@ describe('MobileAdminAccountsView', () => {
     expect(wrapper.get('[data-testid="mobile-page-empty"]').text()).toContain('暂无账号')
   })
 
+  it.each([
+    ['null row', { ...response(), items: [null], total: 1, diagnostic: 'credential=null-row-secret' }],
+    ['duplicate id', response([healthy, { ...healthy, name: 'credential=duplicate-id-secret' }])],
+    ['invalid status', { ...response(), items: [{ ...healthy, status: 'credential=invalid-status-secret' }], total: 1 }],
+    ['invalid pagination', { ...response(), page_size: 0, diagnostic: 'credential=page-secret' }],
+  ])('rejects a malformed account list with %s and recovers on retry', async (_caseName, payload) => {
+    mocks.list
+      .mockResolvedValueOnce(payload as unknown as AdminAccountListResponse)
+      .mockResolvedValueOnce(response([healthy]))
+    const wrapper = mount(MobileAdminAccountsView)
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="mobile-page-error"]').text()).toContain(
+      '账号列表加载失败，请检查网络后重试。',
+    )
+    expect(wrapper.findAll('[data-testid="mobile-account-card"]')).toHaveLength(0)
+    expect(wrapper.text()).not.toContain('credential=')
+
+    await wrapper.get('[data-testid="mobile-page-retry"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="mobile-page-error"]').exists()).toBe(false)
+    expect(wrapper.findAll('[data-testid="mobile-account-card"]')).toHaveLength(1)
+    expect(wrapper.text()).toContain(healthy.name)
+  })
+
   it('ignores stale filter responses and does not leave the page busy', async () => {
     const older = deferred<AdminAccountListResponse>()
     const newer = deferred<AdminAccountListResponse>()

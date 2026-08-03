@@ -5,8 +5,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   adminDeniedListener: null as null | (() => void),
+  backButtonHandler: null as null | ((payload: { canGoBack: boolean }) => void),
+  onBackButtonPress: vi.fn(),
+  platform: 'android' as 'android' | 'macos',
   session: null as any,
   signOut: vi.fn(),
+  unregisterBackButton: vi.fn(),
+}))
+
+vi.mock('@tauri-apps/api/app', () => ({
+  onBackButtonPress: mocks.onBackButtonPress,
+}))
+
+vi.mock('@/lib/platform', () => ({
+  platform: () => mocks.platform,
 }))
 
 vi.mock('@/lib/http', () => ({
@@ -89,6 +101,13 @@ async function clickAndExpectRoute(
 describe('MobileAppLayout', () => {
   beforeEach(() => {
     localStorage.clear()
+    mocks.backButtonHandler = null
+    mocks.platform = 'android'
+    mocks.onBackButtonPress.mockReset().mockImplementation(async (handler) => {
+      mocks.backButtonHandler = handler
+      return { unregister: mocks.unregisterBackButton }
+    })
+    mocks.unregisterBackButton.mockReset().mockResolvedValue(undefined)
     mocks.session.user.role = 'user'
   })
 
@@ -349,6 +368,49 @@ describe('MobileAppLayout', () => {
     expect(router.currentRoute.value.name).toBe('admin-dashboard')
   })
 
+  it('consumes native Back for the account layer, then leaves real router history to the host', async () => {
+    const { router, wrapper } = await mountLayout('/dashboard')
+    await router.push('/usage')
+    await flushPromises()
+
+    await wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    await flushPromises()
+    expect(mocks.onBackButtonPress).toHaveBeenCalledOnce()
+    expect(mocks.backButtonHandler).toBeTypeOf('function')
+
+    mocks.backButtonHandler?.({ canGoBack: true })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
+    expect(router.currentRoute.value.name).toBe('usage')
+    expect(mocks.unregisterBackButton).toHaveBeenCalledOnce()
+
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('dashboard')
+  })
+
+  it('consumes native Back for More and does not register the Android listener on desktop', async () => {
+    localStorage.setItem(ADMIN_WORKSPACE_STORAGE_KEY, 'admin')
+    const mobile = await mountLayout('/admin/dashboard', 'admin')
+    await mobile.router.push('/admin/accounts')
+    await flushPromises()
+
+    await mobile.wrapper.get('[data-testid="mobile-more-trigger"]').trigger('click')
+    await flushPromises()
+    mocks.backButtonHandler?.({ canGoBack: true })
+    await flushPromises()
+    expect(mobile.wrapper.find('[data-testid="mobile-more-sheet"]').exists()).toBe(false)
+    expect(mobile.router.currentRoute.value.name).toBe('admin-accounts')
+    expect(mocks.unregisterBackButton).toHaveBeenCalledOnce()
+
+    mocks.platform = 'macos'
+    mocks.onBackButtonPress.mockClear()
+    const desktop = await mountLayout('/dashboard')
+    await desktop.wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    await flushPromises()
+    expect(mocks.onBackButtonPress).not.toHaveBeenCalled()
+  })
+
   it('opens More as a labelled modal, focuses its first destination, and restores focus on Escape', async () => {
     localStorage.setItem(ADMIN_WORKSPACE_STORAGE_KEY, 'admin')
     const { wrapper } = await mountLayout('/admin/dashboard', 'admin')
@@ -427,6 +489,8 @@ describe('MobileAppLayout', () => {
     const removeDocument = vi.spyOn(document, 'removeEventListener')
     const removeWindow = vi.spyOn(window, 'removeEventListener')
     const { wrapper } = await mountLayout('/dashboard')
+    await wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    await flushPromises()
 
     wrapper.unmount()
 
@@ -434,6 +498,7 @@ describe('MobileAppLayout', () => {
     expect(removeDocument).toHaveBeenCalledWith('keydown', expect.any(Function))
     expect(removeDocument).toHaveBeenCalledWith('pointerdown', expect.any(Function))
     expect(removeWindow).toHaveBeenCalledWith('popstate', expect.any(Function))
+    expect(mocks.unregisterBackButton).toHaveBeenCalledOnce()
     expect(mocks.adminDeniedListener).toBeNull()
   })
 

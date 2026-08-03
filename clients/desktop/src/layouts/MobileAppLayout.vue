@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onBackButtonPress } from '@tauri-apps/api/app'
+import type { PluginListener } from '@tauri-apps/api/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch, type Component } from 'vue'
 import {
   Building2,
@@ -27,6 +29,7 @@ import {
   type WorkspaceMode,
 } from '@/lib/admin-workspace'
 import { onAdminAccessDenied } from '@/lib/http'
+import { platform } from '@/lib/platform'
 import {
   isMobileOverflowActive,
   mobileNavigation,
@@ -62,6 +65,9 @@ const moreArea = ref<HTMLElement | null>(null)
 const moreTrigger = ref<HTMLButtonElement | null>(null)
 const moreSheet = ref<HTMLElement | null>(null)
 let stopAdminAccessListener: (() => void) | null = null
+let nativeBackListener: PluginListener | null = null
+let nativeBackRegistration = 0
+let layoutMounted = false
 
 const isAdmin = computed(() => canUseAdminWorkspace(user.value) && !adminAccessDenied.value)
 const navigation = computed(() => mobileNavigation(workspaceMode.value))
@@ -210,6 +216,41 @@ function handlePopState() {
   closeLayers()
 }
 
+function stopNativeBackListener() {
+  nativeBackRegistration += 1
+  const listener = nativeBackListener
+  nativeBackListener = null
+  if (listener) void listener.unregister().catch(() => undefined)
+}
+
+async function startNativeBackListener() {
+  if (platform() !== 'android' || nativeBackListener) return
+  const registration = ++nativeBackRegistration
+  try {
+    const listener = await onBackButtonPress(() => closeLayers())
+    if (
+      !layoutMounted
+      || registration !== nativeBackRegistration
+      || (!accountOpen.value && !moreOpen.value)
+    ) {
+      void listener.unregister().catch(() => undefined)
+      return
+    }
+    nativeBackListener = listener
+  } catch {
+    // With no registered listener, Tauri retains its native WebView Back behavior.
+  }
+}
+
+watch(
+  [accountOpen, moreOpen],
+  ([accountLayerOpen, moreLayerOpen]) => {
+    if (accountLayerOpen || moreLayerOpen) void startNativeBackListener()
+    else stopNativeBackListener()
+  },
+  { flush: 'sync' },
+)
+
 watch(
   () => user.value?.role,
   (role, previousRole) => {
@@ -241,6 +282,7 @@ watch(
 )
 
 onMounted(() => {
+  layoutMounted = true
   stopAdminAccessListener = onAdminAccessDenied(handleAdminAccessDenied)
   document.addEventListener('keydown', handleDocumentKeydown)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
@@ -256,6 +298,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  layoutMounted = false
+  stopNativeBackListener()
   stopAdminAccessListener?.()
   stopAdminAccessListener = null
   document.removeEventListener('keydown', handleDocumentKeydown)

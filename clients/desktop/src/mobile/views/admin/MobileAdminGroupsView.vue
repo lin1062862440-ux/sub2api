@@ -21,6 +21,7 @@ import MobilePage from '@/mobile/components/MobilePage.vue'
 import MobilePagination from '@/mobile/components/MobilePagination.vue'
 
 const PAGE_SIZE = 20
+const groupPlatforms: AdminGroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'composite']
 const platformLabels: Record<AdminGroupPlatform, string> = {
   anthropic: 'Anthropic',
   openai: 'OpenAI',
@@ -89,6 +90,68 @@ function safeQuota(value: unknown) {
   return Number.isFinite(parsed) && parsed >= 0 ? `$${parsed.toFixed(2)}` : '不限'
 }
 
+function plainRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function strictId(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
+function strictNonNegativeInteger(value: unknown): number | null {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+}
+
+function validNullableNumber(value: unknown) {
+  return value === null || typeof value === 'number'
+}
+
+function validAdminGroupRow(value: unknown): value is AdminGroup {
+  const group = plainRecord(value)
+  if (!group) return false
+  return strictId(group.id) !== null
+    && typeof group.name === 'string'
+    && (group.description === null || typeof group.description === 'string')
+    && groupPlatforms.includes(group.platform as AdminGroupPlatform)
+    && typeof group.rate_multiplier === 'number'
+    && typeof group.is_exclusive === 'boolean'
+    && (group.status === 'active' || group.status === 'inactive')
+    && (group.subscription_type === 'standard' || group.subscription_type === 'subscription')
+    && validNullableNumber(group.daily_limit_usd)
+    && validNullableNumber(group.weekly_limit_usd)
+    && validNullableNumber(group.monthly_limit_usd)
+    && typeof group.sort_order === 'number'
+    && typeof group.created_at === 'string'
+    && typeof group.updated_at === 'string'
+    && (group.rpm_limit === undefined || typeof group.rpm_limit === 'number')
+    && (group.account_count === undefined || typeof group.account_count === 'number')
+    && (group.active_account_count === undefined || typeof group.active_account_count === 'number')
+    && (group.rate_limited_account_count === undefined || typeof group.rate_limited_account_count === 'number')
+}
+
+function decodeGroupListResponse(value: unknown, requestedPage: number): AdminGroupListResponse | null {
+  const response = plainRecord(value)
+  if (!response || !Array.isArray(response.items)) return null
+  const total = strictNonNegativeInteger(response.total)
+  if (
+    total === null
+    || response.page !== requestedPage
+    || response.page_size !== PAGE_SIZE
+    || response.items.length > PAGE_SIZE
+    || total < response.items.length
+  ) return null
+  const seen = new Set<number>()
+  const items: AdminGroup[] = []
+  for (const item of response.items) {
+    if (!validAdminGroupRow(item) || seen.has(item.id)) return null
+    seen.add(item.id)
+    items.push(item)
+  }
+  return { items, total, page: requestedPage, page_size: PAGE_SIZE }
+}
+
 function listParams(page: number): AdminGroupListParams {
   return {
     page,
@@ -123,8 +186,12 @@ async function loadGroups(
   fatalError.value = ''
 
   try {
-    const response = await listAdminGroups(listParams(requestedPage))
+    const response = decodeGroupListResponse(
+      await listAdminGroups(listParams(requestedPage)),
+      requestedPage,
+    )
     if (!mounted || generation !== loadGeneration) return
+    if (!response) throw new Error('invalid groups response')
     const total = safeNumber(response.total)
     const availablePages = Math.max(1, Math.ceil(total / PAGE_SIZE))
     if (requestedPage > availablePages) {
@@ -132,7 +199,7 @@ async function loadGroups(
       return
     }
     result.value = {
-      items: Array.isArray(response.items) ? response.items : [],
+      items: response.items,
       total,
       page: requestedPage,
       page_size: PAGE_SIZE,
