@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import {
   copyFile,
   lstat,
@@ -76,6 +77,29 @@ async function createPng(size: number, seed: number) {
     .toBuffer()
 }
 
+function findIdatChunk(bytes: Buffer) {
+  let offset = 8
+  while (offset + 12 <= bytes.length) {
+    const length = bytes.readUInt32BE(offset)
+    const type = bytes.toString('ascii', offset + 4, offset + 8)
+    if (type === 'IDAT') return { offset, length, dataOffset: offset + 8 }
+    offset += 12 + length
+  }
+  throw new Error('PNG fixture has no IDAT chunk')
+}
+
+function truncateIdat(bytes: Buffer) {
+  const chunk = findIdatChunk(bytes)
+  return bytes.subarray(0, chunk.dataOffset + Math.max(1, Math.floor(chunk.length / 2)))
+}
+
+function corruptIdat(bytes: Buffer) {
+  const chunk = findIdatChunk(bytes)
+  const corrupted = Buffer.from(bytes)
+  corrupted[chunk.dataOffset + Math.floor(chunk.length / 2)] ^= 0xff
+  return corrupted
+}
+
 async function createFixture({
   conventionalPaths = false,
   hdpiLegacySize = 72,
@@ -129,6 +153,36 @@ async function expectPngSize(filePath: string, expectedSize: number) {
   const metadata = await sharp(filePath).metadata()
   expect(metadata.format).toBe('png')
   expect([metadata.width, metadata.height]).toEqual([expectedSize, expectedSize])
+}
+
+async function expectNoTransactionArtifacts(androidResRoot: string) {
+  const mainRoot = path.dirname(androidResRoot)
+  await expect(lstat(path.join(mainRoot, '.sync-android-icons.lock')))
+    .rejects.toMatchObject({ code: 'ENOENT' })
+  expect((await readdir(mainRoot)).some((name) => name.startsWith('.android-icons-stage-')))
+    .toBe(false)
+}
+
+function sha256(bytes: Buffer) {
+  return createHash('sha256').update(bytes).digest('hex')
+}
+
+async function writeLockOwner(
+  androidResRoot: string,
+  owner: { pid: number; transactionPath: string | null },
+) {
+  const lockPath = path.join(androidResRoot, '..', '.sync-android-icons.lock')
+  await mkdir(lockPath)
+  await writeFile(
+    path.join(lockPath, 'owner.json'),
+    JSON.stringify({
+      version: 1,
+      pid: owner.pid,
+      startedAt: new Date().toISOString(),
+      transactionPath: owner.transactionPath,
+    }),
+  )
+  return lockPath
 }
 
 function parseManifest(xml: string) {
@@ -220,6 +274,36 @@ describe('syncAndroidIcons resources', () => {
     )
   })
 
+  it.each([
+    ['a truncated IDAT stream', truncateIdat],
+    ['a corrupted IDAT chunk', corruptIdat],
+  ])('fully decodes and rejects %s without changing any live files', async (_label, damage) => {
+    const { sourceRoot, androidResRoot, manifestPath } = await createFixture()
+    const relativePath = path.join('mipmap-mdpi', 'ic_launcher.png')
+    const sourcePath = path.join(sourceRoot, relativePath)
+    const damagedSource = damage(await readFile(sourcePath))
+    await expect(sharp(damagedSource).metadata()).resolves.toMatchObject({
+      format: 'png',
+      width: 48,
+      height: 48,
+    })
+    await writeFile(sourcePath, damagedSource)
+    const targetPath = path.join(androidResRoot, relativePath)
+    const originalTarget = Buffer.from('existing generated target')
+    await mkdir(path.dirname(targetPath), { recursive: true })
+    await writeFile(targetPath, originalTarget)
+    const originalManifest = await readFile(manifestPath)
+
+    await expect(syncAndroidIcons({ sourceRoot, androidResRoot })).rejects.toThrow(
+      `${relativePath} is not a valid PNG`,
+    )
+
+    expect(await readFile(sourcePath)).toEqual(damagedSource)
+    expect(await readFile(targetPath)).toEqual(originalTarget)
+    expect(await readFile(manifestPath)).toEqual(originalManifest)
+    await expectNoTransactionArtifacts(androidResRoot)
+  })
+
   it('rejects a source path that is not a regular file', async () => {
     const { sourceRoot, androidResRoot } = await createFixture()
     const source = path.join(sourceRoot, 'mipmap-mdpi', 'ic_launcher_round.png')
@@ -251,6 +335,37 @@ describe('syncAndroidIcons resources', () => {
       'ic_launcher_round.xml foreground must reference @mipmap/ic_launcher_foreground',
     )
   })
+
+  it.each([
+    path.join('mipmap-anydpi-v26', 'ic_launcher_round.xml'),
+    path.join('values', 'ic_launcher_background.xml'),
+  ])('rejects non-UTF-8 XML with its relative source path: %s', async (relativePath) => {
+    const { sourceRoot, androidResRoot } = await createFixture()
+    await writeFile(
+      path.join(sourceRoot, relativePath),
+      Buffer.concat([Buffer.from('<?xml version="1.0"?><resources>'), Buffer.from([0xff]), Buffer.from('</resources>')]),
+    )
+
+    await expect(syncAndroidIcons({ sourceRoot, androidResRoot })).rejects.toThrow(
+      `${relativePath} is not valid UTF-8 XML`,
+    )
+  })
+
+  it.each(['red', '#12', '#12345', '@drawable/icon_background'])(
+    'rejects an invalid Android launcher background color: %s',
+    async (color) => {
+      const { sourceRoot, androidResRoot } = await createFixture()
+      const relativePath = path.join('values', 'ic_launcher_background.xml')
+      await writeFile(
+        path.join(sourceRoot, relativePath),
+        backgroundColorXml.replace('#fff', color),
+      )
+
+      await expect(syncAndroidIcons({ sourceRoot, androidResRoot })).rejects.toThrow(
+        `${relativePath} must define a valid ic_launcher_background color`,
+      )
+    },
+  )
 
   it('repairs drifted generated adaptive descriptors from validated source XML', async () => {
     const { sourceRoot, androidResRoot } = await createFixture()
@@ -399,12 +514,82 @@ describe('syncAndroidIcons manifest semantics', () => {
 describe('syncAndroidIcons transaction', () => {
   it('fails clearly when another icon sync owns the exclusive lock', async () => {
     const { sourceRoot, androidResRoot } = await createFixture()
+    const lockPath = await writeLockOwner(androidResRoot, {
+      pid: process.pid,
+      transactionPath: null,
+    })
+
+    const error = await syncAndroidIcons({ sourceRoot, androidResRoot }).catch((caught) => caught)
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toContain(`Another Android launcher icon sync owns ${lockPath}`)
+    expect(error.message).toContain(`PID ${process.pid}`)
+    expect(error.message).toContain('rerun')
+    expect(await lstat(lockPath)).toBeTruthy()
+  })
+
+  it('cleans a dead owner lock without a live transaction and retries safely', async () => {
+    const { sourceRoot, androidResRoot } = await createFixture()
+    await writeLockOwner(androidResRoot, { pid: 99_999_999, transactionPath: null })
+
+    await syncAndroidIcons({ sourceRoot, androidResRoot })
+
+    await expectNoTransactionArtifacts(androidResRoot)
+  })
+
+  it('preserves an unsafe lock when owner metadata cannot be validated', async () => {
+    const { sourceRoot, androidResRoot } = await createFixture()
     const lockPath = path.join(androidResRoot, '..', '.sync-android-icons.lock')
     await mkdir(lockPath)
+    await writeFile(path.join(lockPath, 'owner.json'), '{invalid json')
+
+    const error = await syncAndroidIcons({ sourceRoot, androidResRoot }).catch((caught) => caught)
+
+    expect(error.message).toContain(`Cannot safely recover Android launcher icon lock ${lockPath}`)
+    expect(error.message).toContain('Do not delete it manually')
+    expect(await readFile(path.join(lockPath, 'owner.json'), 'utf8')).toBe('{invalid json')
+  })
+
+  it('recovers a dead owner crash journal before starting the next sync', async () => {
+    const { sourceRoot, androidResRoot } = await createFixture()
+    const mainRoot = path.dirname(androidResRoot)
+    const transactionPath = path.join(mainRoot, '.android-icons-stage-crash-fixture')
+    const destination = path.join(androidResRoot, 'mipmap-mdpi', 'ic_launcher.png')
+    const backupPath = path.join(transactionPath, 'backups', '0')
+    const stagedPath = path.join(transactionPath, 'files', '0')
+    const originalBytes = Buffer.from('original target before crash')
+    const committedBytes = Buffer.from('new target left by crashed sync')
+    await mkdir(path.dirname(destination), { recursive: true })
+    await mkdir(path.dirname(backupPath), { recursive: true })
+    await writeFile(destination, committedBytes)
+    await writeFile(backupPath, originalBytes)
+    await writeFile(
+      path.join(transactionPath, 'journal.json'),
+      JSON.stringify({
+        version: 1,
+        status: 'committing',
+        sourceRoot,
+        androidResRoot,
+        entries: [
+          {
+            destination,
+            stagedPath,
+            backupPath,
+            originalType: 'file',
+            originalHash: sha256(originalBytes),
+            newHash: sha256(committedBytes),
+          },
+        ],
+      }),
+    )
+    await writeLockOwner(androidResRoot, { pid: 99_999_999, transactionPath })
+    await writeFile(path.join(sourceRoot, 'mipmap-mdpi', 'ic_launcher.png'), Buffer.from('not png'))
 
     await expect(syncAndroidIcons({ sourceRoot, androidResRoot })).rejects.toThrow(
-      'Another Android launcher icon sync is already running',
+      'mipmap-mdpi/ic_launcher.png is not a valid PNG',
     )
+
+    expect(await readFile(destination)).toEqual(originalBytes)
+    await expectNoTransactionArtifacts(androidResRoot)
   })
 
   it('rolls back the manifest, normalized source, and replaced resources after a mid-commit failure', async () => {

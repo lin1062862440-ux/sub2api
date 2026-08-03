@@ -4,7 +4,9 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
+  rename,
   rm,
   stat,
   writeFile,
@@ -17,6 +19,10 @@ import sharp from 'sharp'
 
 const ANDROID_NAMESPACE = 'http://schemas.android.com/apk/res/android'
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+const LOCK_NAME = '.sync-android-icons.lock'
+const OWNER_NAME = 'owner.json'
+const JOURNAL_NAME = 'journal.json'
+const TRANSACTION_PREFIX = '.android-icons-stage-'
 const densitySpecs = [
   { density: 'mdpi', legacySize: 48, foregroundSize: 108 },
   { density: 'hdpi', legacySize: 72, foregroundSize: 162 },
@@ -46,6 +52,48 @@ function hash(bytes) {
   return createHash('sha256').update(bytes).digest('hex')
 }
 
+function isPathInside(root, candidate) {
+  const relativePath = path.relative(path.resolve(root), path.resolve(candidate))
+  return relativePath !== '' && !relativePath.startsWith(`..${path.sep}`) && relativePath !== '..' && !path.isAbsolute(relativePath)
+}
+
+async function pathState(filePath) {
+  try {
+    const fileStats = await stat(filePath)
+    if (fileStats.isFile()) return { type: 'file', bytes: await readFile(filePath) }
+    return { type: 'other' }
+  } catch (error) {
+    if (error?.code === 'ENOENT') return { type: 'absent' }
+    throw error
+  }
+}
+
+async function writeJsonAtomic(filePath, value) {
+  const temporaryPath = `${filePath}.tmp-${process.pid}`
+  await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`)
+  await rename(temporaryPath, filePath)
+}
+
+async function readJson(filePath, label) {
+  try {
+    return JSON.parse(await readFile(filePath, 'utf8'))
+  } catch {
+    throw new Error(`${label} is missing or invalid JSON`)
+  }
+}
+
+function processIsAlive(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return null
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (error) {
+    if (error?.code === 'ESRCH') return false
+    if (error?.code === 'EPERM') return true
+    return null
+  }
+}
+
 async function readRegularFile(filePath, label) {
   try {
     const fileStats = await stat(filePath)
@@ -63,10 +111,31 @@ async function inspectPng(bytes, relativePath) {
 
   try {
     const metadata = await sharp(bytes, { failOn: 'error' }).metadata()
-    if (metadata.format !== 'png' || !metadata.width || !metadata.height) throw new Error('invalid PNG')
-    return metadata
+    const { info } = await sharp(bytes, { failOn: 'error' })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+    if (
+      metadata.format !== 'png' ||
+      !metadata.width ||
+      !metadata.height ||
+      info.width !== metadata.width ||
+      info.height !== metadata.height ||
+      info.channels !== 4
+    ) {
+      throw new Error('invalid PNG')
+    }
+    return info
   } catch {
     throw new Error(`${relativePath} is not a valid PNG`)
+  }
+}
+
+function decodeXml(bytes, relativePath) {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes)
+  } catch {
+    throw new Error(`${relativePath} is not valid UTF-8 XML`)
   }
 }
 
@@ -97,8 +166,8 @@ function directElementChildren(element, localName) {
 }
 
 function validateAdaptiveXml(bytes, relativePath) {
-  const label = path.basename(relativePath)
-  const { document, errors } = parseXml(new TextDecoder('utf-8', { fatal: true }).decode(bytes), label)
+  const label = relativePath
+  const { document, errors } = parseXml(decodeXml(bytes, relativePath), label)
   if (errors.length > 0 || document.documentElement.localName !== 'adaptive-icon') {
     throw new Error(`${label} is malformed XML`)
   }
@@ -126,18 +195,21 @@ function validateAdaptiveXml(bytes, relativePath) {
 }
 
 function validateColorXml(bytes, relativePath) {
-  const label = path.basename(relativePath)
-  const { document, errors } = parseXml(new TextDecoder('utf-8', { fatal: true }).decode(bytes), label)
+  const label = relativePath
+  const { document, errors } = parseXml(decodeXml(bytes, relativePath), label)
   const colors = directElementChildren(document.documentElement, 'color').filter(
     (element) => element.getAttribute('name') === 'ic_launcher_background',
   )
+  const value = colors[0]?.textContent.trim()
+  const validColor =
+    /^(?:#[0-9a-f]{3,4}|#[0-9a-f]{6}|#[0-9a-f]{8}|@color\/[a-z0-9_.]+)$/i.test(value || '')
   if (
     errors.length > 0 ||
     document.documentElement.localName !== 'resources' ||
     colors.length !== 1 ||
-    !colors[0].textContent.trim()
+    !validColor
   ) {
-    throw new Error(`${label} must define ic_launcher_background`)
+    throw new Error(`${label} must define a valid ic_launcher_background color`)
   }
 }
 
@@ -321,46 +393,249 @@ async function stageEntries(stageRoot, entries) {
   }
 }
 
-async function commitEntries(entries, stageRoot) {
-  const changed = []
+function validateJournal(journal, transactionPath, { sourceRoot, androidResRoot }) {
+  const manifestPath = path.join(path.dirname(androidResRoot), 'AndroidManifest.xml')
+  if (
+    journal?.version !== 1 ||
+    !['prepared', 'committing', 'committed', 'rolled_back'].includes(journal.status) ||
+    path.resolve(journal.sourceRoot || '') !== path.resolve(sourceRoot) ||
+    path.resolve(journal.androidResRoot || '') !== path.resolve(androidResRoot) ||
+    !Array.isArray(journal.entries)
+  ) {
+    throw new Error('transaction journal metadata does not match this icon sync')
+  }
+
+  const destinations = new Set()
+  for (const entry of journal.entries) {
+    const destination = path.resolve(entry.destination || '')
+    const validDestination =
+      destination === path.resolve(manifestPath) ||
+      isPathInside(sourceRoot, destination) ||
+      isPathInside(androidResRoot, destination)
+    if (
+      !validDestination ||
+      destinations.has(destination) ||
+      !isPathInside(path.join(transactionPath, 'files'), entry.stagedPath || '') ||
+      !isPathInside(path.join(transactionPath, 'backups'), entry.backupPath || '') ||
+      !['file', 'absent', 'other'].includes(entry.originalType) ||
+      !/^[0-9a-f]{64}$/.test(entry.newHash || '') ||
+      (entry.originalType === 'file' && !/^[0-9a-f]{64}$/.test(entry.originalHash || ''))
+    ) {
+      throw new Error('transaction journal contains an unsafe path or checksum')
+    }
+    destinations.add(destination)
+  }
+  return journal
+}
+
+async function journalIsFullyCommitted(journal) {
+  if (journal.status !== 'committed') return false
+  for (const entry of journal.entries) {
+    const current = await pathState(entry.destination)
+    if (current.type !== 'file' || hash(current.bytes) !== entry.newHash) return false
+  }
+  return true
+}
+
+async function restoreJournal(journal, transactionPath, context) {
+  validateJournal(journal, transactionPath, context)
+  if (await journalIsFullyCommitted(journal)) return
+
+  for (let index = journal.entries.length - 1; index >= 0; index -= 1) {
+    const entry = journal.entries[index]
+    const current = await pathState(entry.destination)
+    if (entry.originalType === 'file') {
+      const backup = await pathState(entry.backupPath)
+      if (backup.type !== 'file' || hash(backup.bytes) !== entry.originalHash) {
+        throw new Error(`backup checksum is unsafe for ${entry.destination}`)
+      }
+      if (current.type === 'file' && hash(current.bytes) === entry.originalHash) continue
+      if (current.type !== 'absent' && !(current.type === 'file' && hash(current.bytes) === entry.newHash)) {
+        throw new Error(`live file changed outside the transaction: ${entry.destination}`)
+      }
+      const restorePath = path.join(
+        path.dirname(entry.destination),
+        `.${path.basename(entry.destination)}.android-icons-restore-${process.pid}-${index}`,
+      )
+      await copyFile(entry.backupPath, restorePath)
+      await rename(restorePath, entry.destination)
+    } else if (entry.originalType === 'absent') {
+      if (current.type === 'absent') continue
+      if (current.type !== 'file' || hash(current.bytes) !== entry.newHash) {
+        throw new Error(`live file changed outside the transaction: ${entry.destination}`)
+      }
+      await rm(entry.destination, { force: true })
+    } else if (current.type !== 'other') {
+      throw new Error(`non-file destination changed outside the transaction: ${entry.destination}`)
+    }
+  }
+
+  journal.status = 'rolled_back'
+  await writeJsonAtomic(path.join(transactionPath, JOURNAL_NAME), journal)
+}
+
+async function prepareJournal(entries, stageRoot, context) {
+  const journalEntries = []
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index]
+    const original = await pathState(entry.destination)
+    const backupPath = path.join(stageRoot, 'backups', String(index))
+    if (original.type === 'file') {
+      await mkdir(path.dirname(backupPath), { recursive: true })
+      await copyFile(entry.destination, backupPath)
+      if (hash(await readFile(backupPath)) !== hash(original.bytes)) {
+        throw new Error(`Backup hash mismatch for ${entry.label}`)
+      }
+    }
+    journalEntries.push({
+      destination: entry.destination,
+      stagedPath: entry.stagedPath,
+      backupPath,
+      originalType: original.type,
+      originalHash: original.type === 'file' ? hash(original.bytes) : null,
+      newHash: hash(entry.bytes),
+    })
+  }
+
+  const journal = {
+    version: 1,
+    status: 'prepared',
+    sourceRoot: context.sourceRoot,
+    androidResRoot: context.androidResRoot,
+    completedIndexes: [],
+    entries: journalEntries,
+  }
+  validateJournal(journal, stageRoot, context)
+  await writeJsonAtomic(path.join(stageRoot, JOURNAL_NAME), journal)
+  return journal
+}
+
+async function commitEntries(entries, stageRoot, context) {
+  const journal = await prepareJournal(entries, stageRoot, context)
+  journal.status = 'committing'
+  await writeJsonAtomic(path.join(stageRoot, JOURNAL_NAME), journal)
   try {
     for (let index = 0; index < entries.length; index += 1) {
       const entry = entries[index]
-      const backupPath = path.join(stageRoot, 'backups', String(index))
-      let originalType = 'absent'
-      try {
-        const destinationStats = await stat(entry.destination)
-        if (destinationStats.isFile()) {
-          originalType = 'file'
-          await mkdir(path.dirname(backupPath), { recursive: true })
-          await copyFile(entry.destination, backupPath)
-        } else originalType = 'other'
-      } catch (error) {
-        if (error?.code !== 'ENOENT') throw error
-      }
-
       await mkdir(path.dirname(entry.destination), { recursive: true })
-      changed.push({ destination: entry.destination, originalType, backupPath })
-      await copyFile(entry.stagedPath, entry.destination)
+      await rename(entry.stagedPath, entry.destination)
       if (hash(await readFile(entry.destination)) !== hash(entry.bytes)) {
         throw new Error(`Committed hash mismatch for ${entry.label}`)
       }
+      journal.completedIndexes.push(index)
+      await writeJsonAtomic(path.join(stageRoot, JOURNAL_NAME), journal)
     }
+    journal.status = 'committed'
+    await writeJsonAtomic(path.join(stageRoot, JOURNAL_NAME), journal)
   } catch (commitError) {
-    const rollbackErrors = []
-    for (const entry of changed.reverse()) {
-      try {
-        if (entry.originalType === 'file') await copyFile(entry.backupPath, entry.destination)
-        else if (entry.originalType === 'absent') await rm(entry.destination, { force: true })
-      } catch (rollbackError) {
-        rollbackErrors.push(rollbackError)
-      }
-    }
-    if (rollbackErrors.length > 0) {
-      throw new AggregateError([commitError, ...rollbackErrors], 'Android icon sync rollback failed')
+    try {
+      await restoreJournal(journal, stageRoot, context)
+    } catch (rollbackError) {
+      const failure = new AggregateError(
+        [commitError, rollbackError],
+        `Android icon sync rollback is incomplete; preserve ${stageRoot} for safe recovery`,
+      )
+      failure.preserveTransaction = true
+      throw failure
     }
     throw commitError
   }
+}
+
+function lockRecoveryError(lockPath, detail) {
+  return new Error(
+    `Cannot safely recover Android launcher icon lock ${lockPath}: ${detail}. ` +
+      'Do not delete it manually; confirm no icon sync process is active, then rerun for automatic recovery.',
+  )
+}
+
+function validateTransactionPath(mainRoot, transactionPath) {
+  return (
+    typeof transactionPath === 'string' &&
+    path.dirname(path.resolve(transactionPath)) === path.resolve(mainRoot) &&
+    path.basename(transactionPath).startsWith(TRANSACTION_PREFIX)
+  )
+}
+
+async function recoverStaleLock(lockPath, mainRoot, context) {
+  let owner
+  try {
+    owner = await readJson(path.join(lockPath, OWNER_NAME), 'lock owner')
+  } catch (error) {
+    throw lockRecoveryError(lockPath, error.message)
+  }
+  if (owner.version !== 1 || !Number.isFinite(Date.parse(owner.startedAt || ''))) {
+    throw lockRecoveryError(lockPath, 'owner metadata is invalid')
+  }
+
+  const alive = processIsAlive(owner.pid)
+  if (alive === true) {
+    throw new Error(
+      `Another Android launcher icon sync owns ${lockPath} (PID ${owner.pid}). ` +
+        'Wait for it to finish; if that PID no longer exists, rerun for automatic recovery.',
+    )
+  }
+  if (alive === null) throw lockRecoveryError(lockPath, `cannot determine whether PID ${owner.pid} is alive`)
+
+  if (owner.transactionPath !== null) {
+    if (!validateTransactionPath(mainRoot, owner.transactionPath)) {
+      throw lockRecoveryError(lockPath, 'transaction path is outside the Android main directory')
+    }
+    const transaction = await pathState(owner.transactionPath)
+    if (transaction.type === 'other') {
+      const journalPath = path.join(owner.transactionPath, JOURNAL_NAME)
+      const journalState = await pathState(journalPath)
+      if (journalState.type === 'file') {
+        let journal
+        try {
+          journal = JSON.parse(journalState.bytes.toString('utf8'))
+          await restoreJournal(journal, owner.transactionPath, context)
+        } catch (error) {
+          throw lockRecoveryError(lockPath, error.message)
+        }
+      } else if (journalState.type !== 'absent') {
+        throw lockRecoveryError(lockPath, 'transaction journal is not a regular file')
+      }
+      await rm(owner.transactionPath, { recursive: true, force: true })
+    } else if (transaction.type === 'file') {
+      throw lockRecoveryError(lockPath, 'transaction path is not a directory')
+    }
+  } else {
+    const liveStages = (await readdir(mainRoot, { withFileTypes: true })).filter(
+      (entry) => entry.isDirectory() && entry.name.startsWith(TRANSACTION_PREFIX),
+    )
+    if (liveStages.length > 0) {
+      throw lockRecoveryError(lockPath, 'owner has no journal but transaction staging directories exist')
+    }
+  }
+
+  await rm(lockPath, { recursive: true, force: true })
+}
+
+async function acquireLock(mainRoot, context) {
+  const lockPath = path.join(mainRoot, LOCK_NAME)
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      await mkdir(lockPath)
+      const owner = {
+        version: 1,
+        pid: process.pid,
+        startedAt: new Date().toISOString(),
+        transactionPath: null,
+      }
+      try {
+        await writeJsonAtomic(path.join(lockPath, OWNER_NAME), owner)
+      } catch (error) {
+        await rm(lockPath, { recursive: true, force: true })
+        throw error
+      }
+      return { lockPath, owner }
+    } catch (error) {
+      if (error?.code !== 'EEXIST') throw error
+      await recoverStaleLock(lockPath, mainRoot, context)
+    }
+  }
+  throw lockRecoveryError(lockPath, 'lock was reacquired while stale recovery retried')
 }
 
 export async function syncAndroidIcons({ sourceRoot, androidResRoot }) {
@@ -374,18 +649,20 @@ export async function syncAndroidIcons({ sourceRoot, androidResRoot }) {
   }
 
   const mainRoot = path.dirname(androidResRoot)
-  const lockPath = path.join(mainRoot, '.sync-android-icons.lock')
-  try {
-    await mkdir(lockPath)
-  } catch (error) {
-    if (error?.code === 'EEXIST') {
-      throw new Error('Another Android launcher icon sync is already running')
-    }
-    throw error
-  }
+  const context = { sourceRoot: path.resolve(sourceRoot), androidResRoot: path.resolve(androidResRoot) }
+  const { lockPath, owner } = await acquireLock(mainRoot, context)
 
   let stageRoot
+  let preserveTransaction = false
   try {
+    const [mainStats, sourceStats, resourceStats] = await Promise.all([
+      stat(mainRoot),
+      stat(sourceRoot),
+      stat(androidResRoot),
+    ])
+    if (mainStats.dev !== sourceStats.dev || mainStats.dev !== resourceStats.dev) {
+      throw new Error('Android icon source, generated resources, and transaction staging must share a filesystem')
+    }
     const manifestPath = path.join(mainRoot, 'AndroidManifest.xml')
     const manifest = prepareManifest(
       await readRegularFile(manifestPath, 'AndroidManifest.xml'),
@@ -411,12 +688,16 @@ export async function syncAndroidIcons({ sourceRoot, androidResRoot }) {
     ]
 
     stageRoot = await mkdtemp(path.join(mainRoot, '.android-icons-stage-'))
+    owner.transactionPath = stageRoot
+    await writeJsonAtomic(path.join(lockPath, OWNER_NAME), owner)
     await stageEntries(stageRoot, entries)
-    await commitEntries(entries, stageRoot)
+    await commitEntries(entries, stageRoot, context)
+  } catch (error) {
+    preserveTransaction = error?.preserveTransaction === true
+    throw error
   } finally {
-    try {
+    if (!preserveTransaction) {
       if (stageRoot) await rm(stageRoot, { recursive: true, force: true })
-    } finally {
       await rm(lockPath, { recursive: true, force: true })
     }
   }
