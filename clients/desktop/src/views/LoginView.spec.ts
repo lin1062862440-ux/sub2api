@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   completeLogin: vi.fn(),
   reloadSettings: vi.fn(),
   replace: vi.fn(),
+  push: vi.fn(),
   openUrl: vi.fn(),
   session: {
     ready: true,
@@ -19,7 +20,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ replace: mocks.replace }),
+  useRouter: () => ({ push: mocks.push, replace: mocks.replace }),
 }))
 
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: mocks.openUrl }))
@@ -107,6 +108,17 @@ describe('LoginView', () => {
     expect(submit.attributes('disabled')).toBeDefined()
     await wrapper.get('[data-testid="password-input"]').setValue('secret')
     expect(submit.attributes('disabled')).toBeUndefined()
+  })
+
+  it('reveals the password without opening password reset', async () => {
+    const wrapper = mountLogin()
+    const passwordInput = wrapper.get<HTMLInputElement>('[data-testid="password-input"]')
+
+    expect(passwordInput.element.type).toBe('password')
+    await wrapper.get('.reveal-action').trigger('click')
+
+    expect(passwordInput.element.type).toBe('text')
+    expect(mocks.push).not.toHaveBeenCalled()
   })
 
   it('submits trimmed credentials and opens the dashboard', async () => {

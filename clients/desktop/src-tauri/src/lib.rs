@@ -1,9 +1,9 @@
 #[cfg(desktop)]
 pub mod local_config;
 #[cfg(desktop)]
-mod usage_display;
-#[cfg(desktop)]
 mod text_export;
+#[cfg(desktop)]
+mod usage_display;
 
 #[cfg(desktop)]
 pub fn run() {
@@ -55,6 +55,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // Lets the shared frontend branch on the host OS instead of forking.
         .plugin(tauri_plugin_os::init())
+        // Enables signed in-app desktop updates.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // Lets the updater restart the app after installing a new version.
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             usage_display::setup(app)?;
             if cfg!(debug_assertions) {

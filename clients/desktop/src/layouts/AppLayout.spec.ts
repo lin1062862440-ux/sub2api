@@ -5,8 +5,29 @@ const mocks = vi.hoisted(() => ({
   mobile: false,
   adminDeniedListener: null as null | (() => void),
   openUrl: vi.fn(),
+  checkUpdate: vi.fn(),
+  installUpdate: vi.fn(),
+  attachUsageUser: vi.fn(),
+  loadUsageSubscriptions: vi.fn(),
+  updateUsageConfig: vi.fn(),
+  stopUsageStore: vi.fn(),
+  notifyUsageConfigChanged: vi.fn(),
   replace: vi.fn(),
   signOut: vi.fn(),
+  usageState: {
+    platform: 'macos' as const,
+    config: {
+      enabled: true,
+      source: 'balance' as 'balance' | 'subscription',
+      subscriptionId: null as number | null,
+      surface: 'menu-bar' as 'menu-bar' | 'floating-window',
+      appearance: 'sky' as const,
+      floatingStyle: 'orb' as 'orb' | 'bar',
+    },
+    subscriptions: [],
+    trayTitle: '余额 $128.60',
+    error: '',
+  },
   session: {
     runMode: 'standard' as 'standard' | 'simple',
     userGroupCapabilities: null as null | { can_access: boolean; can_manage: boolean; group_count: number },
@@ -25,6 +46,24 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl: mocks.openUrl }))
+vi.mock('@tauri-apps/api/app', () => ({
+  getName: vi.fn().mockResolvedValue('LinAI'),
+  getVersion: vi.fn().mockResolvedValue('0.1.2'),
+}))
+vi.mock('@/lib/desktop-updater', () => ({
+  checkDesktopUpdate: mocks.checkUpdate,
+  installDesktopUpdate: mocks.installUpdate,
+  desktopUpdateErrorMessage: (error: unknown) => error instanceof Error ? error.message : String(error),
+}))
+vi.mock('@/features/usage-display/core/store', () => ({
+  createUsageDisplayStore: () => ({
+    state: mocks.usageState,
+    attachUser: mocks.attachUsageUser,
+    loadSubscriptions: mocks.loadUsageSubscriptions,
+    updateConfig: mocks.updateUsageConfig,
+    stop: mocks.stopUsageStore,
+  }),
+}))
 vi.mock('@/lib/http', () => ({
   ApiError: class ApiError extends Error {},
   onAdminAccessDenied: (listener: () => void) => {
@@ -54,11 +93,12 @@ vi.mock('@/lib/platform-capabilities', () => ({
     get mobile() { return mocks.mobile },
     get apiKeys() { return !mocks.mobile },
     get externalUsageDisplay() { return !mocks.mobile },
+    get desktopUpdater() { return !mocks.mobile },
   },
 }))
 vi.mock('@/features/usage-display/core/host', () => ({
   configureUsageDisplay: vi.fn().mockResolvedValue(undefined),
-  notifyUsageConfigChanged: vi.fn().mockResolvedValue(undefined),
+  notifyUsageConfigChanged: mocks.notifyUsageConfigChanged,
   setUsageDisplayTitle: vi.fn().mockResolvedValue(undefined),
 }))
 
@@ -66,7 +106,15 @@ import AppLayout from './AppLayout.vue'
 
 describe('AppLayout', () => {
   beforeEach(() => {
+    localStorage.clear()
     mocks.mobile = false
+    mocks.checkUpdate.mockReset()
+    mocks.installUpdate.mockReset()
+    mocks.attachUsageUser.mockReset().mockResolvedValue(undefined)
+    mocks.loadUsageSubscriptions.mockReset().mockResolvedValue(undefined)
+    mocks.updateUsageConfig.mockReset().mockResolvedValue(undefined)
+    mocks.stopUsageStore.mockReset()
+    mocks.notifyUsageConfigChanged.mockReset().mockResolvedValue(undefined)
   })
 
   it('shows the LinAI dashboard destination and closes the session', async () => {
@@ -74,10 +122,6 @@ describe('AppLayout', () => {
       global: {
         stubs: {
           Teleport: true,
-          UsageDisplayDialog: {
-            props: ['modelValue'],
-            template: '<div v-if="modelValue" data-testid="usage-display-dialog">用量显示</div>',
-          },
           RouterLink: { template: '<a><slot /></a>' },
           RouterView: { template: '<div />' },
         },
@@ -101,15 +145,26 @@ describe('AppLayout', () => {
     await wrapper.get('[data-testid="account-menu-trigger"]').trigger('click')
 
     expect(wrapper.get('[data-testid="account-menu"]').text()).toContain('个人资料')
-    expect(wrapper.get('[data-testid="account-menu"]').text()).toContain('用量显示')
+    expect(wrapper.get('[data-testid="account-menu"]').text()).toContain('设置')
     expect(wrapper.get('[data-testid="account-menu"]').text()).toContain('修改密码')
     expect(wrapper.get('[data-testid="account-menu"]').text()).toContain('退出登录')
     expect(wrapper.find('[data-testid="web-admin-menu-item"]').exists()).toBe(false)
 
-    await wrapper.get('[data-testid="usage-display-menu-item"]').trigger('click')
+    await wrapper.get('[data-testid="settings-menu-item"]').trigger('click')
+    await flushPromises()
 
     expect(wrapper.find('[data-testid="account-menu"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="usage-display-dialog"]').text()).toContain('用量显示')
+    expect(wrapper.get('[data-testid="settings-dialog"]').text()).toContain('设置')
+    expect(wrapper.get('[data-testid="settings-dialog"]').text()).toContain('用量显示')
+    expect(wrapper.get('[data-testid="settings-dialog"]').text()).toContain('关于信息')
+    expect(wrapper.get('[data-testid="settings-dialog"]').text()).toContain('检查更新')
+    expect(mocks.attachUsageUser).toHaveBeenCalledWith(mocks.session.user)
+
+    await wrapper.get('[data-testid="settings-tab-about"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="settings-app-version"]').text()).toBe('0.1.2')
+    await wrapper.get('[data-testid="close-settings-dialog"]').trigger('click')
 
     await wrapper.get('[data-testid="account-menu-trigger"]').trigger('click')
 
@@ -134,10 +189,6 @@ describe('AppLayout', () => {
       global: {
         stubs: {
           Teleport: true,
-          UsageDisplayDialog: {
-            props: ['modelValue'],
-            template: '<div v-if="modelValue" data-testid="usage-display-dialog">用量显示</div>',
-          },
           RouterLink: { template: '<a><slot /></a>' },
           RouterView: { template: '<div />' },
         },
@@ -159,7 +210,6 @@ describe('AppLayout', () => {
       global: {
         stubs: {
           Teleport: true,
-          UsageDisplayDialog: true,
           RouterLink: { template: '<a><slot /></a>' },
           RouterView: { template: '<div />' },
         },
@@ -187,6 +237,44 @@ describe('AppLayout', () => {
     mocks.session.user.role = 'user'
   })
 
+  it('checks and installs a desktop update from the account menu', async () => {
+    const update = { version: '0.1.3' }
+    mocks.checkUpdate.mockResolvedValue({
+      available: true,
+      update,
+      info: { version: '0.1.3', currentVersion: '0.1.2', notes: '修复桌面端问题' },
+    })
+    mocks.installUpdate.mockImplementation(async (_update, onProgress) => {
+      onProgress({ downloaded: 50, total: 100, percent: 50 })
+    })
+
+    const wrapper = mount(AppLayout, {
+      global: {
+        stubs: {
+          Teleport: true,
+          RouterLink: { template: '<a><slot /></a>' },
+          RouterView: { template: '<div />' },
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="account-menu-trigger"]').trigger('click')
+    await wrapper.get('[data-testid="settings-menu-item"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="settings-tab-updates"]').trigger('click')
+    await wrapper.get('[data-testid="check-update-button"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.checkUpdate).toHaveBeenCalledOnce()
+    expect(wrapper.get('[data-testid="desktop-update-status"]').text()).toContain('发现新版本 0.1.3')
+
+    await wrapper.get('[data-testid="install-update"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.installUpdate).toHaveBeenCalledWith(update, expect.any(Function))
+    expect(wrapper.get('[data-testid="desktop-update-status"]').text()).toContain('更新已安装，正在重启')
+  })
+
   it('shows the personal user-group entry only to granted ordinary users', () => {
     mocks.session.user.role = 'user'
     mocks.session.userGroupCapabilities = { can_access: true, can_manage: false, group_count: 2 }
@@ -194,7 +282,6 @@ describe('AppLayout', () => {
       global: {
         stubs: {
           Teleport: true,
-          UsageDisplayDialog: true,
           RouterLink: { template: '<a><slot /></a>' },
           RouterView: { template: '<div />' },
         },
@@ -209,7 +296,6 @@ describe('AppLayout', () => {
       global: {
         stubs: {
           Teleport: true,
-          UsageDisplayDialog: true,
           RouterLink: { template: '<a><slot /></a>' },
           RouterView: { template: '<div />' },
         },
@@ -227,7 +313,6 @@ describe('AppLayout', () => {
       global: {
         stubs: {
           Teleport: true,
-          UsageDisplayDialog: true,
           RouterLink: { template: '<a><slot /></a>' },
           RouterView: { template: '<div />' },
         },
@@ -257,7 +342,6 @@ describe('AppLayout', () => {
       global: {
         stubs: {
           Teleport: true,
-          UsageDisplayDialog: true,
           RouterLink: { template: '<a><slot /></a>' },
           RouterView: { template: '<div />' },
         },
@@ -280,7 +364,6 @@ describe('AppLayout', () => {
       global: {
         stubs: {
           Teleport: true,
-          UsageDisplayDialog: true,
           RouterLink: { template: '<a><slot /></a>' },
           RouterView: { template: '<div />' },
         },

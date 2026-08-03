@@ -1,7 +1,7 @@
 {
   "name": "linai-desktop",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.1.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,10 +11,11 @@
     "test": "vitest",
     "test:run": "vitest run",
     "brand:sync": "node scripts/sync-brand.mjs",
+    "updater:manifest": "node tools/write-updater-manifest.mjs",
     "android:init": "tauri android init --ci --skip-targets-install",
     "android:dev": "tauri android dev",
     "android:apk": "tauri android build --debug --apk --target aarch64 --ci",
-    "bundle:macos": "pnpm brand:sync && APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} tauri build --bundles app,dmg"
+    "bundle:macos": "pnpm brand:sync && PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} TAURI_SIGNING_PRIVATE_KEY=\"${TAURI_SIGNING_PRIVATE_KEY:-$(cat ${TAURI_SIGNING_PRIVATE_KEY_PATH:-$HOME/.tauri/linai-updater.key})}\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-} tauri build --bundles app,dmg"
   },
   "dependencies": {
     "@lucide/vue": "^1.28.0",
@@ -23,7 +24,9 @@
     "@tauri-apps/plugin-http": "^2.5.9",
     "@tauri-apps/plugin-opener": "^2.5.4",
     "@tauri-apps/plugin-os": "^2.3.2",
+    "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-store": "^2.4.4",
+    "@tauri-apps/plugin-updater": "^2.10.1",
     "vue": "^3.5.40",
     "vue-router": "^4.6.4"
   },
