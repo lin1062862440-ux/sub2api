@@ -1,14 +1,27 @@
 import { reactive, readonly } from 'vue'
 import type { User } from '@/api/types'
 
-const showLogin = new URLSearchParams(window.location.search).get('screen') === 'login'
+const visualQuery = new URLSearchParams(window.location.search)
+const showLogin = visualQuery.get('screen') === 'login'
+const requestedRole = visualQuery.get('role')
+const visualRole = requestedRole === 'user' ? 'user' : 'admin'
+const requestedWorkspace = visualQuery.get('workspace')
+const visualWorkspace = visualRole === 'admin' && requestedWorkspace === 'personal'
+  ? 'personal'
+  : visualRole === 'admin'
+    ? 'admin'
+    : 'personal'
+
+// This module is loaded while the router is created, before bootstrap runs.
+// Persisting here makes the first route guard and shell render deterministic.
+localStorage.setItem('linai.desktop.workspace', visualWorkspace)
 
 const visualUser: User = {
   id: 1,
   username: 'Lin',
   email: 'lin@example.com',
   avatar_url: null,
-  role: 'admin' as const,
+  role: visualRole,
   balance: 128.6,
   frozen_balance: 0,
   concurrency: 12,

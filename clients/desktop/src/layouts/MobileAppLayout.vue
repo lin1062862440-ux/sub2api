@@ -89,13 +89,22 @@ function closeMore(restoreFocus = false) {
   if (restoreFocus) void nextTick(() => moreTrigger.value?.focus())
 }
 
-function toggleAccount() {
+function accountFocusableElements() {
+  if (!accountArea.value) return []
+  return Array.from(accountArea.value.querySelectorAll<HTMLElement>(
+    '#mobile-account-popover a[href], #mobile-account-popover button:not(:disabled)',
+  ))
+}
+
+async function toggleAccount() {
   if (accountOpen.value) {
     closeAccount(true)
     return
   }
   closeMore(false)
   accountOpen.value = true
+  await nextTick()
+  accountFocusableElements()[0]?.focus()
 }
 
 async function toggleMore() {
@@ -152,7 +161,25 @@ function handleDocumentKeydown(event: KeyboardEvent) {
     closeLayers()
     return
   }
-  if (event.key !== 'Tab' || !moreOpen.value || !moreSheet.value) return
+  if (event.key !== 'Tab') return
+
+  if (accountOpen.value) {
+    const controls = accountFocusableElements()
+    const first = controls[0]
+    const last = controls[controls.length - 1]
+    const active = document.activeElement
+    const outside = !accountArea.value?.contains(active)
+    if (!first || !last) {
+      event.preventDefault()
+      accountTrigger.value?.focus()
+    } else if (event.shiftKey ? active === first || outside : active === last || outside) {
+      event.preventDefault()
+      ;(event.shiftKey ? last : first).focus()
+    }
+    return
+  }
+
+  if (!moreOpen.value || !moreSheet.value) return
 
   const destinations = Array.from(
     moreSheet.value.querySelectorAll<HTMLElement>('[data-testid="mobile-overflow-nav-item"]'),
@@ -244,6 +271,7 @@ onBeforeUnmount(() => {
           type="button"
           data-testid="mobile-account-trigger"
           aria-label="账户"
+          aria-haspopup="dialog"
           aria-controls="mobile-account-popover"
           :aria-expanded="accountOpen"
           @click="toggleAccount"
@@ -256,7 +284,8 @@ onBeforeUnmount(() => {
           id="mobile-account-popover"
           class="mobile-account-popover"
           data-testid="mobile-account-popover"
-          role="region"
+          role="dialog"
+          aria-modal="true"
           aria-labelledby="mobile-account-heading"
         >
           <div class="mobile-identity">

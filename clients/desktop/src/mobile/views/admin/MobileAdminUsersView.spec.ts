@@ -12,6 +12,7 @@ import userDeleteSource from '@/components/admin/UserDeleteDialog.vue?raw'
 import userDetailSource from '@/components/admin/UserDetailDrawer.vue?raw'
 import userEditorSource from '@/components/admin/UserEditorDialog.vue?raw'
 import userGroupsSource from '@/components/admin/UserGroupsDialog.vue?raw'
+import mobileAdminUsersSource from './MobileAdminUsersView.vue?raw'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(),
@@ -132,6 +133,10 @@ describe('MobileAdminUsersView', () => {
     mocks.quotas.mockResolvedValue({ platform_quotas: [] })
     mocks.updateQuotas.mockResolvedValue({ platform_quotas: [] })
     mocks.resetQuota.mockResolvedValue({ platform_quotas: [] })
+  })
+
+  it('keeps fatal list recovery controls at the 44px touch-target minimum', () => {
+    expect(mobileAdminUsersSource).toMatch(/\.list-state button\{[^}]*min-height:44px/)
   })
 
   it('renders safe mobile user cards and requests the exact fixed page contract', async () => {

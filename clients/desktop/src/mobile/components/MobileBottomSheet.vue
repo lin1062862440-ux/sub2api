@@ -265,4 +265,18 @@ onBeforeUnmount(() => {
 .mobile-bottom-sheet-leave-to .mobile-bottom-sheet {
   transform: translateY(20px);
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-bottom-sheet-enter-active,
+  .mobile-bottom-sheet-leave-active,
+  .mobile-bottom-sheet-enter-active .mobile-bottom-sheet,
+  .mobile-bottom-sheet-leave-active .mobile-bottom-sheet {
+    transition: none;
+  }
+
+  .mobile-bottom-sheet-enter-from .mobile-bottom-sheet,
+  .mobile-bottom-sheet-leave-to .mobile-bottom-sheet {
+    transform: none;
+  }
+}
 </style>

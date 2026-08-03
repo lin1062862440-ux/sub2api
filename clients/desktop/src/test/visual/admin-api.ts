@@ -1,4 +1,29 @@
 const now = '2026-08-02T08:00:00Z'
+const visualQuery = new URLSearchParams(window.location.search)
+const longChineseLabel = '跨区域模型推理与超长上下文联合调度'
+
+function previewFlag(name: 'empty' | 'error', route: string) {
+  return visualQuery.getAll(name).some((value) =>
+    value.split(',').some((entry) => ['1', 'true', 'all', route].includes(entry.trim())),
+  )
+}
+
+function assertPreviewRoute(route: string) {
+  if (previewFlag('error', route)) throw new Error(`visual preview ${route} error`)
+}
+
+function pageRows<T>(rows: T[], params: { page?: number; page_size?: number } = {}) {
+  const page = Math.max(1, Math.floor(params.page ?? 1))
+  const pageSize = Math.max(1, Math.floor(params.page_size ?? 20))
+  const start = (page - 1) * pageSize
+  return {
+    items: rows.slice(start, start + pageSize),
+    total: rows.length,
+    page,
+    page_size: pageSize,
+    pages: rows.length ? Math.ceil(rows.length / pageSize) : 0,
+  }
+}
 
 const account = {
   id: 1,
@@ -121,6 +146,54 @@ const subscription = {
   group: { id: 1, name: 'Claude Code', daily_limit_usd: 10, weekly_limit_usd: 50, monthly_limit_usd: 100 },
 }
 
+const accounts = Array.from({ length: 22 }, (_, index) => ({
+  ...account,
+  id: index + 1,
+  name: index === 0 ? `${longChineseLabel}主账号池` : `预览账号 ${String(index + 1).padStart(2, '0')}`,
+  platform: index % 2 === 0 ? account.platform : 'openai' as const,
+  status: index === 1 ? 'error' as const : account.status,
+  schedulable: index !== 1,
+  error_message: index === 1 ? 'refresh token expired' : null,
+  groups: [{ id: index % 2 + 1, name: index % 2 ? 'Codex' : 'Claude Code' }],
+}))
+
+const users = Array.from({ length: 22 }, (_, index) => ({
+  ...user,
+  id: index + 7,
+  username: index === 0 ? longChineseLabel : `Preview User ${String(index + 1).padStart(2, '0')}`,
+  email: `preview-user-${index + 1}@example.com`,
+  balance: Number((32.5 - index * 0.7).toFixed(2)),
+  current_concurrency: index % 4,
+  notes: index === 0 ? `${longChineseLabel}演示记录` : '视觉回归测试账号',
+  subscriptions: [{ id: index + 3, status: 'active', group_id: 1, expires_at: '2026-09-01T00:00:00Z' }],
+}))
+
+const adminGroups = Array.from({ length: 22 }, (_, index) => ({
+  ...adminGroup,
+  id: index + 1,
+  name: index === 0 ? longChineseLabel : `预览分组 ${String(index + 1).padStart(2, '0')}`,
+  description: index === 0 ? `${longChineseLabel}的额度与请求调度` : adminGroup.description,
+  platform: index % 2 === 0 ? adminGroup.platform : 'openai' as const,
+  rate_multiplier: index % 2 === 0 ? 1.2 : 1,
+  sort_order: index + 1,
+}))
+
+const subscriptions = Array.from({ length: 22 }, (_, index) => ({
+  ...subscription,
+  id: index + 3,
+  user_id: index + 7,
+  user: {
+    id: index + 7,
+    email: `preview-user-${index + 1}@example.com`,
+    username: index === 0 ? longChineseLabel : `Preview User ${String(index + 1).padStart(2, '0')}`,
+  },
+  group: {
+    ...subscription.group,
+    name: index === 0 ? longChineseLabel : `Claude Code ${String(index + 1).padStart(2, '0')}`,
+    platform: 'anthropic',
+  },
+}))
+
 const redeemCode = {
   id: 1,
   code: 'LINAI-PREVIEW-2026',
@@ -180,10 +253,26 @@ export async function getAdminDashboardRealtime() {
   return { active_requests: 3, requests_per_minute: 64, average_response_time: 680, error_rate: 0.8 }
 }
 
-export async function listAdminAccounts() {
-  return { items: [account, { ...account, id: 2, name: 'Codex 备用', platform: 'openai' as const, status: 'error' as const, schedulable: false, error_message: 'refresh token expired', groups: [{ id: 2, name: 'Codex' }] }], total: 2, page: 1, page_size: 20 }
+export async function listAdminAccounts(params: { page?: number; page_size?: number } = {}) {
+  assertPreviewRoute('admin-accounts')
+  return pageRows(previewFlag('empty', 'admin-accounts') ? [] : accounts, params)
 }
-export async function getAdminAccount() { return account }
+export async function getAdminAccount(id = 1) { return accounts.find((item) => item.id === id) ?? account }
+export async function getAdminAccountModels() {
+  return [
+    { id: 'claude-sonnet-4', display_name: 'Claude Sonnet 4', owned_by: 'anthropic' },
+    { id: 'gpt-5', display_name: 'GPT-5', owned_by: 'openai' },
+  ]
+}
+export async function getAdminAccountUsage() {
+  return {
+    source: 'active' as const,
+    updated_at: now,
+    five_hour: { utilization: 42, resets_at: '2026-08-02T13:00:00Z', remaining_seconds: 18_000 },
+    seven_day: { utilization: 28, resets_at: '2026-08-09T00:00:00Z', remaining_seconds: 604_800 },
+    seven_day_sonnet: { utilization: 31, resets_at: '2026-08-09T00:00:00Z', remaining_seconds: 604_800 },
+  }
+}
 export async function createAdminAccount(payload: Record<string, unknown>) { return { ...account, ...payload } }
 export async function updateAdminAccount(_id: number, payload: Record<string, unknown>) { return { ...account, ...payload } }
 export async function testAdminAccount() { return { success: true, message: '连接正常', latency_ms: 420 } }
@@ -192,12 +281,25 @@ export async function clearAdminAccountError() { return account }
 export async function recoverAdminAccount() { return account }
 export async function setAdminAccountSchedulable(_id: number, schedulable: boolean) { return { ...account, schedulable } }
 
-export async function listAdminUsers() {
-  return { items: [user, { ...user, id: 8, username: 'Nova', email: 'nova@example.com', balance: 8.2, current_concurrency: 0 }], total: 2, page: 1, page_size: 20 }
+export async function listAdminUsers(params: { page?: number; page_size?: number } = {}) {
+  assertPreviewRoute('admin-users')
+  return pageRows(previewFlag('empty', 'admin-users') ? [] : users, params)
 }
-export async function getAdminUser() { return user }
-export async function getAdminGroups() { return [{ id: 1, name: 'Claude Code', platform: 'anthropic', is_exclusive: true }] }
-export async function listAdminGroups() { return { items: [adminGroup, { ...adminGroup, id: 2, name: 'Codex Team', platform: 'openai' as const, description: 'OpenAI 团队订阅', rate_multiplier: 1, rpm_limit: 90, monthly_limit_usd: 160 }], total: 2, page: 1, page_size: 20 } }
+export async function getAdminUser(id = 7) { return users.find((item) => item.id === id) ?? user }
+export async function getAdminGroups() {
+  return adminGroups.slice(0, 4).map((group) => ({
+    id: group.id,
+    name: group.name,
+    platform: group.platform,
+    is_exclusive: group.is_exclusive,
+    status: group.status,
+    subscription_type: group.subscription_type,
+  }))
+}
+export async function listAdminGroups(params: { page?: number; page_size?: number } = {}) {
+  assertPreviewRoute('admin-groups')
+  return pageRows(previewFlag('empty', 'admin-groups') ? [] : adminGroups, params)
+}
 export async function createAdminGroup(payload: Record<string, unknown>) { return { ...adminGroup, ...payload } }
 export async function updateAdminGroup(_id: number, payload: Record<string, unknown>) { return { ...adminGroup, ...payload } }
 export async function updateAdminGroupStatus(_id: number, status: 'active' | 'inactive') { return { ...adminGroup, status } }
@@ -230,13 +332,17 @@ export async function getAdminChannelMonitorHistory() { return { items: [{ id: 1
 export async function listAdminAuditLogs() { return { items: [auditLog], total: 1, page: 1, page_size: 20 } }
 export async function getAdminAuditLog() { return auditLog }
 
-export async function listAdminSubscriptions() { return { items: [subscription], total: 1, page: 1, page_size: 20 } }
-export async function getAdminSubscriptionProgress() {
+export async function listAdminSubscriptions(params: { page?: number; page_size?: number } = {}) {
+  assertPreviewRoute('admin-subscriptions')
+  return pageRows(previewFlag('empty', 'admin-subscriptions') ? [] : subscriptions, params)
+}
+export async function getAdminSubscriptionProgress(id = 3) {
   return {
-    id: 3,
-    group_name: 'Claude Code',
-    daily: { used_usd: 32.05, limit_usd: 400, remaining_usd: 367.95, percentage: 8.009257707, resets_in_seconds: 21_600 },
-    weekly: { used_usd: 113.24, limit_usd: 500, remaining_usd: 386.76, percentage: 22.6459541288, resets_in_seconds: 360_000 },
+    id,
+    group_name: id === 3 ? longChineseLabel : `Claude Code ${id - 2}`,
+    daily: { used_usd: 32.05, limit_usd: 400, remaining_usd: 367.95, percentage: 8.009257707, window_start: '2026-08-02T00:00:00Z', resets_at: '2026-08-03T00:00:00Z', resets_in_seconds: 21_600 },
+    weekly: { used_usd: 113.24, limit_usd: 500, remaining_usd: 386.76, percentage: 22.6459541288, window_start: '2026-07-27T00:00:00Z', resets_at: '2026-08-03T00:00:00Z', resets_in_seconds: 360_000 },
+    monthly: { used_usd: 180.12, limit_usd: 800, remaining_usd: 619.88, percentage: 22.515, window_start: '2026-08-01T00:00:00Z', resets_at: '2026-09-01T00:00:00Z', resets_in_seconds: 2_419_200 },
     expires_at: '2026-09-01T00:00:00Z',
     expires_in_days: 30,
   }

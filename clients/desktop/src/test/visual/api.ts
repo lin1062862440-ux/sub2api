@@ -7,7 +7,18 @@ import type {
 } from '@/api/types'
 
 const today = new Date()
-const slowPreview = new URLSearchParams(window.location.search).has('slow')
+const visualQuery = new URLSearchParams(window.location.search)
+const slowPreview = visualQuery.has('slow')
+
+function previewFlag(name: 'empty' | 'error', route: string) {
+  return visualQuery.getAll(name).some((value) =>
+    value.split(',').some((entry) => ['1', 'true', 'all', route].includes(entry.trim())),
+  )
+}
+
+function assertPreviewRoute(route: string) {
+  if (previewFlag('error', route)) throw new Error(`visual preview ${route} error`)
+}
 
 async function maybeDelay() {
   if (slowPreview) await new Promise((resolve) => window.setTimeout(resolve, 900))
@@ -315,7 +326,7 @@ export async function getUsageModels() {
   }
 }
 
-const visualUsageRows = [
+const visualUsageSeeds = [
   { id: 1006, api_key_id: 1, model: 'claude-sonnet-4', inbound_endpoint: '/v1/messages', input_tokens: 8240, output_tokens: 1280, cache_creation_tokens: 640, cache_read_tokens: 4260, total_tokens: 14420, actual_cost: 0.0684, request_type: 'stream' as const, stream: true, duration_ms: 1260, first_token_ms: 284, billing_type: 0, billing_mode: 'token', created_at: new Date(Date.now() - 3 * 60_000).toISOString(), api_key: { id: 1, name: 'production-key' }, group: { id: 1, name: 'Claude 通用' } },
   { id: 1005, api_key_id: 2, model: 'gpt-5.2-codex', inbound_endpoint: '/v1/responses', input_tokens: 12480, output_tokens: 3620, cache_creation_tokens: 0, cache_read_tokens: 8840, total_tokens: 24940, actual_cost: 0.1042, request_type: 'sync' as const, stream: false, duration_ms: 2184, first_token_ms: 0, billing_type: 1, billing_mode: 'token', created_at: new Date(Date.now() - 11 * 60_000).toISOString(), api_key: { id: 2, name: 'coding-agent' }, group: { id: 2, name: 'OpenAI 高速' } },
   { id: 1004, api_key_id: 1, model: 'claude-sonnet-4', inbound_endpoint: '/v1/messages', input_tokens: 4260, output_tokens: 920, cache_creation_tokens: 120, cache_read_tokens: 2280, total_tokens: 7580, actual_cost: 0.0368, request_type: 'stream' as const, stream: true, duration_ms: 864, first_token_ms: 196, billing_type: 0, billing_mode: 'token', created_at: new Date(Date.now() - 26 * 60_000).toISOString(), api_key: { id: 1, name: 'production-key' }, group: { id: 1, name: 'Claude 通用' } },
@@ -324,8 +335,31 @@ const visualUsageRows = [
   { id: 1001, api_key_id: 1, model: 'claude-opus-4', inbound_endpoint: '/v1/messages', input_tokens: 2680, output_tokens: 740, cache_creation_tokens: 240, cache_read_tokens: 1260, total_tokens: 4920, actual_cost: 0.0648, request_type: 'live' as const, stream: true, duration_ms: 718, first_token_ms: 148, billing_type: 0, billing_mode: 'token', created_at: new Date(Date.now() - 76 * 60_000).toISOString(), api_key: { id: 1, name: 'production-key' }, group: { id: 1, name: 'Claude 通用' } },
 ]
 
+const visualUsageRows = Array.from({ length: 24 }, (_, index) => {
+  const seed = visualUsageSeeds[index % visualUsageSeeds.length]!
+  return {
+    ...seed,
+    id: 1100 - index,
+    created_at: new Date(Date.now() - (index + 1) * 7 * 60_000).toISOString(),
+    group: index === 0
+      ? { id: 9, name: '跨区域模型推理与超长上下文联合调度' }
+      : seed.group,
+  }
+})
+
 export async function getUsageRecords(params: { page?: number; page_size?: number } = {}) {
-  return { items: visualUsageRows, total: 1286, page: params.page ?? 1, page_size: params.page_size ?? 20 }
+  assertPreviewRoute('usage')
+  const page = Math.max(1, Math.floor(params.page ?? 1))
+  const pageSize = Math.max(1, Math.floor(params.page_size ?? 20))
+  const rows = previewFlag('empty', 'usage') ? [] : visualUsageRows
+  const start = (page - 1) * pageSize
+  return {
+    items: rows.slice(start, start + pageSize),
+    total: rows.length,
+    page,
+    page_size: pageSize,
+    pages: rows.length ? Math.ceil(rows.length / pageSize) : 0,
+  }
 }
 
 const visualErrors = [

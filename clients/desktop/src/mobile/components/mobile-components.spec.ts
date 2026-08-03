@@ -3,6 +3,7 @@ import { defineComponent } from 'vue'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import MobileBottomSheet from './MobileBottomSheet.vue'
+import mobileBottomSheetSource from './MobileBottomSheet.vue?raw'
 import MobilePage from './MobilePage.vue'
 import MobilePagination from './MobilePagination.vue'
 
@@ -63,6 +64,12 @@ describe('MobilePage', () => {
 })
 
 describe('MobileBottomSheet', () => {
+  it('removes sheet transitions when the user requests reduced motion', () => {
+    expect(mobileBottomSheetSource).toContain('@media (prefers-reduced-motion: reduce)')
+    expect(mobileBottomSheetSource).toMatch(/\.mobile-bottom-sheet-enter-active[\s\S]*transition:\s*none/)
+    expect(mobileBottomSheetSource).toMatch(/@media \(prefers-reduced-motion: reduce\)[\s\S]*\.mobile-bottom-sheet-enter-from[\s\S]*transform:\s*none/)
+  })
+
   it('teleports a labelled modal, focuses its first control, and restores prior focus on Escape', async () => {
     const trigger = document.createElement('button')
     document.body.appendChild(trigger)

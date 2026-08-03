@@ -197,8 +197,9 @@ describe('MobileAppLayout', () => {
     expect(popover.find('[data-testid="mobile-workspace-switch"]').exists()).toBe(false)
     expect(wrapper.get('[data-testid="mobile-account-trigger"]').attributes('aria-controls'))
       .toBe('mobile-account-popover')
-    expect(wrapper.get('[data-testid="mobile-account-trigger"]').attributes('aria-haspopup')).toBeUndefined()
-    expect(popover.attributes('role')).toBe('region')
+    expect(wrapper.get('[data-testid="mobile-account-trigger"]').attributes('aria-haspopup')).toBe('dialog')
+    expect(popover.attributes('role')).toBe('dialog')
+    expect(popover.attributes('aria-modal')).toBe('true')
     expect(popover.find('[role="menuitem"]').exists()).toBe(false)
 
     await clickAndExpectRoute(router, popover.get('[data-testid="profile-menu-item"]'), 'profile')
@@ -220,6 +221,29 @@ describe('MobileAppLayout', () => {
     await nextTick()
     expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
     expect(document.activeElement).toBe(trigger.element)
+  })
+
+  it('moves focus into the account popover and traps Tab in its controls', async () => {
+    const { wrapper } = await mountLayout('/dashboard')
+    await wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    await nextTick()
+    const controls = wrapper.findAll<HTMLElement>('[data-testid="mobile-account-popover"] a, [data-testid="mobile-account-popover"] button')
+    const first = controls[0]!.element
+    const last = controls[controls.length - 1]!.element
+
+    expect(document.activeElement).toBe(first)
+
+    last.focus()
+    const forwards = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true })
+    document.dispatchEvent(forwards)
+    expect(forwards.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(first)
+
+    first.focus()
+    const backwards = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+    document.dispatchEvent(backwards)
+    expect(backwards.defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(last)
   })
 
   it('opens the password dialog and signs out to login', async () => {

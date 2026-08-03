@@ -1,7 +1,14 @@
 const now = '2026-08-02T08:00:00Z'
+const visualQuery = new URLSearchParams(window.location.search)
+
+function previewFlag(name: 'empty' | 'error') {
+  return visualQuery.getAll(name).some((value) =>
+    value.split(',').some((entry) => ['1', 'true', 'all', 'user-groups'].includes(entry.trim())),
+  )
+}
 
 let groups = [
-  { id: 1, name: '研发团队', description: '核心研发成员与项目用量统一查看', status: 'active' as const, member_count: 4, viewer_count: 2, created_at: '2026-07-01T00:00:00Z', updated_at: now },
+  { id: 1, name: '跨区域模型推理与超长上下文联合调度', description: '核心研发成员、跨区域模型推理与超长上下文联合调度项目用量统一查看', status: 'active' as const, member_count: 4, viewer_count: 2, created_at: '2026-07-01T00:00:00Z', updated_at: now },
   { id: 2, name: '运营团队', description: '运营、客服与内容协作成员', status: 'active' as const, member_count: 3, viewer_count: 1, created_at: '2026-07-05T00:00:00Z', updated_at: '2026-07-30T08:00:00Z' },
   { id: 3, name: '重点客户', description: '客户成功团队的服务对象与额度跟踪', status: 'active' as const, member_count: 2, viewer_count: 3, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-28T08:00:00Z' },
 ]
@@ -13,7 +20,10 @@ const members = [
 ]
 
 export async function getUserGroupCapabilities() { return { can_access: true, can_manage: true, group_count: groups.length } }
-export async function listUserGroups() { return groups }
+export async function listUserGroups() {
+  if (previewFlag('error')) throw new Error('visual preview user-groups error')
+  return previewFlag('empty') ? [] : groups
+}
 export async function createUserGroup(payload: { name: string; description: string }) { const group = { id: Date.now(), ...payload, status: 'active' as const, member_count: 0, viewer_count: 0, created_at: now, updated_at: now }; groups = [group, ...groups]; return group }
 export async function updateUserGroup(id: number, payload: { name: string; description: string }) { const group = { ...groups.find((item) => item.id === id)!, ...payload, updated_at: now }; groups = groups.map((item) => item.id === id ? group : item); return group }
 export async function archiveUserGroup(id: number) { groups = groups.filter((item) => item.id !== id) }
