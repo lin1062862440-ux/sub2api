@@ -114,6 +114,7 @@ func provideCleanup(
 	ollamaCloudUsage *service.OllamaCloudUsageService,
 	auditLog *service.AuditLogService,
 	promptAudit *securityaudit.PromptService,
+	userGroupPromptCapture *securityaudit.UserGroupPromptCaptureService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -153,6 +154,12 @@ func provideCleanup(
 			{"PromptAuditService", func() error {
 				if promptAudit != nil {
 					return promptAudit.Shutdown(ctx)
+				}
+				return nil
+			}},
+			{"UserGroupPromptCaptureService", func() error {
+				if userGroupPromptCapture != nil {
+					return userGroupPromptCapture.Stop(ctx)
 				}
 				return nil
 			}},

@@ -1,6 +1,20 @@
 package securityaudit
 
-import "github.com/google/wire"
+import (
+	"context"
+
+	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/google/wire"
+	"github.com/redis/go-redis/v9"
+)
+
+func ProvideUserGroupPromptCaptureService(repo service.UserGroupPromptCaptureRepository, redisClient *redis.Client) (*UserGroupPromptCaptureService, error) {
+	svc := NewUserGroupPromptCaptureService(repo, redisClient)
+	if err := svc.Start(context.Background()); err != nil {
+		return nil, err
+	}
+	return svc, nil
+}
 
 var ProviderSet = wire.NewSet(
 	NewPostgreSQLRepository,
@@ -20,4 +34,5 @@ var ProviderSet = wire.NewSet(
 	NewLegacyModerationAdapter,
 	NewCoordinator,
 	NewPromptAdminHandler,
+	ProvideUserGroupPromptCaptureService,
 )
