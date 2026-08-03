@@ -21,10 +21,12 @@ tauri-build = { version = "2.6.3", features = [] }
 chrono = { version = "0.4", features = ["serde"] }
 dirs = "5.0"
 sha2 = "0.10"
+base64 = "0.22"
+minisign-verify = "0.2.5"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 log = "0.4"
-tauri = { version = "2.11.3", features = ["macos-private-api"] }
+tauri = { version = "2.11.3", features = [] }
 tauri-plugin-log = "2"
 tauri-plugin-http = "2"
 tauri-plugin-store = "2"
@@ -47,3 +49,7 @@ objc2 = "0.6.4"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSAttributedString", "NSButton", "NSColor", "NSControl", "NSResponder", "NSStatusBarButton", "NSStatusItem", "NSView"] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSAttributedString", "NSDictionary", "NSObject", "NSString"] }
 window-vibrancy = "0.6"
+
+[dev-dependencies]
+blake2 = "0.10"
+ed25519-dalek = "2.2"

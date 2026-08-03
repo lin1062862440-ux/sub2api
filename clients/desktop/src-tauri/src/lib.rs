@@ -1,3 +1,6 @@
+#[cfg(any(mobile, test))]
+mod android_update;
+
 #[cfg(desktop)]
 pub mod local_config;
 #[cfg(desktop)]
@@ -92,6 +95,9 @@ pub fn run() {
 #[tauri::mobile_entry_point]
 pub fn run() {
     tauri::Builder::default()
+        .invoke_handler(tauri::generate_handler![
+            android_update::verify_android_update,
+        ])
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::default().build())

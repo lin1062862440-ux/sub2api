@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const lib = readFileSync(resolve(process.cwd(), 'src-tauri/src/lib.rs'), 'utf8').replace(/\r\n/g, '\n')
+const cargo = readFileSync(resolve(process.cwd(), 'src-tauri/Cargo.toml'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('Android Rust host boundary', () => {
   it('compiles desktop-only modules and plugins behind desktop cfg', () => {
@@ -18,5 +19,10 @@ describe('Android Rust host boundary', () => {
     expect(mobileSource).not.toContain('local_config::')
     expect(mobileSource).not.toContain('usage_display::')
     expect(mobileSource).not.toContain('text_export::')
+  })
+
+  it('keeps macOS-only Tauri features out of the mobile dependency graph', () => {
+    expect(cargo).toContain('tauri = { version = "2.11.3", features = [] }')
+    expect(cargo).toContain('[target.\'cfg(target_os = "macos")\'.dependencies]\ntauri = { version = "2.11.3", features = ["macos-private-api", "tray-icon"] }')
   })
 })
