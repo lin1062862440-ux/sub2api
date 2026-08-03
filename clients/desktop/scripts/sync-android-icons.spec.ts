@@ -9,6 +9,7 @@ import {
   readdir,
   rm,
   symlink,
+  utimes,
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -30,6 +31,7 @@ const densitySpecs = [
   { density: 'xxxhdpi', legacySize: 192, foregroundSize: 432 },
 ]
 const iconNames = ['ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png']
+const staleTimestamp = new Date(Date.now() - 6 * 60 * 1000)
 const temporaryDirectories: string[] = []
 const execFileAsync = promisify(execFile)
 
@@ -183,6 +185,10 @@ async function writeLockOwner(
     }),
   )
   return lockPath
+}
+
+async function markOld(...paths: string[]) {
+  for (const targetPath of paths) await utimes(targetPath, staleTimestamp, staleTimestamp)
 }
 
 function parseManifest(xml: string) {
@@ -523,17 +529,86 @@ describe('syncAndroidIcons transaction', () => {
     expect(error).toBeInstanceOf(Error)
     expect(error.message).toContain(`Another Android launcher icon sync owns ${lockPath}`)
     expect(error.message).toContain(`PID ${process.pid}`)
-    expect(error.message).toContain('rerun')
+    expect(error.message).toContain('inspect')
     expect(await lstat(lockPath)).toBeTruthy()
   })
 
-  it('cleans a dead owner lock without a live transaction and retries safely', async () => {
+  it('rejects a fresh ownerless lock with grace-period and inspection guidance', async () => {
     const { sourceRoot, androidResRoot } = await createFixture()
-    await writeLockOwner(androidResRoot, { pid: 99_999_999, transactionPath: null })
+    const lockPath = path.join(androidResRoot, '..', '.sync-android-icons.lock')
+    await mkdir(lockPath)
+
+    const error = await syncAndroidIcons({ sourceRoot, androidResRoot }).catch((caught) => caught)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toContain(lockPath)
+    expect(error.message).toContain('5 minutes')
+    expect(error.message).toContain('inspect')
+    expect(await lstat(lockPath)).toBeTruthy()
+  })
+
+  it('reclaims an old ownerless lock after the grace period', async () => {
+    const { sourceRoot, androidResRoot } = await createFixture()
+    const lockPath = path.join(androidResRoot, '..', '.sync-android-icons.lock')
+    await mkdir(lockPath)
+    await markOld(lockPath)
 
     await syncAndroidIcons({ sourceRoot, androidResRoot })
 
     await expectNoTransactionArtifacts(androidResRoot)
+  })
+
+  it('cleans an old dead-owner lock without a live transaction and retries safely', async () => {
+    const { sourceRoot, androidResRoot } = await createFixture()
+    const lockPath = await writeLockOwner(androidResRoot, {
+      pid: 99_999_999,
+      transactionPath: null,
+    })
+    await markOld(path.join(lockPath, 'owner.json'), lockPath)
+
+    await syncAndroidIcons({ sourceRoot, androidResRoot })
+
+    await expectNoTransactionArtifacts(androidResRoot)
+  })
+
+  it('reclaims only old unjournaled matching stages for a dead owner', async () => {
+    const { sourceRoot, androidResRoot } = await createFixture()
+    const mainRoot = path.dirname(androidResRoot)
+    const lockPath = await writeLockOwner(androidResRoot, {
+      pid: 99_999_999,
+      transactionPath: null,
+    })
+    const orphanStage = path.join(mainRoot, '.android-icons-stage-orphan')
+    const unrelatedTemp = path.join(mainRoot, '.unrelated-temp')
+    await mkdir(orphanStage)
+    await mkdir(unrelatedTemp)
+    await markOld(orphanStage, path.join(lockPath, 'owner.json'), lockPath)
+
+    await syncAndroidIcons({ sourceRoot, androidResRoot })
+
+    await expectNoTransactionArtifacts(androidResRoot)
+    expect(await lstat(unrelatedTemp)).toBeTruthy()
+  })
+
+  it('preserves a fresh unjournaled stage even when its dead-owner lock is old', async () => {
+    const { sourceRoot, androidResRoot } = await createFixture()
+    const mainRoot = path.dirname(androidResRoot)
+    const lockPath = await writeLockOwner(androidResRoot, {
+      pid: 99_999_999,
+      transactionPath: null,
+    })
+    const orphanStage = path.join(mainRoot, '.android-icons-stage-fresh')
+    await mkdir(orphanStage)
+    await markOld(path.join(lockPath, 'owner.json'), lockPath)
+
+    const error = await syncAndroidIcons({ sourceRoot, androidResRoot }).catch((caught) => caught)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toContain(lockPath)
+    expect(error.message).toContain('5 minutes')
+    expect(error.message).toContain('inspect')
+    expect(await lstat(lockPath)).toBeTruthy()
+    expect(await lstat(orphanStage)).toBeTruthy()
   })
 
   it('preserves an unsafe lock when owner metadata cannot be validated', async () => {
@@ -545,7 +620,7 @@ describe('syncAndroidIcons transaction', () => {
     const error = await syncAndroidIcons({ sourceRoot, androidResRoot }).catch((caught) => caught)
 
     expect(error.message).toContain(`Cannot safely recover Android launcher icon lock ${lockPath}`)
-    expect(error.message).toContain('Do not delete it manually')
+    expect(error.message).toContain('inspect')
     expect(await readFile(path.join(lockPath, 'owner.json'), 'utf8')).toBe('{invalid json')
   })
 
@@ -590,6 +665,54 @@ describe('syncAndroidIcons transaction', () => {
 
     expect(await readFile(destination)).toEqual(originalBytes)
     await expectNoTransactionArtifacts(androidResRoot)
+  })
+
+  it('preserves a crash journal when the live destination has a foreign hash', async () => {
+    const { sourceRoot, androidResRoot } = await createFixture()
+    const mainRoot = path.dirname(androidResRoot)
+    const transactionPath = path.join(mainRoot, '.android-icons-stage-foreign-live')
+    const destination = path.join(androidResRoot, 'mipmap-mdpi', 'ic_launcher.png')
+    const backupPath = path.join(transactionPath, 'backups', '0')
+    const stagedPath = path.join(transactionPath, 'files', '0')
+    const originalBytes = Buffer.from('original target before crash')
+    const committedBytes = Buffer.from('new target from crashed sync')
+    const foreignBytes = Buffer.from('third-party live target')
+    await mkdir(path.dirname(destination), { recursive: true })
+    await mkdir(path.dirname(backupPath), { recursive: true })
+    await writeFile(destination, foreignBytes)
+    await writeFile(backupPath, originalBytes)
+    await writeFile(
+      path.join(transactionPath, 'journal.json'),
+      JSON.stringify({
+        version: 1,
+        status: 'committing',
+        sourceRoot,
+        androidResRoot,
+        entries: [
+          {
+            destination,
+            stagedPath,
+            backupPath,
+            originalType: 'file',
+            originalHash: sha256(originalBytes),
+            newHash: sha256(committedBytes),
+          },
+        ],
+      }),
+    )
+    const lockPath = await writeLockOwner(androidResRoot, {
+      pid: 99_999_999,
+      transactionPath,
+    })
+
+    const error = await syncAndroidIcons({ sourceRoot, androidResRoot }).catch((caught) => caught)
+
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toContain('live file changed outside the transaction')
+    expect(error.message).toContain('inspect')
+    expect(await readFile(destination)).toEqual(foreignBytes)
+    expect(await lstat(lockPath)).toBeTruthy()
+    expect(await lstat(transactionPath)).toBeTruthy()
   })
 
   it('rolls back the manifest, normalized source, and replaced resources after a mid-commit failure', async () => {

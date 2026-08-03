@@ -23,6 +23,8 @@ const LOCK_NAME = '.sync-android-icons.lock'
 const OWNER_NAME = 'owner.json'
 const JOURNAL_NAME = 'journal.json'
 const TRANSACTION_PREFIX = '.android-icons-stage-'
+const STALE_LOCK_GRACE_MS = 5 * 60 * 1000
+const STALE_LOCK_GRACE_LABEL = '5 minutes'
 const densitySpecs = [
   { density: 'mdpi', legacySize: 48, foregroundSize: 108 },
   { density: 'hdpi', legacySize: 72, foregroundSize: 162 },
@@ -72,14 +74,6 @@ async function writeJsonAtomic(filePath, value) {
   const temporaryPath = `${filePath}.tmp-${process.pid}`
   await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`)
   await rename(temporaryPath, filePath)
-}
-
-async function readJson(filePath, label) {
-  try {
-    return JSON.parse(await readFile(filePath, 'utf8'))
-  } catch {
-    throw new Error(`${label} is missing or invalid JSON`)
-  }
 }
 
 function processIsAlive(pid) {
@@ -545,7 +539,16 @@ async function commitEntries(entries, stageRoot, context) {
 function lockRecoveryError(lockPath, detail) {
   return new Error(
     `Cannot safely recover Android launcher icon lock ${lockPath}: ${detail}. ` +
-      'Do not delete it manually; confirm no icon sync process is active, then rerun for automatic recovery.',
+      `Wait until the lock and matching staging paths have been unchanged for at least ${STALE_LOCK_GRACE_LABEL}, ` +
+      `verify no icon sync process is active, and inspect ${lockPath} plus matching staging directories before any manual cleanup.`,
+  )
+}
+
+function isTransactionName(name) {
+  return (
+    name.startsWith(TRANSACTION_PREFIX) &&
+    name.length > TRANSACTION_PREFIX.length &&
+    /^[A-Za-z0-9_-]+$/.test(name.slice(TRANSACTION_PREFIX.length))
   )
 }
 
@@ -553,16 +556,74 @@ function validateTransactionPath(mainRoot, transactionPath) {
   return (
     typeof transactionPath === 'string' &&
     path.dirname(path.resolve(transactionPath)) === path.resolve(mainRoot) &&
-    path.basename(transactionPath).startsWith(TRANSACTION_PREFIX)
+    isTransactionName(path.basename(transactionPath))
   )
 }
 
+async function requirePastRecoveryGrace(targetPath, lockPath, label) {
+  let targetStats
+  try {
+    targetStats = await stat(targetPath)
+  } catch (error) {
+    throw lockRecoveryError(lockPath, `${label} metadata cannot be read: ${error.message}`)
+  }
+  const ageMs = Date.now() - targetStats.mtimeMs
+  if (!Number.isFinite(ageMs) || ageMs <= STALE_LOCK_GRACE_MS) {
+    throw lockRecoveryError(
+      lockPath,
+      `${label} was modified within the ${STALE_LOCK_GRACE_LABEL} recovery grace period`,
+    )
+  }
+}
+
+async function findOrphanStages(lockPath, mainRoot) {
+  const stages = []
+  for (const entry of await readdir(mainRoot, { withFileTypes: true })) {
+    if (!entry.name.startsWith(TRANSACTION_PREFIX)) continue
+    if (!entry.isDirectory() || !isTransactionName(entry.name)) {
+      throw lockRecoveryError(lockPath, `unsafe staging entry exists at ${path.join(mainRoot, entry.name)}`)
+    }
+    const stagePath = path.join(mainRoot, entry.name)
+    if (!validateTransactionPath(mainRoot, stagePath)) {
+      throw lockRecoveryError(lockPath, `staging path is outside the Android main directory: ${stagePath}`)
+    }
+    stages.push(stagePath)
+  }
+  return stages
+}
+
+async function removeExpiredUnjournaledState(lockPath, mainRoot, ownerPath) {
+  await requirePastRecoveryGrace(lockPath, lockPath, 'lock')
+  if (ownerPath) await requirePastRecoveryGrace(ownerPath, lockPath, 'owner metadata')
+
+  const stages = await findOrphanStages(lockPath, mainRoot)
+  for (const stagePath of stages) {
+    const journal = await pathState(path.join(stagePath, JOURNAL_NAME))
+    if (journal.type !== 'absent') {
+      throw lockRecoveryError(lockPath, `unjournaled recovery found transaction data at ${stagePath}`)
+    }
+    await requirePastRecoveryGrace(stagePath, lockPath, `staging directory ${stagePath}`)
+  }
+  for (const stagePath of stages) await rm(stagePath, { recursive: true, force: true })
+}
+
 async function recoverStaleLock(lockPath, mainRoot, context) {
+  const ownerPath = path.join(lockPath, OWNER_NAME)
+  const ownerState = await pathState(ownerPath)
+  if (ownerState.type === 'absent') {
+    await removeExpiredUnjournaledState(lockPath, mainRoot)
+    await rm(lockPath, { recursive: true, force: true })
+    return
+  }
+  if (ownerState.type !== 'file') {
+    throw lockRecoveryError(lockPath, 'owner metadata is not a regular file')
+  }
+
   let owner
   try {
-    owner = await readJson(path.join(lockPath, OWNER_NAME), 'lock owner')
-  } catch (error) {
-    throw lockRecoveryError(lockPath, error.message)
+    owner = JSON.parse(ownerState.bytes.toString('utf8'))
+  } catch {
+    throw lockRecoveryError(lockPath, 'owner metadata is invalid JSON')
   }
   if (owner.version !== 1 || !Number.isFinite(Date.parse(owner.startedAt || ''))) {
     throw lockRecoveryError(lockPath, 'owner metadata is invalid')
@@ -572,7 +633,8 @@ async function recoverStaleLock(lockPath, mainRoot, context) {
   if (alive === true) {
     throw new Error(
       `Another Android launcher icon sync owns ${lockPath} (PID ${owner.pid}). ` +
-        'Wait for it to finish; if that PID no longer exists, rerun for automatic recovery.',
+        `Wait for it to finish. If that PID exits unexpectedly, wait at least ${STALE_LOCK_GRACE_LABEL}, ` +
+        `verify no icon sync process is active, and inspect ${lockPath} before any manual cleanup.`,
     )
   }
   if (alive === null) throw lockRecoveryError(lockPath, `cannot determine whether PID ${owner.pid} is alive`)
@@ -595,18 +657,19 @@ async function recoverStaleLock(lockPath, mainRoot, context) {
         }
       } else if (journalState.type !== 'absent') {
         throw lockRecoveryError(lockPath, 'transaction journal is not a regular file')
+      } else {
+        await removeExpiredUnjournaledState(lockPath, mainRoot, ownerPath)
       }
-      await rm(owner.transactionPath, { recursive: true, force: true })
+      if (journalState.type === 'file') {
+        await rm(owner.transactionPath, { recursive: true, force: true })
+      }
     } else if (transaction.type === 'file') {
       throw lockRecoveryError(lockPath, 'transaction path is not a directory')
+    } else {
+      await removeExpiredUnjournaledState(lockPath, mainRoot, ownerPath)
     }
   } else {
-    const liveStages = (await readdir(mainRoot, { withFileTypes: true })).filter(
-      (entry) => entry.isDirectory() && entry.name.startsWith(TRANSACTION_PREFIX),
-    )
-    if (liveStages.length > 0) {
-      throw lockRecoveryError(lockPath, 'owner has no journal but transaction staging directories exist')
-    }
+    await removeExpiredUnjournaledState(lockPath, mainRoot, ownerPath)
   }
 
   await rm(lockPath, { recursive: true, force: true })
