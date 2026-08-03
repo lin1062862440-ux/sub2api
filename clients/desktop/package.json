@@ -13,7 +13,8 @@
     "brand:sync": "node scripts/sync-brand.mjs",
     "android:init": "tauri android init --ci --skip-targets-install",
     "android:dev": "tauri android dev",
-    "android:apk": "tauri android build --debug --apk --target aarch64 --ci",
+    "android:icons": "node scripts/sync-android-icons.mjs",
+    "android:apk": "pnpm android:icons && tauri android build --debug --apk --target aarch64 --ci",
     "bundle:macos": "pnpm brand:sync && APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} tauri build --bundles app,dmg"
   },
   "dependencies": {
