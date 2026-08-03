@@ -3,10 +3,13 @@ import { listen } from '@tauri-apps/api/event'
 
 import * as api from '@/api'
 import { usageDisplayStore } from '@/features/usage-display/core/store'
+import { disableWebviewContextMenu } from '@/lib/context-menu'
 import MacOSMenuBarPopover from './MacOSMenuBarPopover.vue'
 import '@/style.css'
 import '@/features/usage-display/external/macos/shared/quota-float-themes.css'
 import './macos-menu-bar.css'
+
+disableWebviewContextMenu()
 
 async function syncSession(userId?: number | null) {
   if (userId === null) {

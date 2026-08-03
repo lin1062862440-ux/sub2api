@@ -5,14 +5,14 @@ use std::sync::{
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tauri::{Manager, Monitor, PhysicalPosition, PhysicalSize, Position, Size};
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tauri_plugin_store::StoreExt;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use super::super::{Appearance, FloatingStyle, UsageDisplayHost, FLOATING_LABEL};
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use super::apply_window_material;
 
 pub(in crate::usage_display) const ORB_LOGICAL_WIDTH: f64 = 88.0;
@@ -187,7 +187,7 @@ struct FloatingPositionRecord {
     work_height: u32,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn physical_size(logical: (f64, f64), scale: f64) -> WindowSize {
     WindowSize::new(
         (logical.0 * scale).round().max(1.0) as u32,
@@ -195,7 +195,7 @@ fn physical_size(logical: (f64, f64), scale: f64) -> WindowSize {
     )
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn work_area(monitor: &Monitor) -> WorkArea {
     let area = monitor.work_area();
     WorkArea::new(
@@ -206,12 +206,12 @@ fn work_area(monitor: &Monitor) -> WorkArea {
     )
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn as_physical(point: WindowPoint) -> PhysicalPosition<i32> {
     PhysicalPosition::new(point.x, point.y)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn monitor_for_point(app: &tauri::AppHandle, point: WindowPoint) -> Result<Monitor, String> {
     app.monitor_from_point(point.x as f64, point.y as f64)
         .map_err(|error| error.to_string())?
@@ -219,7 +219,7 @@ fn monitor_for_point(app: &tauri::AppHandle, point: WindowPoint) -> Result<Monit
         .ok_or_else(|| "无法确定悬浮窗所在显示器".to_string())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn default_monitor(app: &tauri::AppHandle) -> Result<Monitor, String> {
     if let Some(main) = app.get_webview_window("main") {
         if let Ok(Some(monitor)) = main.current_monitor() {
@@ -231,13 +231,13 @@ fn default_monitor(app: &tauri::AppHandle) -> Result<Monitor, String> {
         .ok_or_else(|| "无法确定主显示器".to_string())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn load_position(app: &tauri::AppHandle) -> Option<FloatingPositionRecord> {
     let store = app.store("linai.json").ok()?;
     serde_json::from_value(store.get(POSITION_KEY)?).ok()
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn persist_position(app: tauri::AppHandle, record: FloatingPositionRecord, generation: u64) {
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(250));
@@ -254,7 +254,7 @@ fn persist_position(app: tauri::AppHandle, record: FloatingPositionRecord, gener
     });
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn restored_anchor(
     app: &tauri::AppHandle,
     record: FloatingPositionRecord,
@@ -281,7 +281,7 @@ fn restored_anchor(
     ))
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::usage_display) fn configure(
     app: &tauri::AppHandle,
     state: &UsageDisplayHost,
@@ -336,7 +336,7 @@ pub(in crate::usage_display) fn configure(
     window.show().map_err(|error| error.to_string())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::usage_display) fn set_expanded(
     app: &tauri::AppHandle,
     state: &UsageDisplayHost,
@@ -426,7 +426,7 @@ pub(in crate::usage_display) fn set_expanded(
         .map_err(|error| error.to_string())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::usage_display) fn start_dragging(app: &tauri::AppHandle) -> Result<(), String> {
     app.get_webview_window(FLOATING_LABEL)
         .ok_or_else(|| "用量悬浮窗尚未初始化".to_string())?
@@ -434,7 +434,7 @@ pub(in crate::usage_display) fn start_dragging(app: &tauri::AppHandle) -> Result
         .map_err(|error| error.to_string())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::usage_display) fn moved(
     app: &tauri::AppHandle,
     state: &UsageDisplayHost,

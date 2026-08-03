@@ -1,6 +1,11 @@
 node_modules/
 dist/
+dist-installer/
+dist-windows/
 src-tauri/target/
+src-installer-windows/target/
+src-installer-windows/gen/schemas/
 src-tauri/gen/schemas/
 *.tsbuildinfo
 .DS_Store
+latest.json

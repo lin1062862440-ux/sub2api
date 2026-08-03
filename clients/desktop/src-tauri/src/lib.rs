@@ -1,18 +1,29 @@
 #[cfg(desktop)]
 pub mod local_config;
 #[cfg(desktop)]
-mod usage_display;
-#[cfg(desktop)]
 mod text_export;
+#[cfg(desktop)]
+mod usage_display;
+
+#[cfg(desktop)]
+fn show_main_window(app: &tauri::AppHandle) {
+    use tauri::Manager;
+
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
 
 #[cfg(desktop)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .manage(local_config::LocalConfigHost::default())
         .manage(usage_display::UsageDisplayHost::default())
         // Forward a second-instance deep link to the running window on Windows/Linux.
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
-            use tauri::{Emitter, Manager};
+            use tauri::Emitter;
 
             let urls: Vec<String> = argv
                 .into_iter()
@@ -21,10 +32,7 @@ pub fn run() {
             if !urls.is_empty() {
                 let _ = app.emit("linai://new-url", urls);
             }
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            show_main_window(app);
         }))
         .invoke_handler(tauri::generate_handler![
             local_config::detect_local_client,
@@ -55,6 +63,10 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         // Lets the shared frontend branch on the host OS instead of forking.
         .plugin(tauri_plugin_os::init())
+        // Enables signed in-app desktop updates.
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        // Lets the updater restart the app after installing a new version.
+        .plugin(tauri_plugin_process::init())
         .setup(|app| {
             usage_display::setup(app)?;
             if cfg!(debug_assertions) {
@@ -66,8 +78,14 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("error while running tauri application");
+    app.run(|app, event| {
+        #[cfg(target_os = "macos")]
+        if let tauri::RunEvent::Reopen { .. } = event {
+            show_main_window(app);
+        }
+    });
 }
 
 #[cfg(mobile)]

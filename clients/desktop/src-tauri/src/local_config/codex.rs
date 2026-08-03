@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-use toml_edit::{value, DocumentMut, Item, Table};
+use toml_edit::DocumentMut;
 
 use super::paths::resolve_codex_dir;
 use super::transaction::{fingerprint, PlannedFile};
@@ -9,15 +9,6 @@ use super::types::{
     ClientDetection, ClientTarget, ConfigContext, ConfigError, ConfigFormat, EditableFile,
     ReadFilesInput, ValidationResult,
 };
-
-fn ensure_table<'a>(table: &'a mut Table, key: &str) -> &'a mut Table {
-    if !table.contains_key(key) || !table[key].is_table() {
-        table.insert(key, Item::Table(Table::new()));
-    }
-    table[key]
-        .as_table_mut()
-        .expect("table inserted immediately above")
-}
 
 fn normalize_base_url(base_url: &str) -> Result<String, ConfigError> {
     let normalized = base_url.trim().trim_end_matches('/');
@@ -27,55 +18,58 @@ fn normalize_base_url(base_url: &str) -> Result<String, ConfigError> {
     Ok(normalized.to_string())
 }
 
-pub(crate) fn merge_config(
-    existing: &str,
-    base_url: &str,
-    api_key: &str,
-) -> Result<String, ConfigError> {
-    let mut document = if existing.trim().is_empty() {
-        DocumentMut::new()
-    } else {
-        existing.parse::<DocumentMut>().map_err(|error| {
-            ConfigError::Invalid(format!("Codex config.toml TOML 格式错误: {error}"))
-        })?
-    };
+fn toml_string(value: &str) -> String {
+    serde_json::to_string(value).expect("string serialization cannot fail")
+}
 
-    document["model_provider"] = value("linai");
-    document["model"] = value("gpt-5.5");
-    document["review_model"] = value("gpt-5.5");
-    document["model_reasoning_effort"] = value("xhigh");
+pub(crate) fn generate_config(base_url: &str) -> Result<String, ConfigError> {
+    let base_url = normalize_base_url(base_url)?;
+    Ok(format!(
+        r#"model_provider = "OpenAI"
+model = "gpt-5.5"
+review_model = "gpt-5.5"
+model_reasoning_effort = "xhigh"
+disable_response_storage = true
+network_access = "enabled"
+windows_wsl_setup_acknowledged = true
 
-    let providers = ensure_table(document.as_table_mut(), "model_providers");
-    let linai = ensure_table(providers, "linai");
-    linai["name"] = value("LinAI");
-    linai["base_url"] = value(normalize_base_url(base_url)?);
-    linai["wire_api"] = value("responses");
-    linai["requires_openai_auth"] = value(true);
-    linai["experimental_bearer_token"] = value(api_key);
+[model_providers.OpenAI]
+name = "OpenAI"
+base_url = {}
+wire_api = "responses"
+requires_openai_auth = true
 
-    let mut output = document.to_string();
-    if !output.ends_with('\n') {
-        output.push('\n');
-    }
-    Ok(output)
+[features]
+goals = true
+"#,
+        toml_string(&base_url)
+    ))
+}
+
+pub(crate) fn generate_auth(api_key: &str) -> Result<Vec<u8>, ConfigError> {
+    let auth = serde_json::json!({ "OPENAI_API_KEY": api_key });
+    let mut bytes = serde_json::to_vec_pretty(&auth)
+        .map_err(|error| ConfigError::Invalid(format!("无法生成 Codex auth.json: {error}")))?;
+    bytes.push(b'\n');
+    Ok(bytes)
 }
 
 pub(crate) fn preview_quick(context: &ConfigContext) -> Result<Vec<PlannedFile>, ConfigError> {
     let config_dir = resolve_codex_dir(context.config_dir.as_deref())?;
-    let path = config_dir.join("config.toml");
-    let existing = if path.exists() {
-        fs::read_to_string(&path).map_err(|error| {
-            ConfigError::Invalid(format!("无法读取 Codex 配置 {}: {error}", path.display()))
-        })?
-    } else {
-        String::new()
-    };
-    let after = merge_config(&existing, &context.base_url, &context.api_key)?;
-    Ok(vec![PlannedFile::read(
-        &path,
-        ConfigFormat::Toml,
-        after.into_bytes(),
-    )?])
+    let config_path = config_dir.join("config.toml");
+    let auth_path = config_dir.join("auth.json");
+    Ok(vec![
+        PlannedFile::read(
+            &config_path,
+            ConfigFormat::Toml,
+            generate_config(&context.base_url)?.into_bytes(),
+        )?,
+        PlannedFile::read(
+            &auth_path,
+            ConfigFormat::Json,
+            generate_auth(&context.api_key)?,
+        )?,
+    ])
 }
 
 fn read_expert_file(
@@ -206,42 +200,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn quick_merge_preserves_comments_mcp_features_and_other_providers() {
-        let existing = r#"# user comment
-model_provider = "openai"
+    fn quick_config_matches_ccs_codex_files() {
+        let config = generate_config("https://lynn.lat/v1/").unwrap();
 
-[model_providers.other]
-name = "Other"
-base_url = "https://other.example/v1"
-
-[features]
-goals = true
-
-[mcp_servers.docs]
-command = "node"
-"#;
-
-        let merged = merge_config(existing, "https://lynn.lat/v1", "sk-lin-secret").unwrap();
-
-        assert!(merged.contains("# user comment"));
-        assert!(merged.contains("[mcp_servers.docs]"));
-        assert!(merged.contains("goals = true"));
-        assert!(merged.contains("[model_providers.other]"));
-        let document = merged.parse::<toml_edit::DocumentMut>().unwrap();
-        assert_eq!(document["model_provider"].as_str(), Some("linai"));
+        assert!(config.contains("model_provider = \"OpenAI\""));
+        assert!(config.contains("model = \"gpt-5.5\""));
+        assert!(config.contains("review_model = \"gpt-5.5\""));
+        assert!(config.contains("model_reasoning_effort = \"xhigh\""));
+        assert!(config.contains("disable_response_storage = true"));
+        assert!(config.contains("[features]\ngoals = true"));
+        assert!(!config.contains("experimental_bearer_token"));
+        let document = config.parse::<toml_edit::DocumentMut>().unwrap();
+        assert_eq!(document["model_provider"].as_str(), Some("OpenAI"));
         assert_eq!(
-            document["model_providers"]["linai"]["base_url"].as_str(),
+            document["model_providers"]["OpenAI"]["base_url"].as_str(),
             Some("https://lynn.lat/v1")
         );
         assert_eq!(
-            document["model_providers"]["linai"]["experimental_bearer_token"].as_str(),
-            Some("sk-lin-secret")
+            document["model_providers"]["OpenAI"]["requires_openai_auth"].as_bool(),
+            Some(true)
         );
     }
 
     #[test]
-    fn safe_preview_never_plans_an_auth_json_write() {
+    fn quick_preview_replaces_config_toml_and_auth_json() {
         let directory = tempfile::tempdir().unwrap();
+        std::fs::write(directory.path().join("config.toml"), "model = \"old\"\n").unwrap();
         std::fs::write(
             directory.path().join("auth.json"),
             "{\"tokens\":{\"access_token\":\"official\"}}\n",
@@ -258,17 +242,26 @@ command = "node"
 
         let files = preview_quick(&context).unwrap();
 
-        assert_eq!(files.len(), 1);
-        assert!(files[0].path.ends_with("config.toml"));
-        assert_eq!(
-            std::fs::read_to_string(directory.path().join("auth.json")).unwrap(),
-            "{\"tokens\":{\"access_token\":\"official\"}}\n"
-        );
+        assert_eq!(files.len(), 2);
+        let config = files
+            .iter()
+            .find(|file| file.path.ends_with("config.toml"))
+            .expect("config.toml planned");
+        let auth = files
+            .iter()
+            .find(|file| file.path.ends_with("auth.json"))
+            .expect("auth.json planned");
+        let config_after = String::from_utf8(config.after.clone()).unwrap();
+        assert!(config_after.contains("model_provider = \"OpenAI\""));
+        assert!(!config_after.contains("experimental_bearer_token"));
+        let auth_after: serde_json::Value = serde_json::from_slice(&auth.after).unwrap();
+        assert_eq!(auth_after["OPENAI_API_KEY"], "sk-lin-secret");
     }
 
     #[test]
-    fn malformed_toml_is_rejected() {
-        let error = merge_config("model = [", "https://lynn.lat/v1", "key").unwrap_err();
-        assert!(error.to_string().contains("TOML"));
+    fn malformed_toml_is_rejected_by_validator() {
+        let result = validate_toml("model = [");
+        assert!(!result.valid);
+        assert!(result.message.unwrap().contains("TOML"));
     }
 }

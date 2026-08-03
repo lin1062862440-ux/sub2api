@@ -43,6 +43,52 @@ describe('usage display storage', () => {
     })
     expect(first).not.toBe(second)
     expect(mocks.get).toHaveBeenCalledWith('usage_display:42')
+    expect(mocks.get).toHaveBeenCalledWith('usage_display:installer-default')
+  })
+
+  it('uses the installer floating-window preference until the user has their own config', async () => {
+    mocks.get
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce({
+        enabled: true,
+        source: 'balance',
+        subscriptionId: null,
+        surface: 'floating-window',
+        appearance: 'sky',
+        floatingStyle: 'orb',
+      })
+
+    await expect(loadUsageDisplayConfig(42)).resolves.toEqual({
+      enabled: true,
+      source: 'balance',
+      subscriptionId: null,
+      surface: 'floating-window',
+      appearance: 'sky',
+      floatingStyle: 'orb',
+    })
+    expect(mocks.get).toHaveBeenNthCalledWith(1, 'usage_display:42')
+    expect(mocks.get).toHaveBeenNthCalledWith(2, 'usage_display:installer-default')
+  })
+
+  it('keeps a user-specific config ahead of the installer default', async () => {
+    mocks.get.mockResolvedValueOnce({
+      enabled: false,
+      source: 'balance',
+      subscriptionId: null,
+      surface: 'menu-bar',
+      appearance: 'meadow',
+      floatingStyle: 'bar',
+    })
+
+    await expect(loadUsageDisplayConfig(42)).resolves.toEqual({
+      enabled: false,
+      source: 'balance',
+      subscriptionId: null,
+      surface: 'menu-bar',
+      appearance: 'meadow',
+      floatingStyle: 'bar',
+    })
+    expect(mocks.get).toHaveBeenCalledOnce()
   })
 
   it('migrates a valid legacy subscription config to menu bar, sky, and orb', async () => {

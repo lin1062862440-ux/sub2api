@@ -1,4 +1,7 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 fn safe_export_name(suggested_name: &str) -> String {
     let file_name = Path::new(suggested_name)
@@ -30,7 +33,10 @@ fn available_path(directory: &Path, suggested_name: &str) -> PathBuf {
     }
 
     let path = Path::new(&safe_name);
-    let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("linai-export");
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("linai-export");
     let extension = path.extension().and_then(|value| value.to_str());
     for index in 2..=9999 {
         let name = match extension {
@@ -43,7 +49,10 @@ fn available_path(directory: &Path, suggested_name: &str) -> PathBuf {
         }
     }
 
-    directory.join(format!("linai-export-{}.csv", chrono::Utc::now().timestamp_millis()))
+    directory.join(format!(
+        "linai-export-{}.csv",
+        chrono::Utc::now().timestamp_millis()
+    ))
 }
 
 #[tauri::command]
@@ -70,6 +79,9 @@ mod tests {
     fn avoids_overwriting_an_existing_export() {
         let directory = tempfile::tempdir().unwrap();
         fs::write(directory.path().join("codes.csv"), "existing").unwrap();
-        assert_eq!(available_path(directory.path(), "codes.csv"), directory.path().join("codes-2.csv"));
+        assert_eq!(
+            available_path(directory.path(), "codes.csv"),
+            directory.path().join("codes-2.csv")
+        );
     }
 }

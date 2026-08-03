@@ -212,9 +212,9 @@ function openAccountPage(path: string) {
             </span>
           </label>
 
-          <label class="control">
+          <div class="control">
             <span class="control-line">
-              <span>密码</span>
+              <label for="login-password">密码</label>
               <button
                 v-if="settings?.password_reset_enabled"
                 class="text-action"
@@ -228,6 +228,7 @@ function openAccountPage(path: string) {
             <span class="input-shell">
               <LockKeyhole :size="17" aria-hidden="true" />
               <input
+                id="login-password"
                 v-model="password"
                 data-testid="password-input"
                 :type="showPassword ? 'text' : 'password'"
@@ -245,7 +246,7 @@ function openAccountPage(path: string) {
                 <component :is="showPassword ? EyeOff : Eye" :size="17" />
               </button>
             </span>
-          </label>
+          </div>
 
           <div v-if="turnstileRequired" class="turnstile-slot" data-testid="turnstile-widget">
             <TurnstileWidget

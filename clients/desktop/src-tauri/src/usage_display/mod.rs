@@ -5,10 +5,10 @@ use std::sync::{
 
 use tauri::Manager;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tauri::{WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 mod macos;
 
 const POPOVER_LABEL: &str = "usage-popover";
@@ -114,9 +114,9 @@ fn surface_transition(enabled: bool, surface: UsageSurface) -> HostTransition {
 pub struct UsageDisplayHost {
     enabled: AtomicBool,
     active_surface: Mutex<Option<UsageSurface>>,
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     menu_bar: macos::MenuBarState,
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     floating: macos::FloatingWindowState,
 }
 
@@ -125,10 +125,10 @@ pub(super) fn show_popover(app: &tauri::AppHandle, anchor: PopoverAnchor) -> Res
         .get_webview_window(POPOVER_LABEL)
         .ok_or_else(|| "用量弹窗尚未初始化".to_string())?;
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     macos::position_popover(app, &window, anchor)?;
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = anchor;
         window.center().map_err(|error| error.to_string())?;
@@ -152,7 +152,7 @@ pub fn configure_usage_display(
     let appearance = Appearance::parse(&appearance)?;
     let floating_style = FloatingStyle::parse(&floating_style)?;
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
         let transition = surface_transition(enabled, surface);
         state.enabled.store(enabled, Ordering::SeqCst);
@@ -175,7 +175,7 @@ pub fn configure_usage_display(
         return Ok(());
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (app, title, surface, appearance, floating_style);
         state.enabled.store(false, Ordering::SeqCst);
@@ -197,14 +197,17 @@ pub fn set_usage_display_title(
         .lock()
         .map(|value| *value)
         .unwrap_or(None);
+    #[cfg(not(target_os = "windows"))]
     if active != Some(UsageSurface::MenuBar) {
         return Ok(());
     }
+    #[cfg(target_os = "windows")]
+    let _ = active;
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     return macos::set_menu_bar_title(&app, &title);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (app, title);
         Ok(())
@@ -230,10 +233,10 @@ pub fn set_floating_usage_expanded(
         return Err("悬浮窗当前未启用".to_string());
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     return macos::set_floating_expanded(&app, &state, expanded);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = (app, expanded);
         Ok(())
@@ -258,10 +261,10 @@ pub fn start_floating_usage_drag(
         return Err("悬浮窗当前未启用".to_string());
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
     return macos::start_floating_drag(&app);
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = app;
         Ok(())
@@ -301,18 +304,18 @@ pub fn quit_usage_display(app: tauri::AppHandle) {
 }
 
 pub fn setup(app: &mut tauri::App) -> tauri::Result<()> {
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
     {
         let _ = app;
         return Ok(());
     }
 
-    #[cfg(target_os = "macos")]
-    setup_macos(app)
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    setup_desktop(app)
 }
 
-#[cfg(target_os = "macos")]
-fn setup_macos(app: &mut tauri::App) -> tauri::Result<()> {
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+fn setup_desktop(app: &mut tauri::App) -> tauri::Result<()> {
     let popover = WebviewWindowBuilder::new(
         app,
         POPOVER_LABEL,
@@ -379,21 +382,23 @@ fn setup_macos(app: &mut tauri::App) -> tauri::Result<()> {
     });
 
     if let Some(main) = app.get_webview_window("main") {
-        let app_handle = app.handle().clone();
         let main_for_events = main.clone();
         main.on_window_event(move |event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
-                if app_handle
-                    .state::<UsageDisplayHost>()
-                    .enabled
-                    .load(Ordering::SeqCst)
-                {
+                #[cfg(target_os = "macos")]
+                let hide_to_tray = true;
+                #[cfg(target_os = "windows")]
+                let hide_to_tray = true;
+                if hide_to_tray {
                     api.prevent_close();
                     let _ = main_for_events.hide();
                 }
             }
         });
     }
+
+    #[cfg(target_os = "windows")]
+    macos::setup_windows_tray(app.handle()).map_err(std::io::Error::other)?;
 
     Ok(())
 }

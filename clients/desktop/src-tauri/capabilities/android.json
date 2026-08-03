@@ -16,6 +16,9 @@
       "allow": [
         {
           "url": "https://lynn.lat/**"
+        },
+        {
+          "url": "https://gitee.com/**"
         }
       ]
     }

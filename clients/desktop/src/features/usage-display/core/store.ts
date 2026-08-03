@@ -95,6 +95,10 @@ export interface UsageDisplayStoreOptions {
   syncDisplayOnAttach?: boolean
 }
 
+function supportsExternalUsageDisplay(value: Platform): boolean {
+  return value === 'macos' || value === 'windows'
+}
+
 export function createUsageDisplayStore(
   deps: UsageDisplayDependencies = defaultDependencies,
   options: UsageDisplayStoreOptions = {},
@@ -164,7 +168,7 @@ export function createUsageDisplayStore(
 
   async function syncDisplay(reconfigure = false) {
     state.trayTitle = resolveTrayTitle()
-    const enabled = state.platform === 'macos' && state.userId !== null && state.config.enabled
+    const enabled = supportsExternalUsageDisplay(state.platform) && state.userId !== null && state.config.enabled
     if (reconfigure || !enabled) {
       await deps.configureDisplay({
         enabled,
@@ -175,7 +179,9 @@ export function createUsageDisplayStore(
       })
       return
     }
-    if (state.config.surface === 'menu-bar') await deps.setDisplayTitle(state.trayTitle)
+    if (state.config.surface === 'menu-bar' || state.platform === 'windows') {
+      await deps.setDisplayTitle(state.trayTitle)
+    }
   }
 
   async function refreshBalance(current: number) {
@@ -220,7 +226,7 @@ export function createUsageDisplayStore(
   }
 
   async function refresh() {
-    if (state.platform !== 'macos' || state.userId === null || !state.config.enabled) return
+    if (!supportsExternalUsageDisplay(state.platform) || state.userId === null || !state.config.enabled) return
     const current = ++sequence
     const initial = state.lastUpdatedAt === null
     state.loading = initial
@@ -240,7 +246,7 @@ export function createUsageDisplayStore(
 
   async function start() {
     clearTimer()
-    if (state.platform !== 'macos' || state.userId === null || !state.config.enabled) return
+    if (!supportsExternalUsageDisplay(state.platform) || state.userId === null || !state.config.enabled) return
     await refresh()
     intervalId = deps.setInterval(() => void refresh(), 60_000)
   }

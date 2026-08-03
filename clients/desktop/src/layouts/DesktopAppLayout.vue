@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
 import { openUrl } from '@tauri-apps/plugin-opener'
 import {
   Activity,
@@ -16,8 +16,9 @@ import {
   LayoutDashboard,
   LogOut,
   Megaphone,
-  RefreshCw,
   ScrollText,
+  RefreshCw,
+  Settings2,
   ShieldCheck,
   Ticket,
   UserRound,
@@ -27,8 +28,8 @@ import { useRoute, useRouter } from 'vue-router'
 
 import BrandLogo from '@/components/BrandLogo.vue'
 import ChangePasswordDialog from '@/components/ChangePasswordDialog.vue'
+import SettingsDialog from '@/components/SettingsDialog.vue'
 import UserAvatar from '@/components/UserAvatar.vue'
-import UsageDisplayDialog from '@/features/usage-display/internal/settings/UsageDisplayDialog.vue'
 import { webUrl } from '@/config'
 import { normalizeBrand } from '@/lib/brand'
 import { onAdminAccessDenied } from '@/lib/http'
@@ -41,17 +42,32 @@ import {
 } from '@/lib/admin-workspace'
 import { isMacOS } from '@/lib/platform'
 import { appCapabilities } from '@/lib/platform-capabilities'
+import {
+  checkDesktopUpdate,
+  desktopUpdateErrorMessage,
+  installDesktopUpdate,
+  type AvailableDesktopUpdate,
+} from '@/lib/desktop-updater'
 import { session, signOut } from '@/stores/session'
+import type { Update } from '@tauri-apps/plugin-updater'
 
 const router = useRouter()
 const route = useRoute()
 const signingOut = ref(false)
 const accountMenuOpen = ref(false)
 const passwordDialogOpen = ref(false)
-const usageDisplayDialogOpen = ref(false)
+const settingsDialogOpen = ref(false)
 const adminAccessDenied = ref(false)
+const updateChecking = ref(false)
+const updateInstalling = ref(false)
+const updateProgress = ref<number | null>(null)
+const updateMessage = ref('')
+const availableUpdate = shallowRef<Update | null>(null)
+const availableUpdateInfo = ref<AvailableDesktopUpdate | null>(null)
 const accountArea = ref<HTMLElement | null>(null)
 let stopAdminAccessListener: (() => void) | null = null
+const autoCheckUpdatesStorageKey = 'desktop:update:auto-check'
+const autoCheckUpdates = ref(localStorage.getItem(autoCheckUpdatesStorageKey) === 'true')
 
 const chromeInset = isMacOS() ? '42px' : '20px'
 const user = computed(() => session.user)
@@ -89,9 +105,52 @@ function openPasswordDialog() {
   passwordDialogOpen.value = true
 }
 
-function openUsageDisplay() {
+function openSettingsDialog() {
   closeAccountMenu()
-  usageDisplayDialogOpen.value = true
+  settingsDialogOpen.value = true
+}
+
+function setAutoCheckUpdates(value: boolean) {
+  autoCheckUpdates.value = value
+  localStorage.setItem(autoCheckUpdatesStorageKey, String(value))
+}
+
+async function handleCheckUpdate() {
+  updateChecking.value = true
+  updateMessage.value = ''
+  availableUpdate.value = null
+  availableUpdateInfo.value = null
+  try {
+    const result = await checkDesktopUpdate()
+    if (!result.available || !result.update || !result.info) {
+      updateMessage.value = '已是最新版本'
+      return
+    }
+    availableUpdate.value = result.update
+    availableUpdateInfo.value = result.info
+    updateMessage.value = `发现新版本 ${result.info.version}`
+  } catch (error) {
+    updateMessage.value = desktopUpdateErrorMessage(error)
+  } finally {
+    updateChecking.value = false
+  }
+}
+
+async function handleInstallUpdate() {
+  if (!availableUpdate.value) return
+  updateInstalling.value = true
+  updateProgress.value = null
+  updateMessage.value = '正在下载更新'
+  try {
+    await installDesktopUpdate(availableUpdate.value, (progress) => {
+      updateProgress.value = progress.percent ?? null
+      updateMessage.value = progress.percent == null ? '正在下载更新' : `正在下载更新 ${progress.percent}%`
+    })
+    updateMessage.value = '更新已安装，正在重启'
+  } catch (error) {
+    updateMessage.value = desktopUpdateErrorMessage(error)
+    updateInstalling.value = false
+  }
 }
 
 function openWebAdmin() {
@@ -121,6 +180,9 @@ onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown)
   if (isAdmin.value && workspaceMode.value === 'admin' && !route.meta.requiresAdmin && !route.meta.userGroupWorkspace) {
     void router.replace({ name: 'admin-dashboard' })
+  }
+  if (appCapabilities.desktopUpdater && autoCheckUpdates.value) {
+    void handleCheckUpdate()
   }
 })
 
@@ -288,15 +350,14 @@ onBeforeUnmount(() => {
               <span>个人资料</span>
             </RouterLink>
             <button
-              v-if="appCapabilities.externalUsageDisplay"
               class="menu-item"
               type="button"
               role="menuitem"
-              data-testid="usage-display-menu-item"
-              @click="openUsageDisplay"
+              data-testid="settings-menu-item"
+              @click="openSettingsDialog"
             >
-              <ChartNoAxesCombined :size="16" />
-              <span>用量显示</span>
+              <Settings2 :size="16" />
+              <span>设置</span>
             </button>
             <button
               class="menu-item"
@@ -371,10 +432,22 @@ onBeforeUnmount(() => {
   </div>
 
   <ChangePasswordDialog v-model="passwordDialogOpen" />
-  <UsageDisplayDialog
-    v-if="appCapabilities.externalUsageDisplay"
-    v-model="usageDisplayDialogOpen"
+  <SettingsDialog
+    v-model="settingsDialogOpen"
     :user="user ?? null"
+    :product-name="brand.name"
+    :can-use-usage-display="appCapabilities.externalUsageDisplay"
+    :can-use-updater="appCapabilities.desktopUpdater"
+    :update-checking="updateChecking"
+    :update-installing="updateInstalling"
+    :update-progress="updateProgress"
+    :update-message="updateMessage"
+    :has-available-update="Boolean(availableUpdate)"
+    :available-update-info="availableUpdateInfo"
+    :auto-check-updates="autoCheckUpdates"
+    @check-update="handleCheckUpdate"
+    @install-update="handleInstallUpdate"
+    @update:auto-check-updates="setAutoCheckUpdates"
   />
 </template>
 
@@ -630,6 +703,11 @@ onBeforeUnmount(() => {
 .menu-item:hover {
   background: rgba(255, 255, 255, 0.62);
   color: var(--text-primary);
+}
+
+.menu-item:disabled {
+  cursor: default;
+  opacity: 0.68;
 }
 
 .menu-logout {

@@ -49,8 +49,13 @@ function dateRange(days = rangeDays.value): { start_date: string; end_date: stri
   const end = new Date()
   const start = new Date()
   start.setDate(start.getDate() - (days - 1))
-  const iso = (date: Date) => date.toISOString().slice(0, 10)
-  return { start_date: iso(start), end_date: iso(end) }
+  const localDate = (date: Date) => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  return { start_date: localDate(start), end_date: localDate(end) }
 }
 
 const topModels = computed(() => {
@@ -397,7 +402,7 @@ onUnmounted(() => {
 .headline-metric {
   position: relative;
   display: grid;
-  width: 118px;
+  width: 138px;
   height: 58px;
   grid-template-columns: 19px minmax(0, 1fr);
   grid-template-rows: 19px 22px;
@@ -546,7 +551,7 @@ onUnmounted(() => {
 
 @container app-content (max-width: 1100px) {
   .dashboard-page { padding-right: 22px; padding-left: 22px; }
-  .headline-metric { width: 100px; }
+  .headline-metric { width: 124px; }
   .update-time { display: none; }
   .platform-visual { grid-template-columns: 86px minmax(0, 1fr); gap: 8px; }
   .platform-donut { width: 84px; }
@@ -565,7 +570,7 @@ onUnmounted(() => {
   .title-block { min-width: 132px; }
   .head-console { left: 148px; }
   .headline-metrics { gap: 6px; }
-  .headline-metric { width: 94px; padding-right: 7px; padding-left: 7px; }
+  .headline-metric { width: 116px; padding-right: 8px; padding-left: 8px; }
   .data-panel { padding-right: 16px; padding-left: 16px; }
 }
 
