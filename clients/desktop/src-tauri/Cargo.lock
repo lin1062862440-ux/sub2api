@@ -2189,7 +2189,7 @@ dependencies = [
 
 [[package]]
 name = "linai-desktop"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "chrono",
  "dirs 5.0.1",

@@ -382,18 +382,11 @@ fn setup_desktop(app: &mut tauri::App) -> tauri::Result<()> {
     });
 
     if let Some(main) = app.get_webview_window("main") {
-        #[cfg(target_os = "macos")]
-        let app_handle = app.handle().clone();
         let main_for_events = main.clone();
         main.on_window_event(move |event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 #[cfg(target_os = "macos")]
-                let usage_display_enabled = app_handle
-                    .state::<UsageDisplayHost>()
-                    .enabled
-                    .load(Ordering::SeqCst);
-                #[cfg(target_os = "macos")]
-                let hide_to_tray = usage_display_enabled;
+                let hide_to_tray = true;
                 #[cfg(target_os = "windows")]
                 let hide_to_tray = true;
                 if hide_to_tray {
