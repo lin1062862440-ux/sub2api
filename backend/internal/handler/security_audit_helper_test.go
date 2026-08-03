@@ -30,7 +30,7 @@ func TestRunSecurityAuditDoesNotSkipSubsequentWebSocketTurns(t *testing.T) {
 	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
 
 	subject := middleware2.AuthSubject{UserID: 7, Concurrency: 1}
-	first := runSecurityAudit(c, nil, coordinator, nil, nil, subject, "openai_responses", "gpt-test",
+	first := runSecurityAudit(c, nil, coordinator, nil, nil, nil, subject, "openai_responses", "gpt-test",
 		[]byte(`{"type":"response.create","response":{"input":"benign"}}`), "first_turn")
 	require.NotNil(t, first)
 	require.True(t, first.AllowNextStage)
@@ -42,10 +42,50 @@ func TestRunSecurityAuditDoesNotSkipSubsequentWebSocketTurns(t *testing.T) {
 	// must still audit every response.create payload.
 	c.Set(securityAuditCompletedContextKey, true)
 
-	second := runSecurityAudit(c, nil, coordinator, nil, nil, subject, "openai_responses", "gpt-test",
+	second := runSecurityAudit(c, nil, coordinator, nil, nil, nil, subject, "openai_responses", "gpt-test",
 		[]byte(`{"type":"response.create","response":{"input":"malicious follow-up"}}`), "subsequent_turn")
 	require.NotNil(t, second)
 	require.Equal(t, int64(2), engine.enqueues.Load(), "subsequent WebSocket turns must be audited again")
+}
+
+func TestUserGroupPromptCaptureDispatchesWithoutPromptAuditAndDeduplicatesHTTP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	spy := &promptCaptureDispatcherSpy{}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	subject := middleware2.AuthSubject{UserID: 7, Concurrency: 1}
+	body := []byte(`{"messages":[{"role":"user","content":"current"}]}`)
+
+	require.Nil(t, runSecurityAudit(c, nil, nil, spy, nil, nil, subject, "anthropic_messages", "claude", body, "http"))
+	require.Nil(t, runSecurityAudit(c, nil, nil, spy, nil, nil, subject, "anthropic_messages", "claude", body, "http"))
+	require.Equal(t, int64(1), spy.calls.Load())
+	require.Equal(t, int64(7), spy.last.UserID)
+}
+
+func TestUserGroupPromptCaptureDispatchesEveryWebSocketTurn(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	spy := &promptCaptureDispatcherSpy{}
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses", nil)
+	subject := middleware2.AuthSubject{UserID: 7, Concurrency: 1}
+
+	for _, stage := range []string{"first_turn", "subsequent_turn"} {
+		runSecurityAudit(c, nil, nil, spy, nil, nil, subject, "openai_responses", "gpt-test",
+			[]byte(`{"type":"response.create","response":{"input":"turn"}}`), stage)
+	}
+	require.Equal(t, int64(2), spy.calls.Load())
+}
+
+type promptCaptureDispatcherSpy struct {
+	calls atomic.Int64
+	last  securityaudit.Request
+}
+
+func (s *promptCaptureDispatcherSpy) Dispatch(request securityaudit.Request) {
+	s.last = request
+	s.calls.Add(1)
 }
 
 type turnCountingEngine struct {
