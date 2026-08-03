@@ -1,3 +1,5 @@
+#[cfg(target_os = "android")]
+mod android_plugin;
 #[cfg(any(mobile, test))]
 mod android_update;
 
@@ -94,10 +96,12 @@ pub fn run() {
 #[cfg(mobile)]
 #[tauri::mobile_entry_point]
 pub fn run() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![
-            android_update::verify_android_update,
-        ])
+    let builder = tauri::Builder::default().invoke_handler(tauri::generate_handler![
+        android_update::verify_android_update,
+    ]);
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(android_plugin::init());
+    builder
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_store::Builder::default().build())

@@ -21,6 +21,11 @@ describe('Android Rust host boundary', () => {
     expect(mobileSource).not.toContain('text_export::')
   })
 
+  it('registers the native updater only for Android mobile builds', () => {
+    expect(lib).toContain('#[cfg(target_os = "android")]\nmod android_plugin;')
+    expect(lib).toContain('#[cfg(target_os = "android")]\n    let builder = builder.plugin(android_plugin::init());')
+  })
+
   it('keeps macOS-only Tauri features out of the mobile dependency graph', () => {
     expect(cargo).toContain('tauri = { version = "2.11.3", features = [] }')
     expect(cargo).toContain('[target.\'cfg(target_os = "macos")\'.dependencies]\ntauri = { version = "2.11.3", features = ["macos-private-api", "tray-icon"] }')
