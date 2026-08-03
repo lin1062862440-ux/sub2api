@@ -33,6 +33,12 @@ func TestDeriveAuditAction(t *testing.T) {
 	}
 }
 
+func TestUserGroupPromptAuditRoutesUseStableActions(t *testing.T) {
+	require.Equal(t, "user_group.prompt.view", auditSensitiveReads["GET /api/v1/user-groups/:id/usage/:usageLogID/prompts"])
+	require.Equal(t, "user_group.prompt_capture.update", auditActionOverrides["PUT /api/v1/user-groups/:id/prompt-capture"])
+	require.Equal(t, "user_group.prompt_viewers.update", auditActionOverrides["PUT /api/v1/user-groups/:id/prompt-viewers"])
+}
+
 type auditCaptureRepository struct {
 	mu   sync.Mutex
 	logs []*service.AuditLog

@@ -41,16 +41,20 @@ func (r *userGroupRepository) CountAccessible(ctx context.Context, actorID int64
 
 func (r *userGroupRepository) ListAccessible(ctx context.Context, actorID int64, isAdmin bool) ([]service.UserGroup, error) {
 	join := ""
-	args := []any(nil)
+	args := []any{actorID}
 	if !isAdmin {
 		join = "JOIN user_group_viewer_grants ugvg ON ugvg.user_group_id = ug.id AND ugvg.viewer_user_id = $1"
-		args = []any{actorID}
 	}
 	query := fmt.Sprintf(`
 		SELECT ug.id, ug.name, ug.description, ug.status, ug.created_by,
 		       ug.created_at, ug.updated_at,
 		       COUNT(DISTINCT member_users.id) AS member_count,
-		       COUNT(DISTINCT viewer_users.id) AS viewer_count
+		       COUNT(DISTINCT viewer_users.id) AS viewer_count,
+		       ug.prompt_capture_enabled,
+		       EXISTS (
+		           SELECT 1 FROM user_group_prompt_viewer_grants ugpvg
+		           WHERE ugpvg.user_group_id = ug.id AND ugpvg.viewer_user_id = $1
+		       ) AS can_view_prompt
 		FROM user_groups ug
 		%s
 		LEFT JOIN user_group_members ugm ON ugm.user_group_id = ug.id
@@ -98,7 +102,8 @@ func (r *userGroupRepository) GetByID(ctx context.Context, groupID int64) (*serv
 	const query = `
 		SELECT ug.id, ug.name, ug.description, ug.status, ug.created_by,
 		       ug.created_at, ug.updated_at,
-		       COUNT(DISTINCT member_users.id), COUNT(DISTINCT viewer_users.id)
+		       COUNT(DISTINCT member_users.id), COUNT(DISTINCT viewer_users.id),
+		       ug.prompt_capture_enabled, FALSE AS can_view_prompt
 		FROM user_groups ug
 		LEFT JOIN user_group_members ugm ON ugm.user_group_id = ug.id
 		LEFT JOIN users member_users ON member_users.id = ugm.user_id AND member_users.deleted_at IS NULL
@@ -163,7 +168,7 @@ func (r *userGroupRepository) Update(ctx context.Context, groupID int64, group s
 }
 
 func (r *userGroupRepository) Archive(ctx context.Context, groupID int64) error {
-	result, err := r.db.ExecContext(ctx, `UPDATE user_groups SET status = 'archived', updated_at = NOW() WHERE id = $1 AND status = 'active'`, groupID)
+	result, err := r.db.ExecContext(ctx, `UPDATE user_groups SET status = 'archived', prompt_capture_enabled = FALSE, updated_at = NOW() WHERE id = $1 AND status = 'active'`, groupID)
 	if err != nil {
 		return fmt.Errorf("archive user group: %w", err)
 	}
@@ -476,7 +481,11 @@ type userGroupRowScanner interface {
 func scanUserGroup(scanner userGroupRowScanner) (service.UserGroup, error) {
 	var group service.UserGroup
 	var createdBy sql.NullInt64
-	if err := scanner.Scan(&group.ID, &group.Name, &group.Description, &group.Status, &createdBy, &group.CreatedAt, &group.UpdatedAt, &group.MemberCount, &group.ViewerCount); err != nil {
+	if err := scanner.Scan(
+		&group.ID, &group.Name, &group.Description, &group.Status, &createdBy,
+		&group.CreatedAt, &group.UpdatedAt, &group.MemberCount, &group.ViewerCount,
+		&group.PromptCaptureEnabled, &group.CanViewPrompt,
+	); err != nil {
 		return service.UserGroup{}, fmt.Errorf("scan user group: %w", err)
 	}
 	group.CreatedBy = nullableInt64Pointer(createdBy)

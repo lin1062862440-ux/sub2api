@@ -18,10 +18,10 @@ func TestUserGroupRepositoryListAccessibleScopesDelegatedUser(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 
 	now := time.Now().UTC()
-	mock.ExpectQuery(`(?s)LEFT JOIN user_group_members ugm.*LEFT JOIN users member_users.*member_users\.deleted_at IS NULL.*LEFT JOIN user_group_viewer_grants viewers.*LEFT JOIN users viewer_users.*viewer_users\.deleted_at IS NULL`).
+	mock.ExpectQuery(`(?s)EXISTS \(.*FROM user_group_prompt_viewer_grants ugpvg.*ugpvg\.viewer_user_id = \$1.*LEFT JOIN user_group_members ugm.*LEFT JOIN users member_users.*member_users\.deleted_at IS NULL.*LEFT JOIN user_group_viewer_grants viewers.*LEFT JOIN users viewer_users.*viewer_users\.deleted_at IS NULL`).
 		WithArgs(int64(12)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "description", "status", "created_by", "created_at", "updated_at", "member_count", "viewer_count"}).
-			AddRow(3, "Team A", "", "active", int64(1), now, now, 4, 2))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "description", "status", "created_by", "created_at", "updated_at", "member_count", "viewer_count", "prompt_capture_enabled", "can_view_prompt"}).
+			AddRow(3, "Team A", "", "active", int64(1), now, now, 4, 2, true, true))
 
 	repo := NewUserGroupRepository(db)
 	groups, err := repo.ListAccessible(context.Background(), 12, false)
@@ -29,6 +29,8 @@ func TestUserGroupRepositoryListAccessibleScopesDelegatedUser(t *testing.T) {
 	require.Len(t, groups, 1)
 	require.Equal(t, int64(3), groups[0].ID)
 	require.Equal(t, int64(4), groups[0].MemberCount)
+	require.True(t, groups[0].PromptCaptureEnabled)
+	require.True(t, groups[0].CanViewPrompt)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -40,8 +42,8 @@ func TestUserGroupRepositoryGetByIDExcludesDeletedPeopleFromCounts(t *testing.T)
 	now := time.Now().UTC()
 	mock.ExpectQuery(`(?s)LEFT JOIN user_group_members ugm.*LEFT JOIN users member_users.*member_users\.deleted_at IS NULL.*LEFT JOIN user_group_viewer_grants ugvg.*LEFT JOIN users viewer_users.*viewer_users\.deleted_at IS NULL`).
 		WithArgs(int64(3)).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "description", "status", "created_by", "created_at", "updated_at", "member_count", "viewer_count"}).
-			AddRow(3, "Team A", "", "active", int64(1), now, now, 4, 2))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "name", "description", "status", "created_by", "created_at", "updated_at", "member_count", "viewer_count", "prompt_capture_enabled", "can_view_prompt"}).
+			AddRow(3, "Team A", "", "active", int64(1), now, now, 4, 2, false, false))
 
 	repo := NewUserGroupRepository(db)
 	group, err := repo.GetByID(context.Background(), 3)

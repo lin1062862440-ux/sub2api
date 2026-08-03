@@ -35,4 +35,5 @@ var ProviderSet = wire.NewSet(
 	NewCoordinator,
 	NewPromptAdminHandler,
 	ProvideUserGroupPromptCaptureService,
+	wire.Bind(new(service.UserGroupPromptEligibilityRefresher), new(*UserGroupPromptCaptureService)),
 )

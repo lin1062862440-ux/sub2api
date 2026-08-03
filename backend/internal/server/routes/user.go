@@ -160,5 +160,9 @@ func registerUserGroupRoutes(authenticated *gin.RouterGroup, h *handler.UserGrou
 		groups.PUT("/:id/viewers", h.ReplaceViewers)
 		groups.GET("/:id/subscriptions", heavy, h.ListSubscriptions)
 		groups.GET("/:id/usage", heavy, h.GetUsage)
+		groups.PUT("/:id/prompt-capture", h.SetPromptCapture)
+		groups.GET("/:id/prompt-viewers", h.ListPromptViewers)
+		groups.PUT("/:id/prompt-viewers", h.ReplacePromptViewers)
+		groups.GET("/:id/usage/:usageLogID/prompts", heavy, h.GetUsagePrompts)
 	}
 }

@@ -47,3 +47,8 @@ type UserGroupPromptCaptureRepository interface {
 	ListUsagePrompts(ctx context.Context, groupID, usageLogID int64) ([]UserPromptCaptureDetail, error)
 	DeleteExpiredBatch(ctx context.Context, now time.Time, limit int) (int64, error)
 }
+
+type UserGroupPromptEligibilityRefresher interface {
+	RefreshEligibility(ctx context.Context) error
+	PublishEligibilityInvalidation(ctx context.Context) error
+}

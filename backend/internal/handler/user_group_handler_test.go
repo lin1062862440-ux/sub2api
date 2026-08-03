@@ -16,11 +16,15 @@ import (
 )
 
 type userGroupServiceStub struct {
-	actor        service.UserGroupActor
-	capabilities service.UserGroupCapabilities
-	replacedIDs  []int64
-	usageQuery   service.UserGroupUsageQuery
-	usageResult  *service.UserGroupUsageResult
+	actor         service.UserGroupActor
+	capabilities  service.UserGroupCapabilities
+	replacedIDs   []int64
+	usageQuery    service.UserGroupUsageQuery
+	usageResult   *service.UserGroupUsageResult
+	promptEnabled *bool
+	promptIDs     []int64
+	promptUsageID int64
+	prompts       []service.UserPromptCaptureDetail
 }
 
 func (s *userGroupServiceStub) Capabilities(_ context.Context, actor service.UserGroupActor) (service.UserGroupCapabilities, error) {
@@ -70,6 +74,28 @@ func (s *userGroupServiceStub) GetUsage(_ context.Context, actor service.UserGro
 	s.actor = actor
 	s.usageQuery = query
 	return s.usageResult, nil
+}
+
+func (s *userGroupServiceStub) SetPromptCapture(_ context.Context, actor service.UserGroupActor, _ int64, enabled bool) error {
+	s.actor = actor
+	s.promptEnabled = &enabled
+	return nil
+}
+
+func (s *userGroupServiceStub) ListPromptViewers(context.Context, service.UserGroupActor, int64) ([]service.UserGroupViewer, error) {
+	return []service.UserGroupViewer{}, nil
+}
+
+func (s *userGroupServiceStub) ReplacePromptViewers(_ context.Context, actor service.UserGroupActor, _ int64, ids []int64) error {
+	s.actor = actor
+	s.promptIDs = append([]int64(nil), ids...)
+	return nil
+}
+
+func (s *userGroupServiceStub) GetUsagePrompts(_ context.Context, actor service.UserGroupActor, _ int64, usageLogID int64) ([]service.UserPromptCaptureDetail, error) {
+	s.actor = actor
+	s.promptUsageID = usageLogID
+	return s.prompts, nil
 }
 
 func TestUserGroupHandlerCapabilitiesUsesAuthenticatedActor(t *testing.T) {
@@ -162,4 +188,57 @@ func TestUserGroupHandlerUsageParsesInclusiveDatesAndBillingType(t *testing.T) {
 	require.Equal(t, time.Date(2026, 8, 3, 0, 0, 0, 0, location), stub.usageQuery.EndTime)
 	require.NotNil(t, stub.usageQuery.BillingType)
 	require.Equal(t, int8(1), *stub.usageQuery.BillingType)
+}
+
+func TestUserGroupHandlerPromptEndpointsParseExactPayloads(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	stub := &userGroupServiceStub{prompts: []service.UserPromptCaptureDetail{{ID: 91, RedactedPrompt: "safe"}}}
+	handler := newUserGroupHandlerWithService(stub)
+
+	t.Run("capture toggle", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Params = gin.Params{{Key: "id", Value: "5"}}
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/user-groups/5/prompt-capture", strings.NewReader(`{"enabled":false}`))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 1})
+		c.Set(string(middleware.ContextKeyUserRole), service.RoleAdmin)
+
+		handler.SetPromptCapture(c)
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.NotNil(t, stub.promptEnabled)
+		require.False(t, *stub.promptEnabled)
+	})
+
+	t.Run("prompt viewers", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Params = gin.Params{{Key: "id", Value: "5"}}
+		c.Request = httptest.NewRequest(http.MethodPut, "/api/v1/user-groups/5/prompt-viewers", strings.NewReader(`{"user_ids":[8,3]}`))
+		c.Request.Header.Set("Content-Type", "application/json")
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 1})
+		c.Set(string(middleware.ContextKeyUserRole), service.RoleAdmin)
+
+		handler.ReplacePromptViewers(c)
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, []int64{8, 3}, stub.promptIDs)
+	})
+
+	t.Run("usage prompts", func(t *testing.T) {
+		recorder := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(recorder)
+		c.Params = gin.Params{{Key: "id", Value: "5"}, {Key: "usageLogID", Value: "42"}}
+		c.Request = httptest.NewRequest(http.MethodGet, "/api/v1/user-groups/5/usage/42/prompts", nil)
+		c.Set(string(middleware.ContextKeyUser), middleware.AuthSubject{UserID: 8})
+		c.Set(string(middleware.ContextKeyUserRole), service.RoleUser)
+
+		handler.GetUsagePrompts(c)
+
+		require.Equal(t, http.StatusOK, recorder.Code)
+		require.Equal(t, int64(42), stub.promptUsageID)
+		require.NotContains(t, recorder.Body.String(), "raw_prompt")
+		require.Contains(t, recorder.Body.String(), "safe")
+	})
 }

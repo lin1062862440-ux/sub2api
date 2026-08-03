@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"log/slog"
 	"sort"
 	"strings"
 	"time"
@@ -25,15 +26,17 @@ var (
 )
 
 type UserGroup struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Status      string    `json:"status"`
-	MemberCount int64     `json:"member_count"`
-	ViewerCount int64     `json:"viewer_count"`
-	CreatedBy   *int64    `json:"created_by,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID                   int64     `json:"id"`
+	Name                 string    `json:"name"`
+	Description          string    `json:"description"`
+	Status               string    `json:"status"`
+	MemberCount          int64     `json:"member_count"`
+	ViewerCount          int64     `json:"viewer_count"`
+	PromptCaptureEnabled bool      `json:"prompt_capture_enabled"`
+	CanViewPrompt        bool      `json:"can_view_prompt"`
+	CreatedBy            *int64    `json:"created_by,omitempty"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type UserGroupMutation struct {
@@ -160,6 +163,7 @@ type UserGroupUsageItem struct {
 	ActualCost          float64   `json:"actual_cost"`
 	BillingType         int8      `json:"billing_type"`
 	CreatedAt           time.Time `json:"created_at"`
+	PromptAvailable     *bool     `json:"prompt_available,omitempty"`
 }
 
 type UserGroupUsageResult struct {
@@ -189,11 +193,21 @@ type UserGroupRepository interface {
 }
 
 type UserGroupService struct {
-	repo UserGroupRepository
+	repo            UserGroupRepository
+	promptRepo      UserGroupPromptCaptureRepository
+	promptRefresher UserGroupPromptEligibilityRefresher
 }
 
 func NewUserGroupService(repo UserGroupRepository) *UserGroupService {
 	return &UserGroupService{repo: repo}
+}
+
+func newUserGroupServiceWithPromptCapture(repo UserGroupRepository, promptRepo UserGroupPromptCaptureRepository, refresher UserGroupPromptEligibilityRefresher) *UserGroupService {
+	return &UserGroupService{repo: repo, promptRepo: promptRepo, promptRefresher: refresher}
+}
+
+func ProvideUserGroupService(repo UserGroupRepository, promptRepo UserGroupPromptCaptureRepository, refresher UserGroupPromptEligibilityRefresher) *UserGroupService {
+	return newUserGroupServiceWithPromptCapture(repo, promptRepo, refresher)
 }
 
 func (s *UserGroupService) Capabilities(ctx context.Context, actor UserGroupActor) (UserGroupCapabilities, error) {
@@ -234,7 +248,11 @@ func (s *UserGroupService) Archive(ctx context.Context, actor UserGroupActor, gr
 	if err := requireUserGroupAdmin(actor); err != nil {
 		return err
 	}
-	return s.repo.Archive(ctx, groupID)
+	if err := s.repo.Archive(ctx, groupID); err != nil {
+		return err
+	}
+	s.refreshPromptEligibility(ctx)
+	return nil
 }
 
 func (s *UserGroupService) ListMembers(ctx context.Context, actor UserGroupActor, groupID int64) ([]UserGroupMember, error) {
@@ -252,7 +270,11 @@ func (s *UserGroupService) ReplaceMembers(ctx context.Context, actor UserGroupAc
 	if err != nil {
 		return err
 	}
-	return s.repo.ReplaceMembers(ctx, groupID, normalized, actor.UserID)
+	if err := s.repo.ReplaceMembers(ctx, groupID, normalized, actor.UserID); err != nil {
+		return err
+	}
+	s.refreshPromptEligibility(ctx)
+	return nil
 }
 
 func (s *UserGroupService) ListViewers(ctx context.Context, actor UserGroupActor, groupID int64) ([]UserGroupViewer, error) {
@@ -309,7 +331,104 @@ func (s *UserGroupService) GetUsage(ctx context.Context, actor UserGroupActor, g
 	}
 	query.Page, query.PageSize = normalizeUserGroupPagination(query.Page, query.PageSize)
 	query.Model = strings.TrimSpace(query.Model)
-	return s.repo.GetUsage(ctx, groupID, query)
+	result, err := s.repo.GetUsage(ctx, groupID, query)
+	if err != nil || result == nil || s.promptRepo == nil {
+		return result, err
+	}
+	allowed, err := s.promptRepo.CanViewPrompt(ctx, groupID, actor.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return result, nil
+	}
+	for index := range result.Items {
+		available, err := s.promptRepo.PromptAvailableForUsage(ctx, groupID, result.Items[index].ID)
+		if err != nil {
+			return nil, err
+		}
+		result.Items[index].PromptAvailable = &available
+	}
+	return result, nil
+}
+
+func (s *UserGroupService) SetPromptCapture(ctx context.Context, actor UserGroupActor, groupID int64, enabled bool) error {
+	if err := requireUserGroupAdmin(actor); err != nil {
+		return err
+	}
+	if s.promptRepo == nil {
+		return ErrUserGroupForbidden
+	}
+	if _, err := s.repo.GetByID(ctx, groupID); err != nil {
+		return err
+	}
+	if err := s.promptRepo.SetCaptureEnabled(ctx, groupID, enabled); err != nil {
+		return err
+	}
+	s.refreshPromptEligibility(ctx)
+	return nil
+}
+
+func (s *UserGroupService) ListPromptViewers(ctx context.Context, actor UserGroupActor, groupID int64) ([]UserGroupViewer, error) {
+	if err := requireUserGroupAdmin(actor); err != nil {
+		return nil, err
+	}
+	if err := s.requireRead(ctx, actor, groupID); err != nil {
+		return nil, err
+	}
+	if s.promptRepo == nil {
+		return nil, ErrUserGroupForbidden
+	}
+	return s.promptRepo.ListPromptViewers(ctx, groupID)
+}
+
+func (s *UserGroupService) ReplacePromptViewers(ctx context.Context, actor UserGroupActor, groupID int64, userIDs []int64) error {
+	if err := requireUserGroupAdmin(actor); err != nil {
+		return err
+	}
+	normalized, err := normalizeUserGroupUserIDs(userIDs)
+	if err != nil {
+		return err
+	}
+	if s.promptRepo == nil {
+		return ErrUserGroupForbidden
+	}
+	if _, err := s.repo.GetByID(ctx, groupID); err != nil {
+		return err
+	}
+	return s.promptRepo.ReplacePromptViewers(ctx, groupID, normalized, actor.UserID)
+}
+
+func (s *UserGroupService) GetUsagePrompts(ctx context.Context, actor UserGroupActor, groupID, usageLogID int64) ([]UserPromptCaptureDetail, error) {
+	if usageLogID <= 0 {
+		return nil, ErrUserGroupNotFound
+	}
+	if err := s.requireRead(ctx, actor, groupID); err != nil {
+		return nil, err
+	}
+	if s.promptRepo == nil {
+		return nil, ErrUserGroupForbidden
+	}
+	allowed, err := s.promptRepo.CanViewPrompt(ctx, groupID, actor.UserID)
+	if err != nil {
+		return nil, err
+	}
+	if !allowed {
+		return nil, ErrUserGroupForbidden
+	}
+	return s.promptRepo.ListUsagePrompts(ctx, groupID, usageLogID)
+}
+
+func (s *UserGroupService) refreshPromptEligibility(ctx context.Context) {
+	if s.promptRefresher == nil {
+		return
+	}
+	if err := s.promptRefresher.RefreshEligibility(ctx); err != nil {
+		slog.Warn("user_group_prompt_capture.local_refresh_failed", "error", err)
+	}
+	if err := s.promptRefresher.PublishEligibilityInvalidation(ctx); err != nil {
+		slog.Warn("user_group_prompt_capture.publish_invalidation_failed", "error", err)
+	}
 }
 
 func (s *UserGroupService) requireRead(ctx context.Context, actor UserGroupActor, groupID int64) error {

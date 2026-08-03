@@ -49,6 +49,10 @@ func TestRegisterUserGroupRoutesMountsExpectedSurface(t *testing.T) {
 		http.MethodPut + " /api/v1/user-groups/:id/viewers",
 		http.MethodGet + " /api/v1/user-groups/:id/subscriptions",
 		http.MethodGet + " /api/v1/user-groups/:id/usage",
+		http.MethodPut + " /api/v1/user-groups/:id/prompt-capture",
+		http.MethodGet + " /api/v1/user-groups/:id/prompt-viewers",
+		http.MethodPut + " /api/v1/user-groups/:id/prompt-viewers",
+		http.MethodGet + " /api/v1/user-groups/:id/usage/:usageLogID/prompts",
 	}
 	for _, route := range expected {
 		require.Truef(t, routes[route], "missing route %s", route)

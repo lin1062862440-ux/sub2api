@@ -23,6 +23,55 @@ type userGroupRepositoryStub struct {
 	getByIDErr        error
 }
 
+type userGroupPromptRepositoryStub struct {
+	canView         bool
+	enabled         bool
+	replacedViewers []int64
+	prompts         []UserPromptCaptureDetail
+	availability    map[int64]bool
+}
+
+func (s *userGroupPromptRepositoryStub) LoadEligibility(context.Context) (map[int64][]int64, error) {
+	return nil, nil
+}
+func (s *userGroupPromptRepositoryStub) SetCaptureEnabled(_ context.Context, _ int64, enabled bool) error {
+	s.enabled = enabled
+	return nil
+}
+func (s *userGroupPromptRepositoryStub) ListPromptViewers(context.Context, int64) ([]UserGroupViewer, error) {
+	return nil, nil
+}
+func (s *userGroupPromptRepositoryStub) ReplacePromptViewers(_ context.Context, _ int64, ids []int64, _ int64) error {
+	s.replacedViewers = append([]int64(nil), ids...)
+	return nil
+}
+func (s *userGroupPromptRepositoryStub) CanViewPrompt(context.Context, int64, int64) (bool, error) {
+	return s.canView, nil
+}
+func (s *userGroupPromptRepositoryStub) InsertCapture(context.Context, UserPromptCaptureWrite) error {
+	return nil
+}
+func (s *userGroupPromptRepositoryStub) PromptAvailableForUsage(_ context.Context, _ int64, usageID int64) (bool, error) {
+	return s.availability[usageID], nil
+}
+func (s *userGroupPromptRepositoryStub) ListUsagePrompts(context.Context, int64, int64) ([]UserPromptCaptureDetail, error) {
+	return s.prompts, nil
+}
+func (s *userGroupPromptRepositoryStub) DeleteExpiredBatch(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
+
+type promptEligibilityRefresherStub struct{ refreshes, publishes int }
+
+func (s *promptEligibilityRefresherStub) RefreshEligibility(context.Context) error {
+	s.refreshes++
+	return nil
+}
+func (s *promptEligibilityRefresherStub) PublishEligibilityInvalidation(context.Context) error {
+	s.publishes++
+	return nil
+}
+
 func (s *userGroupRepositoryStub) CountAccessible(context.Context, int64, bool) (int64, error) {
 	return s.accessibleCount, nil
 }
@@ -226,4 +275,63 @@ func TestUserGroupServiceNormalizesSubscriptionStatus(t *testing.T) {
 		require.Equal(t, SubscriptionStatusActive, repo.subscriptionQuery.Status)
 		require.Equal(t, SubscriptionStatusExpired, result.Items[0].Status)
 	})
+}
+
+func TestUserGroupServicePromptAuthorizationIsIndependent(t *testing.T) {
+	prompt := &userGroupPromptRepositoryStub{prompts: []UserPromptCaptureDetail{{ID: 9, RedactedPrompt: "safe"}}}
+
+	t.Run("admin without prompt grant is forbidden", func(t *testing.T) {
+		svc := newUserGroupServiceWithPromptCapture(&userGroupRepositoryStub{}, prompt, nil)
+		_, err := svc.GetUsagePrompts(context.Background(), UserGroupActor{UserID: 1, Role: RoleAdmin}, 2, 31)
+		require.ErrorIs(t, err, ErrUserGroupForbidden)
+	})
+
+	t.Run("dual granted ordinary viewer can read", func(t *testing.T) {
+		prompt.canView = true
+		svc := newUserGroupServiceWithPromptCapture(&userGroupRepositoryStub{canView: true}, prompt, nil)
+		items, err := svc.GetUsagePrompts(context.Background(), UserGroupActor{UserID: 8, Role: RoleUser}, 2, 31)
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+	})
+
+	t.Run("prompt grant alone does not grant group read", func(t *testing.T) {
+		prompt.canView = true
+		svc := newUserGroupServiceWithPromptCapture(&userGroupRepositoryStub{canView: false}, prompt, nil)
+		_, err := svc.GetUsagePrompts(context.Background(), UserGroupActor{UserID: 8, Role: RoleUser}, 2, 31)
+		require.ErrorIs(t, err, ErrUserGroupForbidden)
+	})
+}
+
+func TestUserGroupServicePromptMutationsAreAdminOnlyAndRefreshEligibility(t *testing.T) {
+	prompt := &userGroupPromptRepositoryStub{}
+	refresher := &promptEligibilityRefresherStub{}
+	svc := newUserGroupServiceWithPromptCapture(&userGroupRepositoryStub{}, prompt, refresher)
+
+	err := svc.SetPromptCapture(context.Background(), UserGroupActor{UserID: 8, Role: RoleUser}, 2, true)
+	require.ErrorIs(t, err, ErrUserGroupForbidden)
+
+	err = svc.SetPromptCapture(context.Background(), UserGroupActor{UserID: 1, Role: RoleAdmin}, 2, true)
+	require.NoError(t, err)
+	require.True(t, prompt.enabled)
+	require.Equal(t, 1, refresher.refreshes)
+	require.Equal(t, 1, refresher.publishes)
+
+	err = svc.ReplacePromptViewers(context.Background(), UserGroupActor{UserID: 1, Role: RoleAdmin}, 2, []int64{9, 3, 9})
+	require.NoError(t, err)
+	require.Equal(t, []int64{3, 9}, prompt.replacedViewers)
+}
+
+func TestUserGroupServiceUsageAddsPromptAvailabilityOnlyForGrantedActor(t *testing.T) {
+	usage := &UserGroupUsageResult{Items: []UserGroupUsageItem{{ID: 31}, {ID: 32}}}
+	prompt := &userGroupPromptRepositoryStub{canView: true, availability: map[int64]bool{31: true}}
+	svc := newUserGroupServiceWithPromptCapture(&userGroupRepositoryStub{canView: true, usage: usage}, prompt, nil)
+
+	result, err := svc.GetUsage(context.Background(), UserGroupActor{UserID: 8, Role: RoleUser}, 2, UserGroupUsageQuery{
+		StartTime: time.Now().Add(-time.Hour), EndTime: time.Now(), Page: 1, PageSize: 20,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, result.Items[0].PromptAvailable)
+	require.True(t, *result.Items[0].PromptAvailable)
+	require.NotNil(t, result.Items[1].PromptAvailable)
+	require.False(t, *result.Items[1].PromptAvailable)
 }

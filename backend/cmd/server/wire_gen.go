@@ -94,7 +94,12 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	authHandler := handler.NewAuthHandler(configConfig, authService, userService, settingService, promoService, redeemService, totpService, userAttributeService)
 	userHandler := handler.NewUserHandler(userService, authService, emailService, emailCache, affiliateService, serviceUserPlatformQuotaRepository)
 	userGroupRepository := repository.NewUserGroupRepository(db)
-	userGroupService := service.NewUserGroupService(userGroupRepository)
+	userGroupPromptCaptureRepository := repository.NewUserGroupPromptCaptureRepository(db)
+	userGroupPromptCaptureService, err := securityaudit.ProvideUserGroupPromptCaptureService(userGroupPromptCaptureRepository, redisClient)
+	if err != nil {
+		return nil, err
+	}
+	userGroupService := service.ProvideUserGroupService(userGroupRepository, userGroupPromptCaptureRepository, userGroupPromptCaptureService)
 	userGroupHandler := handler.NewUserGroupHandler(userGroupService)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageLogRepository := repository.NewUsageLogRepository(client, db)
@@ -279,11 +284,6 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)
 	legacyEngine := securityaudit.NewLegacyModerationAdapter(contentModerationService)
 	coordinator := securityaudit.NewCoordinator(legacyEngine, promptService)
-	userGroupPromptCaptureRepository := repository.NewUserGroupPromptCaptureRepository(db)
-	userGroupPromptCaptureService, err := securityaudit.ProvideUserGroupPromptCaptureService(userGroupPromptCaptureRepository, redisClient)
-	if err != nil {
-		return nil, err
-	}
 	gatewayHandler := handler.ProvideGatewayHandler(gatewayService, openAIGatewayService, geminiMessagesCompatService, antigravityGatewayService, userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, contentModerationService, userMessageQueueService, configConfig, settingService, coordinator, userGroupPromptCaptureService)
 	openAIGatewayHandler := handler.ProvideOpenAIGatewayHandler(openAIGatewayService, concurrencyService, billingCacheService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, contentModerationService, opsService, grokQuotaService, configConfig, coordinator, userGroupPromptCaptureService)
 	handlerSettingHandler := handler.ProvideSettingHandler(settingService, buildInfo, notificationEmailService)

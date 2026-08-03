@@ -24,6 +24,10 @@ type UserGroupApplicationService interface {
 	ReplaceViewers(ctx context.Context, actor service.UserGroupActor, groupID int64, userIDs []int64) error
 	ListSubscriptions(ctx context.Context, actor service.UserGroupActor, groupID int64, query service.UserGroupSubscriptionQuery) (*service.UserGroupSubscriptionResult, error)
 	GetUsage(ctx context.Context, actor service.UserGroupActor, groupID int64, query service.UserGroupUsageQuery) (*service.UserGroupUsageResult, error)
+	SetPromptCapture(ctx context.Context, actor service.UserGroupActor, groupID int64, enabled bool) error
+	ListPromptViewers(ctx context.Context, actor service.UserGroupActor, groupID int64) ([]service.UserGroupViewer, error)
+	ReplacePromptViewers(ctx context.Context, actor service.UserGroupActor, groupID int64, userIDs []int64) error
+	GetUsagePrompts(ctx context.Context, actor service.UserGroupActor, groupID, usageLogID int64) ([]service.UserPromptCaptureDetail, error)
 }
 
 type UserGroupHandler struct {
@@ -187,6 +191,57 @@ func (h *UserGroupHandler) GetUsage(c *gin.Context) {
 		return
 	}
 	response.Success(c, result)
+}
+
+func (h *UserGroupHandler) SetPromptCapture(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	var payload struct {
+		Enabled *bool `json:"enabled" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil || payload.Enabled == nil {
+		response.BadRequest(c, "enabled is required")
+		return
+	}
+	if err := h.service.SetPromptCapture(c.Request.Context(), actor, groupID, *payload.Enabled); response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, gin.H{"message": "User group prompt capture updated"})
+}
+
+func (h *UserGroupHandler) ListPromptViewers(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	viewers, err := h.service.ListPromptViewers(c.Request.Context(), actor, groupID)
+	if response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, viewers)
+}
+
+func (h *UserGroupHandler) ReplacePromptViewers(c *gin.Context) {
+	h.replacePeople(c, h.service.ReplacePromptViewers)
+}
+
+func (h *UserGroupHandler) GetUsagePrompts(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	usageLogID, err := strconv.ParseInt(c.Param("usageLogID"), 10, 64)
+	if err != nil || usageLogID <= 0 {
+		response.BadRequest(c, "Invalid usage log ID")
+		return
+	}
+	items, err := h.service.GetUsagePrompts(c.Request.Context(), actor, groupID, usageLogID)
+	if response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, items)
 }
 
 func userGroupActorFromContext(c *gin.Context) (service.UserGroupActor, bool) {
