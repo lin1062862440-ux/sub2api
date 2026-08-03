@@ -13,6 +13,14 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val releaseRequested = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+
+fun requireSecret(name: String): String = providers.environmentVariable(name).orNull
+    ?.takeIf { it.isNotBlank() }
+    ?: throw GradleException("Missing required release signing value: $name")
+
 android {
     compileSdk = 36
     namespace = "ai.lin.android"
@@ -23,6 +31,14 @@ android {
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    if (releaseRequested) {
+        signingConfigs.create("release") {
+            storeFile = file(requireSecret("LINAI_ANDROID_KEYSTORE_PATH"))
+            storePassword = requireSecret("LINAI_ANDROID_STORE_PASSWORD")
+            keyAlias = requireSecret("LINAI_ANDROID_KEY_ALIAS")
+            keyPassword = requireSecret("LINAI_ANDROID_KEY_PASSWORD")
+        }
     }
     buildTypes {
         getByName("debug") {
@@ -37,6 +53,7 @@ android {
             }
         }
         getByName("release") {
+            if (releaseRequested) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
