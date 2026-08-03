@@ -1,6 +1,6 @@
 # LinAI Desktop
 
-LinAI's shared Tauri desktop client. The first supported bundle target is macOS; business code remains platform-neutral so Windows support can reuse the same Vue and Rust sources.
+LinAI's shared Tauri client for macOS and Android. Business code remains platform-neutral so Windows support can reuse the same Vue and Rust sources. Android intentionally omits desktop API-key replacement and floating usage windows.
 
 ## Development
 
@@ -48,3 +48,15 @@ pnpm bundle:macos
 ```
 
 The script refreshes LinAI branding and produces both `.app` and `.dmg` bundles. It defaults to an ad-hoc bundle signature for local distribution. Set `APPLE_SIGNING_IDENTITY` plus the standard Tauri notarization credentials to produce a Developer ID signed and notarized release.
+
+## Android Package
+
+Android release builds are ARM64-only, use a dedicated Android signing keystore, and are audited before being copied to `release/android/<version>/`:
+
+```bash
+pnpm android:release
+pnpm android:manifest -- --notes "Android 更新功能与稳定性改进"
+pnpm android:publish
+```
+
+The first in-app update acceptance run must preserve and install release-signed `0.1.4` before publishing `0.1.5`. See [RELEASE.md](./RELEASE.md) for credential setup and exact release order, and [UPDATER.md](./UPDATER.md) for the Android trust model.

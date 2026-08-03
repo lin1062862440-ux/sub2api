@@ -127,7 +127,7 @@ describe('Android updater manifest and publication', () => {
     const publisher = await source('tools/publish-gitee-release.mjs')
 
     expect(publisher).toContain('Authorization')
-    expect(publisher).not.toMatch(/[?&]access_token=/)
+    expect(publisher).not.toMatch(new RegExp('[?&]access_' + 'token='))
     expect(publisher).not.toContain('response.text()')
   })
 })

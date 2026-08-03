@@ -79,3 +79,41 @@ do not overwrite or depend on each other.
   its `latest.json` asset.
 - The versioned desktop release tags, such as `desktop-v0.1.3`, should keep the
   package and `.sig` file for rollback and auditability.
+
+## Android updater
+
+Android uses a separate optional updater flow. Its fixed public manifest is:
+
+```text
+https://gitee.com/linsource/linai-desktop-release/releases/download/android-latest/android-latest.json
+```
+
+The manifest accepts only `android-aarch64` and APK URLs under the versioned
+`android-v<version>` release in that exact public repository. It contains the
+semantic version, monotonically increasing version code, release notes,
+publication date, exact byte count, lowercase SHA-256, and a minisign signature
+over the exact APK bytes.
+
+The client enforces four independent boundaries before opening Android's system
+installer:
+
+1. TypeScript rejects malformed manifests, credentials in URLs, other hosts,
+   unexpected paths, and non-increasing version codes.
+2. Kotlin downloads only to `cache/linai-updates`, keeps incomplete data as
+   `.partial`, and never accepts a caller-selected destination.
+3. Rust canonicalizes the path inside that cache and streams byte count,
+   SHA-256, and minisign verification.
+4. Kotlin inspects the archive package, requires a higher version code and the
+   same Android signing certificate as the installed app, then grants read-only
+   access to that APK through `FileProvider`.
+
+Automatic checks run at most once per successful 24-hour window; failed checks
+use a one-hour backoff. Manual checks bypass cadence. Neither path downloads an
+APK or blocks login and navigation. Download starts only after explicit consent,
+and installation always remains an Android system confirmation.
+
+The Android release keystore and updater minisign private key have different
+roles and must both remain recoverable. Release assets are published to
+`android-v<version>` and anonymously verified before the fixed
+`android-latest` manifest is replaced. See [RELEASE.md](./RELEASE.md) for the
+bootstrap and publication runbook.

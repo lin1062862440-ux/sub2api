@@ -47,10 +47,12 @@ Tauri updater 私钥默认读取：
 export TAURI_SIGNING_PRIVATE_KEY_PATH=/path/to/linai-updater.key
 ```
 
-Gitee 私人令牌只在当前 shell 里设置，不要写进代码或文档：
+Gitee 私人令牌通过 stdin 写入 Keychain，不要写进代码、文档或命令参数：
 
 ```sh
-export GITEE_TOKEN=你的_Gitee_私人令牌
+read -rs LINAI_GITEE_SECRET
+printf %s "$LINAI_GITEE_SECRET" | swift tools/keychain-secret.swift set ai.lin.release gitee-token
+unset LINAI_GITEE_SECRET
 ```
 
 令牌需要有创建 Release、更新 Release、上传附件、删除附件的权限。
@@ -258,3 +260,114 @@ curl -I -L \
 - 不要把 `GITEE_TOKEN`、私钥、私钥密码写进仓库。
 - 如果令牌曾经发到聊天或截图里，发完后去 Gitee 后台吊销并重建。
 - 保留每个 `desktop-v<version>` Release 的包和 `.sig`，不要随意删除历史版本。
+
+## Android ARM64 发包
+
+Android release 使用两套互不替代的密钥：
+
+- `~/.tauri/linai-android-release.jks` 给 Android Package Manager 验证 APK 签名连续性，alias 固定为 `linai-android-release`。
+- Tauri/minisign updater 私钥给应用内下载器验证 APK 精确字节，对应公钥已编入客户端。
+
+Gitee token 只负责上传公开 Release，不参与 APK 身份或字节签名。三类秘密都不能提交、打印、写进命令参数或打进 WebView。
+
+### 一次性密钥准备
+
+在 `clients/desktop` 下生成 RSA-4096 Android keystore。密码从终端静默读取并通过环境传给 `keytool`，不会进入 shell history：
+
+```sh
+mkdir -p ~/.tauri
+read -rs LINAI_STORE_SECRET
+read -rs LINAI_KEY_SECRET
+export LINAI_STORE_SECRET LINAI_KEY_SECRET
+keytool -genkeypair -v \
+  -keystore ~/.tauri/linai-android-release.jks \
+  -storepass:env LINAI_STORE_SECRET \
+  -keypass:env LINAI_KEY_SECRET \
+  -alias linai-android-release \
+  -keyalg RSA -keysize 4096 -validity 10000
+printf %s "$LINAI_STORE_SECRET" | swift tools/keychain-secret.swift set ai.lin.android.release store-password
+printf %s "$LINAI_KEY_SECRET" | swift tools/keychain-secret.swift set ai.lin.android.release key-password
+unset LINAI_STORE_SECRET LINAI_KEY_SECRET
+chmod 600 ~/.tauri/linai-android-release.jks
+```
+
+`keytool` 会交互询问证书名称等非秘密字段。生成后记录证书 SHA-256，但不要记录密码：
+
+```sh
+keytool -list -v -keystore ~/.tauri/linai-android-release.jks -alias linai-android-release
+```
+
+在发布任何 APK 前，把 keystore 复制到离线介质并使用 `openssl enc -aes-256-cbc -pbkdf2 -salt` 加密；恢复演练必须确认 alias 和证书 SHA-256 与原件一致。丢失 keystore 后无法对已安装应用做原地升级。
+
+把 updater 私钥和 Gitee token 通过 stdin 存入 Keychain：
+
+```sh
+read -rs LINAI_UPDATER_SECRET
+printf %s "$LINAI_UPDATER_SECRET" | swift tools/keychain-secret.swift set ai.lin.release updater-private-key
+unset LINAI_UPDATER_SECRET
+
+read -rs LINAI_GITEE_SECRET
+printf %s "$LINAI_GITEE_SECRET" | swift tools/keychain-secret.swift set ai.lin.release gitee-token
+unset LINAI_GITEE_SECRET
+```
+
+CI 可改用同名环境变量；本机流程优先读取环境，缺失时读取 Keychain。发布后若 token 曾进入聊天或其他不受控位置，应在 Gitee 立即轮换，并把新值重新写入 Keychain。
+
+### 首次 bootstrap：0.1.4
+
+首次验收必须先保持三个版本文件均为 `0.1.4`：
+
+```text
+package.json
+src-tauri/Cargo.toml
+src-tauri/tauri.conf.json
+```
+
+然后构建：
+
+```sh
+pnpm android:release
+```
+
+wrapper 只接受一个 release-signed ARM64 APK，并检查 `apksigner`、ZIP alignment、package `ai.lin.android`、version `0.1.4`、code `1004`、`debuggable=false` 和仅 `arm64-v8a`。产物必须保留在：
+
+```text
+release/android/0.1.4/LinAI_0.1.4_arm64-release.apk
+```
+
+此时不要生成或发布 `android-latest.json`。手机若已装 debug 签名的同包名应用，只卸载该 debug 版本，然后安装 bootstrap；确认启动器 logo、登录、个人空间和管理空间正常。
+
+### 发布 0.1.5
+
+把上述三个版本文件同时改成 `0.1.5`，先验证，再依次执行：
+
+```sh
+pnpm test:run
+pnpm build
+pnpm android:release
+pnpm android:manifest -- --notes "Android 更新功能与稳定性改进"
+pnpm android:publish
+```
+
+`android:manifest` 核对三个版本、APK package/name/code，计算精确 byte count 与 SHA-256，对 APK 精确字节生成 minisign 签名并用内置公钥反向验证。输出位于：
+
+```text
+release/android/0.1.5/LinAI_0.1.5_arm64-release.apk
+release/android/0.1.5/LinAI_0.1.5_arm64-release.apk.sig
+release/android/0.1.5/android-latest.json
+```
+
+`android:publish` 固定按以下顺序执行，任一匿名验证失败都会停止：
+
+1. 替换 `android-v0.1.5` 的 APK 和 `.sig`。
+2. 匿名下载并核对 byte count、SHA-256 和签名文本。
+3. 替换 `android-latest` 的 `android-latest.json`。
+4. 匿名读取固定 manifest，并再次访问 manifest 指向的 APK。
+
+### 手机原地升级验收
+
+从已安装的 release-signed `0.1.4` 手动检查更新。先取消一次下载并确认没有残留 `.partial`，再重新下载；按提示允许 LinAI 安装未知应用，返回应用后继续打开 Android 系统安装器。不能卸载旧版，安装完成后应显示 `0.1.5`，同时保留登录会话。
+
+最后验证个人/管理空间、退出登录、系统 Back、输入法和安全区、桌面 launcher logo。交付记录必须包含 APK 绝对路径、大小、SHA-256、version/code、ABI、debuggable、证书 SHA-256、签名 scheme、signer count、ZIP alignment、permission/provider、launcher PNG、minisign 验证、公开 URL 和手机验收结果。
+
+若用户拒绝“安装未知应用”，重新点击继续安装会回到授权提示，不需要重新下载。若系统安装器被取消，验证后的 APK 可再次打开；超过 24 小时或版本变化后由客户端清理。
