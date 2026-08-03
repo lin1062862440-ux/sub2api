@@ -171,9 +171,24 @@ describe('Android update coordinator', () => {
 
     expect(updater.state.value.phase).toBe('permission-required')
     await updater.requestInstallPermission()
+    expect(updater.state.value.phase).toBe('ready-to-install')
     await updater.install()
 
     expect(deps.requestInstallPermission).toHaveBeenCalledOnce()
     expect(deps.install).toHaveBeenCalledWith('/private/cache/linai-update-0.1.5.apk')
+  })
+
+  it('returns to the permission step when Android still denies installation', async () => {
+    const deps = dependencies({
+      install: vi.fn().mockRejectedValue({ code: 'permission_required', detail: 'private path' }),
+    })
+    const updater = createAndroidUpdater(deps)
+    await updater.check({ manual: true })
+    await updater.download()
+
+    await updater.install()
+
+    expect(updater.state.value).toMatchObject({ phase: 'permission-required', error: null })
+    expect(JSON.stringify(updater.state.value)).not.toContain('private path')
   })
 })

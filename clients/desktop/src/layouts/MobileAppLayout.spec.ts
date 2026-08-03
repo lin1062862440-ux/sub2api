@@ -11,6 +11,12 @@ const mocks = vi.hoisted(() => ({
   session: null as any,
   signOut: vi.fn(),
   unregisterBackButton: vi.fn(),
+  updateCancel: vi.fn(),
+  updateCheck: vi.fn(),
+  updateDownload: vi.fn(),
+  updateInstall: vi.fn(),
+  updatePermission: vi.fn(),
+  updateState: null as any,
 }))
 
 vi.mock('@tauri-apps/api/app', () => ({
@@ -20,6 +26,28 @@ vi.mock('@tauri-apps/api/app', () => ({
 vi.mock('@/lib/platform', () => ({
   platform: () => mocks.platform,
 }))
+
+vi.mock('@/lib/android-updater-host', async () => {
+  const { ref } = await import('vue')
+  mocks.updateState = ref({
+    phase: 'idle',
+    release: null,
+    installedVersion: '0.1.4',
+    downloadedBytes: 0,
+    totalBytes: 0,
+    error: null,
+  })
+  return {
+    androidUpdater: {
+      state: mocks.updateState,
+      check: mocks.updateCheck,
+      download: mocks.updateDownload,
+      cancel: mocks.updateCancel,
+      requestInstallPermission: mocks.updatePermission,
+      install: mocks.updateInstall,
+    },
+  }
+})
 
 vi.mock('@/lib/http', () => ({
   ApiError: class ApiError extends Error {},
@@ -108,6 +136,21 @@ describe('MobileAppLayout', () => {
       return { unregister: mocks.unregisterBackButton }
     })
     mocks.unregisterBackButton.mockReset().mockResolvedValue(undefined)
+    mocks.updateCancel.mockReset().mockResolvedValue(undefined)
+    mocks.updateCheck.mockReset().mockResolvedValue(true)
+    mocks.updateDownload.mockReset().mockResolvedValue(undefined)
+    mocks.updateInstall.mockReset().mockResolvedValue(undefined)
+    mocks.updatePermission.mockReset().mockResolvedValue(undefined)
+    const idleUpdateState = {
+      phase: 'idle',
+      release: null,
+      installedVersion: '0.1.4',
+      downloadedBytes: 0,
+      totalBytes: 0,
+      error: null,
+    }
+    if (mocks.updateState) mocks.updateState.value = idleUpdateState
+    else mocks.updateState = { value: idleUpdateState }
     mocks.session.user.role = 'user'
   })
 
@@ -212,6 +255,7 @@ describe('MobileAppLayout', () => {
     expect(popover.text()).toContain('个人资料')
     expect(popover.text()).toContain('修改密码')
     expect(popover.text()).toContain('退出登录')
+    expect(popover.text()).toContain('检查更新')
     expect(popover.text()).not.toContain('用量显示')
     expect(popover.text()).not.toContain('网页管理后台')
     expect(popover.find('[data-testid="mobile-workspace-switch"]').exists()).toBe(false)
@@ -224,6 +268,61 @@ describe('MobileAppLayout', () => {
 
     await clickAndExpectRoute(router, popover.get('[data-testid="profile-menu-item"]'), 'profile')
     expect(wrapper.find('[data-testid="mobile-account-popover"]').exists()).toBe(false)
+  })
+
+  it('checks automatically without opening a sheet and exposes the same entry to administrators', async () => {
+    const personal = await mountLayout('/dashboard')
+    expect(mocks.updateCheck).toHaveBeenCalledWith({ manual: false })
+    expect(personal.wrapper.find('[data-testid="android-update-sheet"]').exists()).toBe(false)
+    await personal.wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    expect(personal.wrapper.find('[data-testid="android-update-menu-item"]').exists()).toBe(true)
+
+    localStorage.setItem(ADMIN_WORKSPACE_STORAGE_KEY, 'admin')
+    const admin = await mountLayout('/admin/dashboard', 'admin')
+    await admin.wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    expect(admin.wrapper.find('[data-testid="android-update-menu-item"]').exists()).toBe(true)
+  })
+
+  it('runs an unrestricted manual check and opens the update sheet', async () => {
+    const { wrapper } = await mountLayout('/dashboard')
+    mocks.updateCheck.mockClear()
+    await wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    await wrapper.get('[data-testid="android-update-menu-item"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.updateCheck).toHaveBeenCalledWith({ manual: true })
+    expect(wrapper.find('[data-testid="android-update-sheet"]').exists()).toBe(true)
+  })
+
+  it('keeps discovery non-blocking and opens it from the update notice', async () => {
+    const { wrapper } = await mountLayout('/dashboard')
+    mocks.updateState.value = {
+      phase: 'available',
+      release: {
+        version: '0.1.5', versionCode: 1_005, notes: '更新说明', publishedAt: '2026-08-03T00:00:00.000Z',
+        url: 'https://gitee.com/a.apk', bytes: 2_048, sha256: 'a'.repeat(64), signature: 'signature',
+      },
+      installedVersion: '0.1.4',
+      downloadedBytes: 0,
+      totalBytes: 2_048,
+      error: null,
+    }
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="android-update-sheet"]').exists()).toBe(false)
+    const notice = wrapper.get('[data-testid="android-update-notice"]')
+    expect(notice.text()).toContain('0.1.5')
+    await notice.trigger('click')
+    expect(wrapper.find('[data-testid="android-update-sheet"]').exists()).toBe(true)
+  })
+
+  it('hides Android updater controls when the mobile shell is rendered on desktop', async () => {
+    mocks.platform = 'macos'
+    const { wrapper } = await mountLayout('/dashboard')
+    await wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="android-update-menu-item"]').exists()).toBe(false)
+    expect(mocks.updateCheck).not.toHaveBeenCalled()
   })
 
   it('closes the account disclosure on blank space and restores avatar focus', async () => {
@@ -387,6 +486,23 @@ describe('MobileAppLayout', () => {
     router.back()
     await flushPromises()
     expect(router.currentRoute.value.name).toBe('dashboard')
+  })
+
+  it('consumes native Back for the update sheet before route history', async () => {
+    const { router, wrapper } = await mountLayout('/dashboard')
+    await router.push('/usage')
+    await flushPromises()
+    await wrapper.get('[data-testid="mobile-account-trigger"]').trigger('click')
+    await wrapper.get('[data-testid="android-update-menu-item"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="android-update-sheet"]').exists()).toBe(true)
+    expect(mocks.backButtonHandler).toBeTypeOf('function')
+    mocks.backButtonHandler?.({ canGoBack: true })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="android-update-sheet"]').exists()).toBe(false)
+    expect(router.currentRoute.value.name).toBe('usage')
   })
 
   it('consumes native Back for More and does not register the Android listener on desktop', async () => {

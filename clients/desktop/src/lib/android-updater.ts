@@ -296,6 +296,8 @@ export function createAndroidUpdater(dependencies: AndroidUpdaterDependencies): 
     if (!pendingPath || mutableState.value.phase !== 'permission-required') return
     try {
       await dependencies.requestInstallPermission()
+      mutableState.value.phase = 'ready-to-install'
+      mutableState.value.error = null
     } catch {
       mutableState.value = {
         ...mutableState.value,

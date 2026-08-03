@@ -28,8 +28,11 @@ import {
   workspaceDestination,
   type WorkspaceMode,
 } from '@/lib/admin-workspace'
+import { androidUpdater } from '@/lib/android-updater-host'
 import { onAdminAccessDenied } from '@/lib/http'
 import { platform } from '@/lib/platform'
+import { capabilitiesFor } from '@/lib/platform-capabilities'
+import MobileUpdateSheet from '@/mobile/components/MobileUpdateSheet.vue'
 import {
   isMobileOverflowActive,
   mobileNavigation,
@@ -56,6 +59,7 @@ const workspaceMode = ref<WorkspaceMode>(readWorkspaceMode(user.value))
 const workspaceOwner = ref(user.value)
 const accountOpen = ref(false)
 const moreOpen = ref(false)
+const updateSheetOpen = ref(false)
 const passwordDialogOpen = ref(false)
 const signingOut = ref(false)
 const adminAccessDenied = ref(false)
@@ -73,6 +77,8 @@ const isAdmin = computed(() => canUseAdminWorkspace(user.value) && !adminAccessD
 const navigation = computed(() => mobileNavigation(workspaceMode.value))
 const currentTitle = computed(() => mobileRouteTitle(route.name) || String(route.meta.title || '概览'))
 const overflowActive = computed(() => isMobileOverflowActive(route.name, workspaceMode.value))
+const appCapabilities = capabilitiesFor(platform())
+const updateAvailable = computed(() => androidUpdater.state.value.phase === 'available')
 
 function closeLayers() {
   const restoreMore = moreOpen.value
@@ -129,6 +135,17 @@ function openPasswordDialog() {
   passwordDialogOpen.value = true
 }
 
+function closeUpdateSheet() {
+  if (androidUpdater.state.value.phase === 'verifying') return
+  updateSheetOpen.value = false
+}
+
+async function openManualUpdate() {
+  closeLayers()
+  updateSheetOpen.value = true
+  await androidUpdater.check({ manual: true })
+}
+
 async function switchWorkspace() {
   const next = workspaceMode.value === 'admin' ? 'personal' : 'admin'
   saveWorkspaceMode(next, user.value)
@@ -162,6 +179,11 @@ function handleAdminAccessDenied() {
 }
 
 function handleDocumentKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && updateSheetOpen.value) {
+    event.preventDefault()
+    closeUpdateSheet()
+    return
+  }
   if (event.key === 'Escape' && (accountOpen.value || moreOpen.value)) {
     event.preventDefault()
     closeLayers()
@@ -227,11 +249,14 @@ async function startNativeBackListener() {
   if (platform() !== 'android' || nativeBackListener) return
   const registration = ++nativeBackRegistration
   try {
-    const listener = await onBackButtonPress(() => closeLayers())
+    const listener = await onBackButtonPress(() => {
+      if (updateSheetOpen.value) closeUpdateSheet()
+      else closeLayers()
+    })
     if (
       !layoutMounted
       || registration !== nativeBackRegistration
-      || (!accountOpen.value && !moreOpen.value)
+      || (!updateSheetOpen.value && !accountOpen.value && !moreOpen.value)
     ) {
       void listener.unregister().catch(() => undefined)
       return
@@ -243,9 +268,9 @@ async function startNativeBackListener() {
 }
 
 watch(
-  [accountOpen, moreOpen],
-  ([accountLayerOpen, moreLayerOpen]) => {
-    if (accountLayerOpen || moreLayerOpen) void startNativeBackListener()
+  [updateSheetOpen, accountOpen, moreOpen],
+  ([sheetOpen, accountLayerOpen, moreLayerOpen]) => {
+    if (sheetOpen || accountLayerOpen || moreLayerOpen) void startNativeBackListener()
     else stopNativeBackListener()
   },
   { flush: 'sync' },
@@ -287,6 +312,7 @@ onMounted(() => {
   document.addEventListener('keydown', handleDocumentKeydown)
   document.addEventListener('pointerdown', handleDocumentPointerDown)
   window.addEventListener('popstate', handlePopState)
+  if (appCapabilities.androidUpdater) void androidUpdater.check({ manual: false })
   if (
     isAdmin.value
     && workspaceMode.value === 'admin'
@@ -363,6 +389,17 @@ onBeforeUnmount(() => {
             <span>修改密码</span>
           </button>
           <button
+            v-if="appCapabilities.androidUpdater"
+            class="mobile-menu-item"
+            type="button"
+            data-testid="android-update-menu-item"
+            @click="openManualUpdate"
+          >
+            <RefreshCw :size="18" />
+            <span>检查更新</span>
+            <i v-if="updateAvailable" class="mobile-update-dot" aria-label="有新版本" />
+          </button>
+          <button
             v-if="isAdmin"
             class="mobile-menu-item"
             type="button"
@@ -388,6 +425,18 @@ onBeforeUnmount(() => {
     </header>
 
     <main class="mobile-content">
+      <button
+        v-if="appCapabilities.androidUpdater && updateAvailable && !updateSheetOpen"
+        class="mobile-update-notice"
+        type="button"
+        data-testid="android-update-notice"
+        role="status"
+        @click="updateSheetOpen = true"
+      >
+        <RefreshCw :size="18" />
+        <span><strong>LinAI {{ androidUpdater.state.value.release?.version }}</strong> 已可更新</span>
+        <span>查看</span>
+      </button>
       <div
         v-if="adminAccessDenied"
         class="mobile-admin-notice"
@@ -472,6 +521,17 @@ onBeforeUnmount(() => {
   </div>
 
   <ChangePasswordDialog v-model="passwordDialogOpen" />
+  <MobileUpdateSheet
+    v-if="appCapabilities.androidUpdater && updateSheetOpen"
+    v-model="updateSheetOpen"
+    :state="androidUpdater.state.value"
+    data-testid="android-update-sheet"
+    @check="androidUpdater.check({ manual: true })"
+    @download="androidUpdater.download()"
+    @cancel="androidUpdater.cancel()"
+    @request-permission="androidUpdater.requestInstallPermission()"
+    @install="androidUpdater.install()"
+  />
 </template>
 
 <style scoped>
@@ -602,6 +662,14 @@ onBeforeUnmount(() => {
   color: var(--coral);
 }
 
+.mobile-update-dot {
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  background: var(--coral);
+  border-radius: 50%;
+}
+
 .mobile-content {
   position: fixed;
   top: calc(56px + env(safe-area-inset-top));
@@ -630,6 +698,28 @@ onBeforeUnmount(() => {
   border-radius: 8px;
   color: #80601f;
   font-size: 13px;
+}
+
+.mobile-update-notice {
+  display: grid;
+  width: calc(100% - 24px);
+  min-height: 46px;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 12px 0;
+  padding: 7px 12px;
+  background: #eef6ff;
+  border: 1px solid #c8dcf3;
+  border-radius: 8px;
+  color: var(--accent-strong);
+  font-size: 13px;
+  text-align: left;
+}
+
+.mobile-update-notice > span:last-child {
+  color: var(--text-secondary);
+  font-weight: 650;
 }
 
 .mobile-admin-notice button {
