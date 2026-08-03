@@ -8,6 +8,7 @@ describe('platform capabilities', () => {
       apiKeys: true,
       localConfig: true,
       externalUsageDisplay: true,
+      desktopUpdater: true,
       textExport: true,
       desktopSecondInstance: true,
     })
@@ -19,6 +20,7 @@ describe('platform capabilities', () => {
       apiKeys: false,
       localConfig: false,
       externalUsageDisplay: false,
+      desktopUpdater: false,
       textExport: false,
       desktopSecondInstance: false,
     })
