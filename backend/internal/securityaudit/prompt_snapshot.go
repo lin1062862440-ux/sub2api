@@ -19,6 +19,9 @@ var (
 	canaryPattern = regexp.MustCompile(`(?i)([A-Z]+_CANARY_)[A-Za-z0-9_-]+`)
 	emailPattern  = regexp.MustCompile(`(?i)\b[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}\b`)
 	phonePattern  = regexp.MustCompile(`(?:\+?\d[\d\s().-]{8,}\d)`)
+	cookiePattern = regexp.MustCompile(`(?i)\b(?:cookie|set-cookie)\s*[:=]\s*[^\r\n]+`)
+	prcIDPattern  = regexp.MustCompile(`\b\d{17}[\dXx]\b`)
+	cardPattern   = regexp.MustCompile(`\b[3-6]\d{3}(?:[ -]?\d{4}){2,3}\b`)
 )
 
 const promptAuditPrioritySeparator = "\x00SUB2API_PROMPT_AUDIT_PRIORITY_END\x00"
@@ -27,6 +30,16 @@ type promptSegment struct {
 	text string
 	user bool
 	role string
+	turn int
+}
+
+const DefaultCapturedPromptMaxBytes = 64 * 1024
+
+type LatestUserPrompt struct {
+	RedactedPrompt string
+	PromptHash     string
+	PromptLength   int
+	Truncated      bool
 }
 
 func ExtractPromptSnapshot(req Request) (PromptSnapshot, error) {
@@ -38,6 +51,30 @@ func ExtractPromptSnapshot(req Request) (PromptSnapshot, error) {
 // the complete client-controlled transcript is retained for review.
 func ExtractBlockingPromptSnapshot(req Request, latestTurnOnly bool) (PromptSnapshot, error) {
 	return extractPromptSnapshot(req, latestTurnOnly)
+}
+
+func ExtractLatestUserPromptSnapshot(req Request) (LatestUserPrompt, error) {
+	var document any
+	if err := json.Unmarshal(req.Body, &document); err != nil {
+		return LatestUserPrompt{}, errors.New("prompt capture request JSON is invalid")
+	}
+	segments := latestUserTurnSegments(extractProtocolSegments(req.Protocol, document))
+	if len(segments) == 0 {
+		return LatestUserPrompt{}, ErrNoPromptText
+	}
+	redacted := strings.TrimSpace(RedactCapturedPrompt(strings.Join(segments, "\n\n")))
+	redacted = strings.ReplaceAll(redacted, "\x00", "")
+	if redacted == "" {
+		return LatestUserPrompt{}, ErrNoPromptText
+	}
+	redacted, truncated := truncateUTF8Bytes(redacted, DefaultCapturedPromptMaxBytes)
+	digest := sha256.Sum256([]byte(redacted))
+	return LatestUserPrompt{
+		RedactedPrompt: redacted,
+		PromptHash:     hex.EncodeToString(digest[:]),
+		PromptLength:   utf8.RuneCountInString(redacted),
+		Truncated:      truncated,
+	}, nil
 }
 
 func extractPromptSnapshot(req Request, latestTurnOnly bool) (PromptSnapshot, error) {
@@ -142,7 +179,7 @@ func extractMessages(value any, wantedRoles ...string) []promptSegment {
 		wanted[strings.ToLower(strings.TrimSpace(role))] = struct{}{}
 	}
 	result := make([]promptSegment, 0, len(items))
-	for _, item := range items {
+	for itemIndex, item := range items {
 		message, ok := item.(map[string]any)
 		if !ok {
 			continue
@@ -153,7 +190,7 @@ func extractMessages(value any, wantedRoles ...string) []promptSegment {
 		}
 		texts := contentTexts(message["content"])
 		for _, text := range texts {
-			result = append(result, promptSegment{text: text, user: role == "user", role: role})
+			result = append(result, promptSegment{text: text, user: role == "user", role: role, turn: itemIndex + 1})
 		}
 	}
 	return result
@@ -190,10 +227,10 @@ func extractAnthropicSystem(value any) []promptSegment {
 func extractResponses(value any) []promptSegment {
 	switch typed := value.(type) {
 	case string:
-		return []promptSegment{{text: typed, user: true, role: "user"}}
+		return []promptSegment{{text: typed, user: true, role: "user", turn: 1}}
 	case []any:
 		result := make([]promptSegment, 0, len(typed))
-		for _, item := range typed {
+		for itemIndex, item := range typed {
 			switch entry := item.(type) {
 			case string:
 				result = append(result, promptSegment{text: entry, user: true, role: "user"})
@@ -204,10 +241,10 @@ func extractResponses(value any) []promptSegment {
 				}
 				if content, exists := entry["content"]; exists {
 					for _, text := range contentTexts(content) {
-						result = append(result, promptSegment{text: text, user: role == "" || role == "user", role: role})
+						result = append(result, promptSegment{text: text, user: role == "" || role == "user", role: role, turn: itemIndex + 1})
 					}
 				} else if text := stringValue(entry["text"]); text != "" {
-					result = append(result, promptSegment{text: text, user: role == "" || role == "user", role: role})
+					result = append(result, promptSegment{text: text, user: role == "" || role == "user", role: role, turn: itemIndex + 1})
 				}
 			}
 		}
@@ -217,7 +254,11 @@ func extractResponses(value any) []promptSegment {
 		if role != "" && !isClientInstructionRole(role) {
 			return nil
 		}
-		return promptSegmentsForRole(contentTexts(typed["content"]), role)
+		segments := promptSegmentsForRole(contentTexts(typed["content"]), role)
+		for index := range segments {
+			segments[index].turn = 1
+		}
+		return segments
 	default:
 		return nil
 	}
@@ -243,7 +284,7 @@ func extractGemini(value any) []promptSegment {
 		return nil
 	}
 	result := make([]promptSegment, 0, len(contents))
-	for _, item := range contents {
+	for contentIndex, item := range contents {
 		content, ok := item.(map[string]any)
 		if !ok {
 			continue
@@ -256,7 +297,7 @@ func extractGemini(value any) []promptSegment {
 		for _, part := range parts {
 			if object, ok := part.(map[string]any); ok {
 				if text := stringValue(object["text"]); text != "" {
-					result = append(result, promptSegment{text: text, user: role == "" || role == "user", role: role})
+					result = append(result, promptSegment{text: text, user: role == "" || role == "user", role: role, turn: contentIndex + 1})
 				}
 			}
 		}
@@ -325,10 +366,10 @@ func extractGeminiInstances(value any) []promptSegment {
 		return nil
 	}
 	result := make([]promptSegment, 0, len(instances))
-	for _, item := range instances {
+	for instanceIndex, item := range instances {
 		if instance, ok := item.(map[string]any); ok {
 			if prompt := stringValue(instance["prompt"]); prompt != "" {
-				result = append(result, promptSegment{text: prompt, user: true, role: "user"})
+				result = append(result, promptSegment{text: prompt, user: true, role: "user", turn: instanceIndex + 1})
 			}
 		}
 	}
@@ -457,6 +498,29 @@ func normalizeSegmentsLatestUserFirst(values []promptSegment) []string {
 	return result
 }
 
+func latestUserTurnSegments(values []promptSegment) []string {
+	normalized := normalizedPromptSegments(values)
+	latest := -1
+	for index := len(normalized) - 1; index >= 0; index-- {
+		if isUserSegment(normalized[index]) {
+			latest = index
+			break
+		}
+	}
+	if latest < 0 {
+		return nil
+	}
+	turn := normalized[latest].turn
+	start := latest
+	for start > 0 && isUserSegment(normalized[start-1]) {
+		if turn > 0 && normalized[start-1].turn != turn {
+			break
+		}
+		start--
+	}
+	return promptSegmentTexts(normalized[start : latest+1])
+}
+
 // blockingSegmentsLatestUserAndPreviousOutput limits synchronous guard input to
 // the current user turn and the nearest preceding assistant/model turn. It is
 // deliberately opt-in because full transcript scanning remains stronger at
@@ -572,6 +636,29 @@ func RedactPreview(value string, maxRunes int) string {
 	value = emailPattern.ReplaceAllString(value, "***@***")
 	value = phonePattern.ReplaceAllString(value, "***PHONE***")
 	return TrimRunes(value, maxRunes)
+}
+
+func RedactCapturedPrompt(value string) string {
+	value = bearerPattern.ReplaceAllString(value, "[REDACTED_BEARER]")
+	value = cookiePattern.ReplaceAllString(value, "[REDACTED_COOKIE]")
+	value = apiKeyPattern.ReplaceAllString(value, "[REDACTED_SECRET]")
+	value = canaryPattern.ReplaceAllString(value, "${1}[REDACTED_SECRET]")
+	value = emailPattern.ReplaceAllString(value, "[REDACTED_EMAIL]")
+	value = prcIDPattern.ReplaceAllString(value, "[REDACTED_ID]")
+	value = cardPattern.ReplaceAllString(value, "[REDACTED_CARD]")
+	value = phonePattern.ReplaceAllString(value, "[REDACTED_PHONE]")
+	return value
+}
+
+func truncateUTF8Bytes(value string, maxBytes int) (string, bool) {
+	if maxBytes <= 0 || len(value) <= maxBytes {
+		return value, false
+	}
+	end := maxBytes
+	for end > 0 && !utf8.ValidString(value[:end]) {
+		end--
+	}
+	return value[:end], true
 }
 
 // BuildPromptPreview stores only a short, non-recoverable head of sanitized

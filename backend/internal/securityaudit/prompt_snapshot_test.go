@@ -293,6 +293,98 @@ func TestPromptSnapshotIncludesClientControlledInstructions(t *testing.T) {
 	}
 }
 
+func TestExtractLatestUserPromptSnapshotProtocols(t *testing.T) {
+	tests := []struct {
+		name     string
+		protocol string
+		body     string
+		want     []string
+		omit     []string
+	}{
+		{
+			name: "chat keeps only final user message blocks", protocol: "openai_chat_completions",
+			body: `{"messages":[{"role":"user","content":"old"},{"role":"user","content":[{"type":"text","text":"new one"},{"type":"image_url","image_url":{"url":"data:image/png;base64,SECRET"}},{"type":"text","text":"new two"}]}]}`,
+			want: []string{"new one", "new two"}, omit: []string{"old", "SECRET"},
+		},
+		{
+			name: "anthropic excludes system assistant and tool result", protocol: "anthropic_messages",
+			body: `{"system":"system secret","messages":[{"role":"user","content":"old"},{"role":"assistant","content":"reply"},{"role":"user","content":[{"type":"tool_result","content":"tool output"},{"type":"text","text":"new alice@example.com sk-testsecret123"}]}]}`,
+			want: []string{"new", "[REDACTED_EMAIL]", "[REDACTED_SECRET]"}, omit: []string{"old", "reply", "tool output", "system secret", "alice@example.com", "sk-testsecret123"},
+		},
+		{
+			name: "responses string", protocol: "openai_responses",
+			body: `{"instructions":"system","input":"current response input"}`,
+			want: []string{"current response input"}, omit: []string{"system"},
+		},
+		{
+			name: "responses array", protocol: "openai_responses",
+			body: `{"input":[{"role":"user","content":"old"},{"role":"assistant","content":"reply"},{"role":"user","content":[{"type":"input_text","text":"current"}]}]}`,
+			want: []string{"current"}, omit: []string{"old", "reply"},
+		},
+		{
+			name: "gemini", protocol: "gemini",
+			body: `{"systemInstruction":{"parts":[{"text":"system"}]},"contents":[{"role":"user","parts":[{"text":"old"}]},{"role":"model","parts":[{"text":"reply"}]},{"role":"user","parts":[{"text":"latest"},{"inlineData":{"data":"SECRET"}}]}]}`,
+			want: []string{"latest"}, omit: []string{"old", "reply", "system", "SECRET"},
+		},
+		{
+			name: "media text prompts", protocol: "openai_images",
+			body: `{"prompt":"draw a lighthouse","negative_prompt":"no fog","image":"BASE64SECRET"}`,
+			want: []string{"draw a lighthouse", "no fog"}, omit: []string{"BASE64SECRET"},
+		},
+		{
+			name: "responses websocket", protocol: "responses_websocket",
+			body: `{"type":"response.create","response":{"input":[{"role":"user","content":[{"type":"input_text","text":"ws current"}]}]}}`,
+			want: []string{"ws current"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := ExtractLatestUserPromptSnapshot(Request{Protocol: tt.protocol, Body: []byte(tt.body)})
+			require.NoError(t, err)
+			for _, expected := range tt.want {
+				require.Contains(t, result.RedactedPrompt, expected)
+			}
+			for _, omitted := range tt.omit {
+				require.NotContains(t, result.RedactedPrompt, omitted)
+			}
+			require.NotEmpty(t, result.PromptHash)
+			require.Equal(t, utf8.RuneCountInString(result.RedactedPrompt), result.PromptLength)
+		})
+	}
+}
+
+func TestExtractLatestUserPromptSnapshotRejectsNonUserText(t *testing.T) {
+	_, err := ExtractLatestUserPromptSnapshot(Request{
+		Protocol: "openai_chat_completions",
+		Body:     []byte(`{"messages":[{"role":"system","content":"system"},{"role":"assistant","content":"reply"},{"role":"tool","content":"tool"}]}`),
+	})
+	require.ErrorIs(t, err, ErrNoPromptText)
+}
+
+func TestRedactCapturedPromptSensitiveCategories(t *testing.T) {
+	raw := "Authorization: Bearer token-secret-123\nCookie: sid=cookie-secret; theme=dark\nemail@example.com\n+86 138 0013 8000\n身份证 11010519491231002X\n卡号 4111 1111 1111 1111\npassword=supersecret123"
+	redacted := RedactCapturedPrompt(raw)
+	for _, secret := range []string{"token-secret-123", "cookie-secret", "email@example.com", "138 0013 8000", "11010519491231002X", "4111 1111 1111 1111", "supersecret123"} {
+		require.NotContains(t, redacted, secret)
+	}
+	for _, marker := range []string{"[REDACTED_BEARER]", "[REDACTED_COOKIE]", "[REDACTED_EMAIL]", "[REDACTED_PHONE]", "[REDACTED_ID]", "[REDACTED_CARD]", "[REDACTED_SECRET]"} {
+		require.Contains(t, redacted, marker)
+	}
+}
+
+func TestExtractLatestUserPromptSnapshotTruncatesAtValidUTF8Boundary(t *testing.T) {
+	text := strings.Repeat("中😀", DefaultCapturedPromptMaxBytes)
+	body, err := json.Marshal(map[string]any{"messages": []any{map[string]any{"role": "user", "content": text}}})
+	require.NoError(t, err)
+
+	result, err := ExtractLatestUserPromptSnapshot(Request{Protocol: "openai_chat_completions", Body: body})
+	require.NoError(t, err)
+	require.True(t, result.Truncated)
+	require.LessOrEqual(t, len(result.RedactedPrompt), DefaultCapturedPromptMaxBytes)
+	require.True(t, utf8.ValidString(result.RedactedPrompt))
+}
+
 func TestBlockingPromptSnapshotLimitsInputToLatestUserAndPreviousOutput(t *testing.T) {
 	tests := []struct {
 		name, protocol, body, want string
