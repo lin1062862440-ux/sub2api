@@ -18,7 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{ update: [config: UsageDisplayConfig] }>()
 
 const selectedSource = ref<UsageDisplayConfig['source']>(props.config.source)
-const supported = computed(() => props.platform === 'macos')
+const supported = computed(() => props.platform === 'macos' || props.platform === 'windows')
 const canEnable = computed(() => props.config.source === 'balance' || props.config.subscriptionId !== null)
 
 watch(() => props.config.source, (source) => {
@@ -69,7 +69,7 @@ function toggle() {
       <MonitorUp :size="24" />
       <div>
         <strong>当前平台暂未支持</strong>
-        <span>Windows 与 Linux 外部用量展示将在后续版本提供</span>
+        <span>Linux 外部用量展示将在后续版本提供</span>
       </div>
     </div>
 
@@ -96,7 +96,7 @@ function toggle() {
           data-testid="usage-surface-menu-bar"
           :aria-pressed="config.surface === 'menu-bar'"
           @click="setSurface('menu-bar')"
-        ><Menu :size="16" /><span>菜单栏</span></button>
+        ><Menu :size="16" /><span>{{ platform === 'windows' ? '系统托盘' : '菜单栏' }}</span></button>
         <button
           type="button"
           data-testid="usage-surface-floating-window"
@@ -166,7 +166,7 @@ function toggle() {
     </fieldset>
 
     <div class="display-preview">
-      <span>{{ config.surface === 'menu-bar' ? '菜单栏预览' : '悬浮窗预览' }}</span>
+      <span>{{ config.surface === 'menu-bar' ? (platform === 'windows' ? '系统托盘预览' : '菜单栏预览') : '悬浮窗预览' }}</span>
       <strong v-if="config.surface === 'menu-bar'" class="menu-preview"><i aria-hidden="true">L</i>{{ trayTitle }}</strong>
       <strong
         v-else-if="config.floatingStyle === 'orb'"

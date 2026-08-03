@@ -1,4 +1,4 @@
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use std::sync::Mutex;
 
 #[cfg(target_os = "macos")]
@@ -8,42 +8,58 @@ use objc2_app_kit::{NSColor, NSForegroundColorAttributeName};
 #[cfg(target_os = "macos")]
 use objc2_foundation::{NSAttributedString, NSDictionary, NSString};
 
-#[cfg(target_os = "macos")]
+#[cfg(target_os = "windows")]
+use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Manager, PhysicalPosition, Position, Size, WebviewWindow,
 };
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 use super::super::{show_popover, PopoverAnchor, UsageDisplayHost, POPOVER_LABEL};
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 const TRAY_ID: &str = "usage-display";
 #[cfg(target_os = "macos")]
 const TRAY_AUTOSAVE_NAME: &str = "com.linai.desktop.usage-display";
+#[cfg(target_os = "windows")]
+const MENU_OPEN_USAGE: &str = "usage-display-open";
+#[cfg(target_os = "windows")]
+const MENU_OPEN_MAIN: &str = "usage-display-main";
+#[cfg(target_os = "windows")]
+const MENU_QUIT: &str = "usage-display-quit";
+#[cfg(any(target_os = "macos", test))]
 const RING_ICON_PIXELS: usize = 36;
+#[cfg(any(target_os = "macos", test))]
 const RING_SUPERSAMPLE: usize = 4;
+#[cfg(any(target_os = "macos", test))]
 const RING_OUTLINE_RGBA: [u8; 4] = [255, 255, 255, 64];
+#[cfg(any(target_os = "macos", test))]
 const RING_TRACK_RGBA: [u8; 4] = [255, 255, 255, 150];
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, PartialEq, Eq)]
 enum TrayMetricIcon {
     WhiteMark,
     QuotaRing { percent: u8, color: (u8, u8, u8) },
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct NativeIconUpdate {
     is_template: bool,
     title_opacity: u8,
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Debug, PartialEq, Eq)]
 struct TrayMetricPresentation {
     text: String,
     icon: TrayMetricIcon,
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn quota_metric_color(percent: u8) -> (u8, u8, u8) {
     match percent.min(100) {
         0..=59 => (67, 168, 112),
@@ -52,6 +68,7 @@ fn quota_metric_color(percent: u8) -> (u8, u8, u8) {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn tray_metric_presentation(title: &str) -> TrayMetricPresentation {
     let trimmed = title.trim();
     let percentage = trimmed
@@ -73,6 +90,7 @@ fn tray_metric_presentation(title: &str) -> TrayMetricPresentation {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn native_icon_update(icon: &TrayMetricIcon) -> NativeIconUpdate {
     match icon {
         TrayMetricIcon::WhiteMark => NativeIconUpdate {
@@ -86,6 +104,7 @@ fn native_icon_update(icon: &TrayMetricIcon) -> NativeIconUpdate {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn quota_ring_rgba(percent: u8, color: (u8, u8, u8)) -> Vec<u8> {
     let percent = percent.min(100);
     let mut rgba = vec![0; RING_ICON_PIXELS * RING_ICON_PIXELS * 4];
@@ -160,7 +179,7 @@ fn pixel_rgb_at(rgba: &[u8], x: usize, y: usize) -> (u8, u8, u8) {
     (pixel[0], pixel[1], pixel[2])
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Clone, Copy, Debug)]
 struct TrayAnchor {
     x: f64,
@@ -169,7 +188,7 @@ struct TrayAnchor {
     height: f64,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Default)]
 pub(in crate::usage_display) struct MenuBarState {
     tray_anchor: Mutex<Option<TrayAnchor>>,
@@ -197,7 +216,52 @@ fn clamp_popover_position(
     )
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "windows", test))]
+fn clamp_windows_tray_position(
+    anchor: (f64, f64, f64, f64),
+    work_area: (f64, f64, f64, f64),
+    popover: (f64, f64),
+) -> (f64, f64) {
+    const MARGIN: f64 = 8.0;
+    const GAP: f64 = 4.0;
+    let (anchor_x, anchor_y, anchor_width, anchor_height) = anchor;
+    let (area_x, area_y, area_width, area_height) = work_area;
+    let (popover_width, popover_height) = popover;
+    let area_right = area_x + area_width;
+    let area_bottom = area_y + area_height;
+    let centered_x = anchor_x + anchor_width / 2.0 - popover_width / 2.0;
+    let centered_y = anchor_y + anchor_height / 2.0 - popover_height / 2.0;
+    let (target_x, target_y) = if anchor_y >= area_bottom {
+        (centered_x, anchor_y - popover_height - GAP)
+    } else if anchor_y + anchor_height <= area_y {
+        (centered_x, anchor_y + anchor_height + GAP)
+    } else if anchor_x >= area_right {
+        (anchor_x - popover_width - GAP, centered_y)
+    } else if anchor_x + anchor_width <= area_x {
+        (anchor_x + anchor_width + GAP, centered_y)
+    } else {
+        (centered_x, anchor_y - popover_height - GAP)
+    };
+    let min_x = area_x + MARGIN;
+    let max_x = area_right - popover_width - MARGIN;
+    let min_y = area_y + MARGIN;
+    let max_y = area_bottom - popover_height - MARGIN;
+    (
+        target_x.clamp(min_x, max_x.max(min_x)),
+        target_y.clamp(min_y, max_y.max(min_y)),
+    )
+}
+
+#[cfg(target_os = "windows")]
+fn tray_tooltip(title: &str) -> String {
+    if title.trim().is_empty() {
+        "LinAI 用量显示".to_string()
+    } else {
+        format!("LinAI · {title}")
+    }
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn monitor_work_area(monitor: &tauri::Monitor) -> (f64, f64, f64, f64) {
     let area = monitor.work_area();
     (
@@ -208,7 +272,7 @@ fn monitor_work_area(monitor: &tauri::Monitor) -> (f64, f64, f64, f64) {
     )
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn set_physical_position(window: &WebviewWindow, position: (f64, f64)) -> Result<(), String> {
     window
         .set_position(Position::Physical(PhysicalPosition::new(
@@ -218,7 +282,7 @@ fn set_physical_position(window: &WebviewWindow, position: (f64, f64)) -> Result
         .map_err(|error| error.to_string())
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn tray_rect_values(rect: tauri::Rect) -> TrayAnchor {
     let (x, y) = match rect.position {
         Position::Physical(position) => (position.x as f64, position.y as f64),
@@ -236,7 +300,7 @@ fn tray_rect_values(rect: tauri::Rect) -> TrayAnchor {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn position_under_tray(
     app: &tauri::AppHandle,
     window: &WebviewWindow,
@@ -250,15 +314,17 @@ fn position_under_tray(
         .or_else(|| app.primary_monitor().ok().flatten())
         .ok_or_else(|| "无法确定菜单栏所在显示器".to_string())?;
     let size = window.outer_size().map_err(|error| error.to_string())?;
-    let position = clamp_popover_position(
-        (anchor.x, anchor.y, anchor.width, anchor.height),
-        monitor_work_area(&monitor),
-        (size.width as f64, size.height as f64),
-    );
+    let anchor_rect = (anchor.x, anchor.y, anchor.width, anchor.height);
+    let area = monitor_work_area(&monitor);
+    let popover = (size.width as f64, size.height as f64);
+    #[cfg(target_os = "macos")]
+    let position = clamp_popover_position(anchor_rect, area, popover);
+    #[cfg(target_os = "windows")]
+    let position = clamp_windows_tray_position(anchor_rect, area, popover);
     set_physical_position(window, position)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn position_over_main(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<(), String> {
     let Some(main) = app.get_webview_window("main") else {
         return window.center().map_err(|error| error.to_string());
@@ -287,7 +353,7 @@ fn position_over_main(app: &tauri::AppHandle, window: &WebviewWindow) -> Result<
     set_physical_position(window, position)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::usage_display) fn position_popover(
     app: &tauri::AppHandle,
     window: &WebviewWindow,
@@ -335,7 +401,7 @@ fn white_app_icon(app: &tauri::AppHandle) -> Result<tauri::image::Image<'static>
     ))
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 fn toggle_popover(app: &tauri::AppHandle) -> Result<(), String> {
     let window = app
         .get_webview_window(POPOVER_LABEL)
@@ -424,7 +490,73 @@ fn build(app: &tauri::AppHandle, title: &str) -> Result<(), String> {
     apply_native_metric(app, &tray, title)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(target_os = "windows")]
+fn build(app: &tauri::AppHandle, title: &str) -> Result<(), String> {
+    let icon = app
+        .default_window_icon()
+        .ok_or_else(|| "应用图标不可用".to_string())?
+        .clone();
+    let open_usage = MenuItem::with_id(app, MENU_OPEN_USAGE, "打开用量", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let open_main = MenuItem::with_id(app, MENU_OPEN_MAIN, "打开主窗口", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let separator = PredefinedMenuItem::separator(app).map_err(|error| error.to_string())?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, "退出 LinAI", true, None::<&str>)
+        .map_err(|error| error.to_string())?;
+    let menu = Menu::with_items(app, &[&open_usage, &open_main, &separator, &quit])
+        .map_err(|error| error.to_string())?;
+
+    TrayIconBuilder::with_id(TRAY_ID)
+        .icon(icon)
+        .tooltip(tray_tooltip(title))
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                rect,
+                button,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let app = tray.app_handle();
+                let state = app.state::<UsageDisplayHost>();
+                if let Ok(mut anchor) = state.menu_bar.tray_anchor.lock() {
+                    *anchor = Some(tray_rect_values(rect));
+                }
+                drop(state);
+                if button == MouseButton::Left {
+                    let _ = toggle_popover(app);
+                }
+            }
+        })
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            MENU_OPEN_USAGE => {
+                let _ = show_popover(app, PopoverAnchor::Tray);
+            }
+            MENU_OPEN_MAIN => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+            MENU_QUIT => app.exit(0),
+            _ => {}
+        })
+        .build(app)
+        .map(|_| ())
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "windows")]
+pub(in crate::usage_display) fn setup(app: &tauri::AppHandle) -> Result<(), String> {
+    if app.tray_by_id(TRAY_ID).is_some() {
+        return Ok(());
+    }
+    build(app, "")
+}
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::usage_display) fn configure(
     app: &tauri::AppHandle,
     _state: &UsageDisplayHost,
@@ -432,6 +564,9 @@ pub(in crate::usage_display) fn configure(
     title: &str,
     appearance: super::super::Appearance,
 ) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    setup(app)?;
+
     if let Some(window) = app.get_webview_window(POPOVER_LABEL) {
         let logical_size = super::super::popover_logical_size(appearance);
         window
@@ -442,6 +577,7 @@ pub(in crate::usage_display) fn configure(
             .map_err(|error| error.to_string())?;
         super::apply_window_material(&window, appearance, 23.0);
     }
+    #[cfg(target_os = "macos")]
     if !enabled {
         let _ = app.remove_tray_by_id(TRAY_ID);
         if let Some(window) = app.get_webview_window(POPOVER_LABEL) {
@@ -449,21 +585,35 @@ pub(in crate::usage_display) fn configure(
         }
         return Ok(());
     }
+    #[cfg(target_os = "windows")]
+    if !enabled {
+        if let Some(window) = app.get_webview_window(POPOVER_LABEL) {
+            let _ = window.hide();
+        }
+    }
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        #[cfg(target_os = "macos")]
         apply_native_metric(app, &tray, title)?;
+        #[cfg(target_os = "windows")]
+        tray.set_tooltip(Some(tray_tooltip(title)))
+            .map_err(|error| error.to_string())?;
         tray.set_visible(true).map_err(|error| error.to_string())?;
         return Ok(());
     }
     build(app, title)
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "windows"))]
 pub(in crate::usage_display) fn set_title(
     app: &tauri::AppHandle,
     title: &str,
 ) -> Result<(), String> {
     if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        #[cfg(target_os = "macos")]
         apply_native_metric(app, &tray, title)?;
+        #[cfg(target_os = "windows")]
+        tray.set_tooltip(Some(tray_tooltip(title)))
+            .map_err(|error| error.to_string())?;
     }
     Ok(())
 }
@@ -595,5 +745,29 @@ mod tests {
         assert_eq!(quota_metric_color(59), healthy);
         assert_eq!(quota_metric_color(79), warning);
         assert_eq!(quota_metric_color(100), danger);
+    }
+
+    #[test]
+    fn windows_tray_popover_opens_above_a_bottom_taskbar() {
+        assert_eq!(
+            clamp_windows_tray_position(
+                (1800.0, 1040.0, 24.0, 40.0),
+                (0.0, 0.0, 1920.0, 1040.0),
+                (352.0, 352.0),
+            ),
+            (1560.0, 680.0),
+        );
+    }
+
+    #[test]
+    fn windows_tray_popover_opens_inside_a_left_taskbar() {
+        assert_eq!(
+            clamp_windows_tray_position(
+                (-80.0, 620.0, 80.0, 24.0),
+                (0.0, 0.0, 1840.0, 1080.0),
+                (352.0, 352.0),
+            ),
+            (8.0, 456.0),
+        );
     }
 }

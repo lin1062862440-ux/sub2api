@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const lib = readFileSync(resolve(process.cwd(), 'src-tauri/src/lib.rs'), 'utf8')
+const lib = readFileSync(resolve(process.cwd(), 'src-tauri/src/lib.rs'), 'utf8').replace(/\r\n/g, '\n')
 
 describe('Android Rust host boundary', () => {
   it('compiles desktop-only modules and plugins behind desktop cfg', () => {

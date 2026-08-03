@@ -2,7 +2,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import {
   Activity,
-  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FilterX,
@@ -24,6 +23,7 @@ import type {
   UserErrorRequest,
 } from '@/api'
 import TrendChart from '@/components/TrendChart.vue'
+import UsageFilterSelect, { type UsageFilterOption } from '@/components/UsageFilterSelect.vue'
 import UsageErrorDrawer from '@/components/UsageErrorDrawer.vue'
 import UsageErrorsTable from '@/components/UsageErrorsTable.vue'
 import UsageRangePicker from '@/components/UsageRangePicker.vue'
@@ -111,6 +111,50 @@ const modelOptions = computed(() => {
   if (model.value) values.add(model.value)
   return [...values].sort()
 })
+
+const apiKeyOptions = computed(() => {
+  const values = new Map<number, ApiKeyOption>()
+  apiKeys.value.forEach((key) => values.set(key.id, key))
+  records.value.forEach((record) => {
+    const id = record.api_key?.id ?? record.api_key_id
+    if (!id || values.has(id)) return
+    values.set(id, { id, name: record.api_key?.name || `Key #${id}` })
+  })
+  return [...values.values()].sort((left, right) => left.name.localeCompare(right.name, 'zh-CN'))
+})
+
+const apiKeyFilterOptions = computed<UsageFilterOption[]>(() => [
+  { value: '', label: '全部 Key' },
+  ...apiKeyOptions.value.map((key) => ({ value: key.id, label: key.name })),
+])
+const modelFilterOptions = computed<UsageFilterOption[]>(() => [
+  { value: '', label: '全部模型' },
+  ...modelOptions.value.map((item) => ({ value: item, label: item })),
+])
+const requestTypeOptions: UsageFilterOption[] = [
+  { value: '', label: '全部类型' },
+  { value: 'stream', label: '流式' },
+  { value: 'sync', label: '同步' },
+  { value: 'ws_v2', label: 'WebSocket' },
+  { value: 'live', label: 'Live' },
+  { value: 'cyber', label: 'Cyber' },
+]
+const billingTypeOptions: UsageFilterOption[] = [
+  { value: '', label: '全部类型' },
+  { value: 0, label: '余额' },
+  { value: 1, label: '订阅' },
+]
+const billingModeOptions: UsageFilterOption[] = [
+  { value: '', label: '全部模式' },
+  { value: 'token', label: '按 Token' },
+  { value: 'per_request', label: '按次' },
+  { value: 'image', label: '图片' },
+  { value: 'video', label: '视频' },
+]
+const groupFilterOptions = computed<UsageFilterOption[]>(() => [
+  { value: '', label: '全部分组' },
+  ...groups.value.map((group) => ({ value: group.id, label: group.name })),
+])
 
 function rankingRows<T extends { total_tokens: number }>(
   items: T[],
@@ -329,48 +373,26 @@ onUnmounted(() => {
 
     <section class="filter-console no-drag" aria-label="用量筛选">
       <UsageRangePicker :model-value="range" @update:model-value="updateRange" />
-      <label class="filter-control">
-        <span>API Key</span>
-        <select v-model="apiKeyId" data-testid="api-key-filter" @change="applyFilters">
-          <option value="">全部 Key</option>
-          <option v-for="key in apiKeys" :key="key.id" :value="key.id">{{ key.name }}</option>
-        </select>
-        <ChevronDown :size="13" />
-      </label>
-      <label class="filter-control model-control">
-        <span>模型</span>
-        <input v-model="model" list="usage-model-options" placeholder="全部模型" @change="applyFilters" />
-        <datalist id="usage-model-options">
-          <option v-for="item in modelOptions" :key="item" :value="item" />
-        </datalist>
-      </label>
-      <label class="filter-control">
-        <span>请求类型</span>
-        <select v-model="requestType" @change="applyFilters">
-          <option value="">全部类型</option>
-          <option value="stream">流式</option>
-          <option value="sync">同步</option>
-          <option value="ws_v2">WebSocket</option>
-          <option value="live">Live</option>
-          <option value="cyber">Cyber</option>
-        </select>
-        <ChevronDown :size="13" />
-      </label>
-      <button ref="advancedTrigger" class="filter-command" type="button" :aria-expanded="advancedOpen" @click="advancedOpen = !advancedOpen">
-        <SlidersHorizontal :size="14" />
-        <span>更多筛选</span>
-        <i v-if="groupId || billingType !== '' || billingMode" />
-      </button>
+      <UsageFilterSelect v-model="apiKeyId" class="filter-control" label="API Key" :options="apiKeyFilterOptions" test-id="api-key-filter" @change="applyFilters" />
+      <UsageFilterSelect v-model="model" class="filter-control model-control" label="模型" :options="modelFilterOptions" test-id="model-filter" @change="applyFilters" />
+      <UsageFilterSelect v-model="requestType" class="filter-control" label="请求类型" :options="requestTypeOptions" test-id="request-type-filter" @change="applyFilters" />
+      <div class="advanced-filter-anchor">
+        <button ref="advancedTrigger" class="filter-command" type="button" :aria-expanded="advancedOpen" @click="advancedOpen = !advancedOpen">
+          <SlidersHorizontal :size="14" />
+          <span>更多筛选</span>
+          <i v-if="groupId || billingType !== '' || billingMode" />
+        </button>
+
+        <div v-if="advancedOpen" ref="advancedPanel" class="advanced-filters">
+          <header><div><strong>更多筛选</strong><span>按分组与计费方式缩小范围</span></div></header>
+          <UsageFilterSelect v-model="groupId" class="advanced-select advanced-group" label="分组" :options="groupFilterOptions" stacked @change="applyFilters" />
+          <UsageFilterSelect v-model="billingType" class="advanced-select" label="计费类型" :options="billingTypeOptions" stacked @change="applyFilters" />
+          <UsageFilterSelect v-model="billingMode" class="advanced-select" label="计费模式" :options="billingModeOptions" stacked @change="applyFilters" />
+        </div>
+      </div>
       <button class="reset-command" type="button" title="重置筛选" aria-label="重置筛选" :disabled="!filtered && range.preset === 'last24h'" @click="resetFilters">
         <FilterX :size="15" />
       </button>
-
-      <div v-if="advancedOpen" ref="advancedPanel" class="advanced-filters">
-        <header><div><strong>更多筛选</strong><span>按分组与计费方式缩小范围</span></div></header>
-        <label><span>分组</span><select v-model="groupId" @change="applyFilters"><option value="">全部分组</option><option v-for="group in groups" :key="group.id" :value="group.id">{{ group.name }}</option></select></label>
-        <label><span>计费类型</span><select v-model="billingType" @change="applyFilters"><option value="">全部类型</option><option :value="0">余额</option><option :value="1">订阅</option></select></label>
-        <label><span>计费模式</span><select v-model="billingMode" @change="applyFilters"><option value="">全部模式</option><option value="token">按 Token</option><option value="per_request">按次</option><option value="image">图片</option><option value="video">视频</option></select></label>
-      </div>
     </section>
 
     <UsageSummary :stats="stats" :simple-mode="simpleMode" :loading="initialLoading" :refreshing="refreshing" />
@@ -419,24 +441,18 @@ onUnmounted(() => {
 .icon-button, .reset-command, .pagination button { display: grid; width: 38px; height: 38px; padding: 0; background: rgba(255,255,255,.72); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text-secondary); place-items: center; transition: transform var(--motion-fast) var(--motion-ease-out), background var(--motion-fast) ease, color var(--motion-fast) ease; }
 .icon-button:hover:not(:disabled), .reset-command:hover:not(:disabled), .pagination button:hover:not(:disabled) { background: var(--bg-surface); color: var(--accent-strong); }
 .filter-console { position: relative; z-index: 12; display: flex; min-width: 0; align-items: center; gap: 7px; }
-.filter-control { position: relative; display: flex; height: 44px; min-width: 0; align-items: center; gap: 7px; padding: 0 12px; background: rgba(255,255,255,.7); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text-tertiary); font-size: 13px; }
-.filter-control > span { flex: 0 0 auto; }
-.filter-control select, .filter-control input { min-width: 0; max-width: 120px; height: 40px; padding: 0; background: transparent; border: 0; outline: 0; color: var(--text-primary); font-size: 14px; }
-.filter-control select { padding-right: 14px; appearance: none; }
-.filter-control > svg { position: absolute; right: 7px; pointer-events: none; }
+.filter-control { flex: 0 1 196px; }
 .model-control { flex: 1 1 150px; max-width: 210px; }
-.model-control input { width: 100%; max-width: none; }
+.advanced-filter-anchor { position: relative; flex: 0 0 auto; }
 .filter-command { display: inline-flex; height: 44px; align-items: center; gap: 7px; padding: 0 12px; background: rgba(255,255,255,.7); border: 1px solid var(--border-strong); border-radius: 6px; color: var(--text-secondary); font-size: 14px; white-space: nowrap; }
 .filter-command i { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; }
 .reset-command { flex: 0 0 auto; }
-.advanced-filters { position: absolute; z-index: 30; top: 52px; right: 45px; display: grid; width: 308px; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; background: rgba(249,251,254,.88); border: 1px solid rgba(255,255,255,.9); border-radius: 8px; box-shadow: 0 18px 38px rgba(30,48,74,.16); backdrop-filter: blur(20px) saturate(1.25); transform-origin: top right; animation: usage-popover-in var(--motion-standard) var(--motion-ease-out) both; }
+.advanced-filters { position: absolute; z-index: 30; top: calc(100% + 8px); right: 0; display: grid; width: 308px; grid-template-columns: 1fr 1fr; gap: 12px; padding: 16px; background: rgba(249,251,254,.88); border: 1px solid rgba(255,255,255,.9); border-radius: 8px; box-shadow: 0 18px 38px rgba(30,48,74,.16); backdrop-filter: blur(20px) saturate(1.25); transform-origin: top right; animation: usage-popover-in var(--motion-standard) var(--motion-ease-out) both; }
 .advanced-filters header { grid-column: 1 / -1; padding-bottom: 7px; border-bottom: 1px solid var(--border-subtle); }
 .advanced-filters header div { display: flex; flex-direction: column; }
 .advanced-filters header strong { font-size: 14px; }
 .advanced-filters header span { color: var(--text-tertiary); font-size: 13px; }
-.advanced-filters label { display: grid; gap: 6px; color: var(--text-tertiary); font-size: 13px; }
-.advanced-filters label:first-of-type { grid-column: 1 / -1; }
-.advanced-filters select { width: 100%; height: 40px; padding: 0 9px; background: rgba(255,255,255,.72); border: 1px solid var(--border-strong); border-radius: 5px; color: var(--text-primary); font-size: 14px; }
+.advanced-group { grid-column: 1 / -1; }
 .analysis-workspace { display: grid; min-width: 0; min-height: 0; grid-template-columns: minmax(0, 1.8fr) minmax(214px, .64fr); gap: 10px; }
 .trend-panel, .detail-workspace { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: rgba(255,255,255,.76); border: 1px solid rgba(205,216,231,.92); border-radius: 8px; transition: transform var(--motion-standard) var(--motion-ease-out), border-color var(--motion-fast) ease, box-shadow var(--motion-standard) ease; }
 .trend-panel::after,
@@ -474,7 +490,7 @@ onUnmounted(() => {
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes usage-popover-in { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (hover: hover) and (pointer: fine) { .trend-panel:hover { border-color: rgba(139,166,211,.78); box-shadow: 0 13px 30px rgba(31,51,78,.08); transform: translateY(-2px); } .filter-command:hover { border-color: rgba(139,166,211,.78); background: var(--bg-surface); } .icon-button:hover:not(:disabled), .reset-command:hover:not(:disabled), .pagination button:hover:not(:disabled) { transform: translateY(-1px); } }
-@container app-content (max-width: 1050px) { .usage-page { grid-template-rows: auto auto 70px 360px auto; padding-right: 18px; padding-left: 18px; } .filter-console { flex-wrap: wrap; } .filter-control { flex: 1 1 150px; padding-right: 8px; padding-left: 8px; } .filter-control > span { display: none; } .model-control { max-width: none; } .analysis-workspace { grid-template-columns: minmax(0, 1.55fr) 220px; } }
-@container app-content (max-width: 760px) { .usage-page { grid-template-rows: auto auto auto auto auto; padding-right: 16px; padding-left: 16px; } .usage-head { align-items: flex-start; } .head-status { flex-wrap: wrap; justify-content: flex-end; } .refresh-notice { max-width: 240px; } .filter-console > :deep(.range-picker) { flex: 1 1 100%; } .filter-control { flex-basis: calc(50% - 8px); } .filter-command { flex: 1 1 auto; justify-content: center; } .advanced-filters { right: 0; width: min(308px,100%); } .analysis-workspace { grid-template-columns: 1fr; } .ranking-column { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: auto; } .detail-head { align-items: stretch; flex-direction: column; gap: 10px; padding-top: 10px; padding-bottom: 10px; } .pagination { justify-content: flex-end; } }
+@container app-content (max-width: 1050px) { .usage-page { grid-template-rows: auto auto 70px 360px auto; padding-right: 18px; padding-left: 18px; } .filter-console { flex-wrap: wrap; } .filter-control { flex: 1 1 150px; } .filter-control :deep(.select-label) { display: none; } .model-control { max-width: none; } .analysis-workspace { grid-template-columns: minmax(0, 1.55fr) 220px; } }
+@container app-content (max-width: 760px) { .usage-page { grid-template-rows: auto auto auto auto auto; padding-right: 16px; padding-left: 16px; } .usage-head { align-items: flex-start; } .head-status { flex-wrap: wrap; justify-content: flex-end; } .refresh-notice { max-width: 240px; } .filter-console > :deep(.range-picker) { flex: 1 1 100%; } .filter-control { flex-basis: calc(50% - 8px); } .advanced-filter-anchor { flex: 1 1 auto; } .filter-command { width: 100%; justify-content: center; } .advanced-filters { width: min(308px,calc(100vw - 32px)); } .analysis-workspace { grid-template-columns: 1fr; } .ranking-column { grid-template-columns: repeat(2,minmax(0,1fr)); grid-template-rows: auto; } .detail-head { align-items: stretch; flex-direction: column; gap: 10px; padding-top: 10px; padding-bottom: 10px; } .pagination { justify-content: flex-end; } }
 @media (prefers-reduced-motion: reduce) { .analysis-skeleton i, .spinning, .advanced-filters, .analysis-workspace, .detail-workspace { animation: none; transform: none; } }
 </style>

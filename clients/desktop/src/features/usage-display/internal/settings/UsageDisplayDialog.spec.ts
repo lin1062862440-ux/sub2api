@@ -4,7 +4,7 @@ import type { UsageDisplayAppearance } from '@/features/usage-display/core/stora
 
 const mocks = vi.hoisted(() => ({
   state: {
-    platform: 'macos' as const,
+    platform: 'macos' as 'macos' | 'windows' | 'linux' | 'unknown',
     config: {
       enabled: true,
       source: 'balance' as 'balance' | 'subscription',
@@ -53,6 +53,7 @@ function mountDialog() {
 
 describe('UsageDisplayDialog', () => {
   beforeEach(() => {
+    mocks.state.platform = 'macos'
     mocks.state.config = {
       enabled: true,
       source: 'balance',
@@ -92,6 +93,18 @@ describe('UsageDisplayDialog', () => {
     expect(wrapper.text()).not.toContain('退出')
     expect(mocks.attachUser).toHaveBeenCalledWith(user)
     expect(mocks.loadSubscriptions).toHaveBeenCalledOnce()
+  })
+
+  it('offers the system tray surface on Windows', async () => {
+    mocks.state.platform = 'windows'
+
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('系统托盘')
+    expect(wrapper.text()).not.toContain('当前平台暂未支持')
+    expect(wrapper.get('[data-testid="usage-display-toggle"]').attributes('disabled')).toBeUndefined()
+    expect(wrapper.get('[data-testid="usage-surface-menu-bar"]').attributes('disabled')).toBeUndefined()
   })
 
   it('selects a fixed subscription before publishing the enabled source', async () => {

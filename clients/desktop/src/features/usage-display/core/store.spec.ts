@@ -121,6 +121,18 @@ describe('usage display store', () => {
     expect(deps.getUsageStats).toHaveBeenCalledTimes(3)
   })
 
+  it('keeps the persistent Windows tray tooltip current in floating-window mode', async () => {
+    const deps = dependencies({
+      platform: () => 'windows',
+      loadConfig: vi.fn().mockResolvedValue(config({ enabled: true, surface: 'floating-window' })),
+    })
+    const store = createUsageDisplayStore(deps)
+
+    await store.attachUser(user())
+
+    expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('$128.60')
+  })
+
   it('uses the shortest quota for display while preserving the constrained summary', async () => {
     const deps = dependencies({
       loadConfig: vi.fn().mockResolvedValue(config({ enabled: true, source: 'subscription', subscriptionId: 9 })),

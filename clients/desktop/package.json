@@ -15,6 +15,11 @@
     "android:init": "tauri android init --ci --skip-targets-install",
     "android:dev": "tauri android dev",
     "android:apk": "tauri android build --debug --apk --target aarch64 --ci",
+    "build:installer:windows:ui": "vite build --config vite.installer.config.ts",
+    "dev:installer:windows": "vite --config vite.installer.config.ts",
+    "bundle:windows": "pnpm bundle:windows:x64",
+    "bundle:windows:x64": "node scripts/build-windows-installer.mjs --target x86_64-pc-windows-msvc",
+    "bundle:windows:x86": "node scripts/build-windows-installer.mjs --target i686-pc-windows-msvc",
     "bundle:macos": "pnpm brand:sync && PATH=/usr/bin:/bin:/usr/sbin:/sbin:$PATH APPLE_SIGNING_IDENTITY=${APPLE_SIGNING_IDENTITY:--} TAURI_SIGNING_PRIVATE_KEY=\"${TAURI_SIGNING_PRIVATE_KEY:-$(cat ${TAURI_SIGNING_PRIVATE_KEY_PATH:-$HOME/.tauri/linai-updater.key})}\" TAURI_SIGNING_PRIVATE_KEY_PASSWORD=${TAURI_SIGNING_PRIVATE_KEY_PASSWORD:-} tauri build --bundles app,dmg"
   },
   "dependencies": {
