@@ -9,6 +9,7 @@ describe('platform capabilities', () => {
       localConfig: true,
       externalUsageDisplay: true,
       desktopUpdater: true,
+      androidUpdater: false,
       textExport: true,
       desktopSecondInstance: true,
     })
@@ -21,6 +22,7 @@ describe('platform capabilities', () => {
       localConfig: false,
       externalUsageDisplay: false,
       desktopUpdater: false,
+      androidUpdater: true,
       textExport: false,
       desktopSecondInstance: false,
     })
