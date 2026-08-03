@@ -1005,31 +1005,63 @@ describe('MobileAdminSubscriptionsView', () => {
     expect(wrapper.text()).not.toContain('one-card-secret')
   })
 
-  it('does not let stale progress workers claim queued items after a newer list owns the page', async () => {
-    const oldItems = Array.from({ length: 6 }, (_, index) => subscription({
+  it('shares progress capacity across generations and drops stale queued items', async () => {
+    const oldItems = Array.from({ length: 20 }, (_, index) => subscription({
       id: index + 1,
       user_id: index + 11,
       user: { id: index + 11, email: `old-${index + 1}@example.com`, username: `Old ${index + 1}` },
     }))
-    const oldRequests = oldItems.map(() => deferred<AdminSubscriptionProgress>())
+    const newItems = [23, 24].map((id) => subscription({
+      id,
+      user_id: id + 10,
+      user: { id: id + 10, email: `new-${id}@example.com`, username: `New ${id}` },
+    }))
+    const oldRequests = Array.from({ length: 4 }, () => deferred<AdminSubscriptionProgress>())
+    const newRequests = Array.from({ length: 2 }, () => deferred<AdminSubscriptionProgress>())
+    let active = 0
+    let peakActive = 0
     mocks.list
       .mockResolvedValueOnce(response(oldItems))
-      .mockResolvedValueOnce(response([subscription({ id: 9, user_id: 19, user: { id: 19, email: 'new@example.com', username: 'New' } })]))
-    mocks.progress.mockImplementation((id: number) => id === 9
-      ? Promise.resolve(progress({ id }))
-      : oldRequests[id - 1]!.promise)
+      .mockResolvedValueOnce(response(newItems))
+    mocks.progress.mockImplementation((id: number) => {
+      active += 1
+      peakActive = Math.max(peakActive, active)
+      const request = id <= 4 ? oldRequests[id - 1] : newRequests[id - 23]
+      return request!.promise.finally(() => {
+        active -= 1
+      })
+    })
     const wrapper = mount(MobileAdminSubscriptionsView)
     await flushPromises()
     expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([1, 2, 3, 4])
+    expect(active).toBe(4)
 
     await wrapper.get('[data-testid="subscription-search"]').setValue('new')
     await wrapper.get('[data-testid="subscription-search-form"]').trigger('submit')
     await flushPromises()
-    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([1, 2, 3, 4, 9])
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([1, 2, 3, 4])
+
     oldRequests[0]!.resolve(progress({ id: 1 }))
     await flushPromises()
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([1, 2, 3, 4, 23])
+    expect(active).toBe(4)
 
-    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([1, 2, 3, 4, 9])
+    oldRequests[1]!.resolve(progress({ id: 2 }))
+    await flushPromises()
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([1, 2, 3, 4, 23, 24])
+    expect(active).toBe(4)
+
+    oldRequests[2]!.resolve(progress({ id: 3 }))
+    oldRequests[3]!.resolve(progress({ id: 4 }))
+    newRequests[0]!.resolve(progress({ id: 23 }))
+    newRequests[1]!.resolve(progress({ id: 24 }))
+    await flushPromises()
+
+    expect(active).toBe(0)
+    expect(peakActive).toBe(4)
+    expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([1, 2, 3, 4, 23, 24])
+    expect(mocks.progress.mock.calls.flatMap(([id]) => id >= 5 && id <= 20 ? [id] : [])).toEqual([])
+    expect(wrapper.text()).toContain('new-23@example.com')
   })
 
   it('does not let progress workers claim queued items after unmount', async () => {

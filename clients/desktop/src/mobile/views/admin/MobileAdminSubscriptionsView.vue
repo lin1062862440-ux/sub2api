@@ -116,6 +116,12 @@ let progressGeneration = 0
 let feedbackGeneration = 0
 let progressSequence = 0
 const progressTokenById = new Map<number, number>()
+let activeProgressRequests = 0
+const queuedProgressRequests: Array<{
+  owns: () => boolean
+  run: () => Promise<void>
+  resolve: () => void
+}> = []
 
 const pageCount = computed(() =>
   Math.max(1, Math.ceil(safeNonNegative(result.value.total) / PAGE_SIZE)),
@@ -471,6 +477,40 @@ function ownsProgress(id: number, generation: number, token: number) {
   )
 }
 
+function clearQueuedProgressRequests() {
+  for (const request of queuedProgressRequests.splice(0)) request.resolve()
+}
+
+function drainProgressRequests() {
+  if (!mounted) return
+  while (activeProgressRequests < PROGRESS_CONCURRENCY) {
+    const request = queuedProgressRequests.shift()
+    if (!request) return
+    if (!request.owns()) {
+      request.resolve()
+      continue
+    }
+    activeProgressRequests += 1
+    const release = () => {
+      activeProgressRequests -= 1
+      request.resolve()
+      drainProgressRequests()
+    }
+    void request.run().finally(release).catch(() => undefined)
+  }
+}
+
+function scheduleProgressRequest(
+  owns: () => boolean,
+  run: () => Promise<void>,
+) {
+  if (!mounted || !owns()) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    queuedProgressRequests.push({ owns, run, resolve })
+    drainProgressRequests()
+  })
+}
+
 function decodeProgressWindow(
   value: unknown,
 ): AdminSubscriptionQuotaWindow | null {
@@ -552,30 +592,36 @@ async function loadProgressItem(
     [item.id]: false,
   }
   progressErrors.value = { ...progressErrors.value, [item.id]: false }
-  try {
-    if (!ownsProgress(item.id, generation, token)) return
-    const detail = decodeProgress(
-      await getAdminSubscriptionProgress(item.id),
-      item.id,
-    )
-    if (!ownsProgress(item.id, generation, token) || !detail) {
-      if (ownsProgress(item.id, generation, token))
-        progressErrors.value = { ...progressErrors.value, [item.id]: true }
-      return
+  await scheduleProgressRequest(
+    () => ownsProgress(item.id, generation, token),
+    async () => {
+      try {
+        if (!ownsProgress(item.id, generation, token)) return
+        const detail = decodeProgress(
+          await getAdminSubscriptionProgress(item.id),
+          item.id,
+        )
+        if (!ownsProgress(item.id, generation, token) || !detail) {
+          if (ownsProgress(item.id, generation, token))
+            progressErrors.value = { ...progressErrors.value, [item.id]: true }
+          return
+        }
+        progressById.value = { ...progressById.value, [item.id]: detail }
+        progressLoadedById.value = {
+          ...progressLoadedById.value,
+          [item.id]: true,
+        }
+      } catch {
+        if (ownsProgress(item.id, generation, token))
+          progressErrors.value = { ...progressErrors.value, [item.id]: true }
+      }
     }
-    progressById.value = { ...progressById.value, [item.id]: detail }
-    progressLoadedById.value = {
-      ...progressLoadedById.value,
-      [item.id]: true,
-    }
-  } catch {
-    if (ownsProgress(item.id, generation, token))
-      progressErrors.value = { ...progressErrors.value, [item.id]: true }
-  }
+  )
 }
 
 async function loadProgress(items: AdminSubscription[]) {
   const generation = ++progressGeneration
+  clearQueuedProgressRequests()
   progressTokenById.clear()
   progressById.value = {}
   progressLoadedById.value = {}
@@ -1322,6 +1368,7 @@ onUnmounted(() => {
   groupGeneration += 1
   progressGeneration += 1
   progressTokenById.clear()
+  clearQueuedProgressRequests()
   document.removeEventListener('keydown', handleDocumentKeydown)
   document.removeEventListener('pointerdown', handleDocumentPointer)
 })
