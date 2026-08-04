@@ -108,24 +108,6 @@
     </UserGroupWorkspaceShell>
 
     <UserGroupEditorDialog :show="editorOpen" :group="editingGroup" :saving="saving" @close="editorOpen = false" @save="saveGroup" />
-    <UserGroupPeopleDialog
-      :show="peopleOpen"
-      :mode="peopleMode"
-      :group-name="peopleTarget?.name || ''"
-      :selected-ids="peopleMode === 'members' ? members.map(item => item.user_id) : viewers.map(item => item.user_id)"
-      :saving="savingPeople"
-      @close="peopleOpen = false"
-      @save="savePeople"
-    />
-    <UserGroupPromptSettingsDialog
-      :show="promptSettingsOpen"
-      :group-name="promptSettingsTarget?.name || ''"
-      :capture-enabled="Boolean(promptSettingsTarget?.prompt_capture_enabled)"
-      :selected-ids="promptViewers.map(item => item.user_id)"
-      :saving="savingPromptSettings"
-      @close="promptSettingsOpen = false"
-      @save="savePromptSettings"
-    />
     <ConfirmDialog
       :show="archiveTarget !== null"
       :title="t('userGroups.groups.archive')"
@@ -147,11 +129,9 @@ import Icon from '@/components/icons/Icon.vue'
 import { userGroupAPI } from '@/api/userGroups'
 import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
-import type { UserGroup, UserGroupMember, UserGroupMutation, UserGroupViewer } from '@/types/userGroups'
+import type { UserGroup, UserGroupMutation } from '@/types/userGroups'
 import UserGroupWorkspaceShell from './components/UserGroupWorkspaceShell.vue'
 import UserGroupEditorDialog from './components/UserGroupEditorDialog.vue'
-import UserGroupPeopleDialog from './components/UserGroupPeopleDialog.vue'
-import UserGroupPromptSettingsDialog from './components/UserGroupPromptSettingsDialog.vue'
 
 const { t, locale } = useI18n()
 const authStore = useAuthStore()
@@ -160,22 +140,12 @@ const canManage = computed(() => authStore.canManageUserGroups)
 
 const groups = ref<UserGroup[]>([])
 const search = ref('')
-const members = ref<UserGroupMember[]>([])
-const viewers = ref<UserGroupViewer[]>([])
 const loadingGroups = ref(false)
 const loadError = ref('')
 const editorOpen = ref(false)
 const editingGroup = ref<UserGroup | null>(null)
 const saving = ref(false)
 const archiveTarget = ref<UserGroup | null>(null)
-const peopleTarget = ref<UserGroup | null>(null)
-const peopleOpen = ref(false)
-const peopleMode = ref<'members' | 'viewers'>('members')
-const savingPeople = ref(false)
-const promptSettingsTarget = ref<UserGroup | null>(null)
-const promptSettingsOpen = ref(false)
-const promptViewers = ref<UserGroupViewer[]>([])
-const savingPromptSettings = ref(false)
 
 const filteredGroups = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
@@ -191,19 +161,11 @@ const GroupActions = defineComponent({
   setup(props) {
     return () => h('div', { class: ['flex flex-wrap items-center gap-1', props.justify === 'end' ? 'justify-end' : 'justify-start'] }, [
       h(RouterLink, {
-        to: { name: 'UserGroupSubscriptions', query: { group_id: String(props.group.id) } },
-        'data-test': `open-subscriptions-${props.group.id}`,
+        to: { name: 'UserGroupMembers', params: { id: String(props.group.id) } },
+        'data-test': `open-group-${props.group.id}`,
         class: 'btn btn-ghost btn-sm',
-      }, () => t('userGroups.groups.openSubscriptions')),
-      h(RouterLink, {
-        to: { name: 'UserGroupUsage', query: { group_id: String(props.group.id) } },
-        'data-test': `open-usage-${props.group.id}`,
-        class: 'btn btn-ghost btn-sm',
-      }, () => t('userGroups.groups.openUsage')),
+      }, () => t('userGroups.groups.openDetail')),
       ...(canManage.value ? [
-        actionButton('users', t('userGroups.groups.manageMembers'), `manage-members-${props.group.id}`, () => openPeople(props.group, 'members')),
-        actionButton('eye', t('userGroups.groups.manageViewers'), `manage-viewers-${props.group.id}`, () => openPeople(props.group, 'viewers')),
-        actionButton('shield', t('userGroups.promptSettings.open'), `manage-prompt-${props.group.id}`, () => openPromptSettings(props.group), false, Boolean(props.group.prompt_capture_enabled)),
         actionButton('edit', t('common.edit'), 'edit-group', () => openEdit(props.group)),
         actionButton('trash', t('userGroups.groups.archive'), 'archive-group', () => requestArchive(props.group), true),
       ] : []),
@@ -211,19 +173,19 @@ const GroupActions = defineComponent({
   },
 })
 
-function actionButton(icon: 'users' | 'eye' | 'shield' | 'edit' | 'trash', label: string, dataTest: string, action: () => void, danger = false, active = false) {
+function actionButton(icon: 'edit' | 'trash', label: string, dataTest: string, action: () => void, danger = false) {
   return h('button', {
     type: 'button',
     title: label,
     'aria-label': label,
     'data-test': dataTest,
-    class: ['btn btn-ghost btn-sm !px-2', danger ? 'text-red-600 dark:text-red-400' : '', active ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300' : ''],
+    class: ['btn btn-ghost btn-sm !px-2', danger ? 'text-red-600 dark:text-red-400' : ''],
     onClick: action,
   }, [h(Icon, { name: icon, size: 'sm' })])
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error && error.message ? error.message : t('common.loadFailed')
+  return error instanceof Error && error.message ? error.message : t('userGroups.common.loadFailed')
 }
 
 async function loadGroups() {
@@ -277,69 +239,6 @@ async function archiveGroup() {
     await loadGroups()
   } catch (error) {
     appStore.showError(errorMessage(error))
-  }
-}
-
-async function openPeople(group: UserGroup, mode: 'members' | 'viewers') {
-  peopleTarget.value = group
-  peopleMode.value = mode
-  try {
-    const [memberRows, viewerRows] = await Promise.all([
-      userGroupAPI.getMembers(group.id),
-      mode === 'viewers' ? userGroupAPI.getViewers(group.id) : Promise.resolve([]),
-    ])
-    members.value = memberRows
-    viewers.value = viewerRows
-    peopleOpen.value = true
-  } catch (error) {
-    members.value = []
-    viewers.value = []
-    appStore.showError(errorMessage(error))
-  }
-}
-
-async function savePeople(userIds: number[]) {
-  if (!peopleTarget.value) return
-  savingPeople.value = true
-  try {
-    if (peopleMode.value === 'members') await userGroupAPI.replaceMembers(peopleTarget.value.id, userIds)
-    else await userGroupAPI.replaceViewers(peopleTarget.value.id, userIds)
-    peopleOpen.value = false
-    appStore.showSuccess(t('userGroups.groups.peopleSaved'))
-    await loadGroups()
-  } catch (error) {
-    appStore.showError(errorMessage(error))
-  } finally {
-    savingPeople.value = false
-  }
-}
-
-async function openPromptSettings(group: UserGroup) {
-  promptSettingsTarget.value = group
-  try {
-    promptViewers.value = await userGroupAPI.getPromptViewers(group.id)
-    promptSettingsOpen.value = true
-  } catch (error) {
-    promptViewers.value = []
-    appStore.showError(errorMessage(error))
-  }
-}
-
-async function savePromptSettings(payload: { enabled: boolean; userIds: number[] }) {
-  if (!promptSettingsTarget.value) return
-  savingPromptSettings.value = true
-  try {
-    await Promise.all([
-      userGroupAPI.setPromptCapture(promptSettingsTarget.value.id, payload.enabled),
-      userGroupAPI.replacePromptViewers(promptSettingsTarget.value.id, payload.userIds),
-    ])
-    promptSettingsOpen.value = false
-    appStore.showSuccess(t('userGroups.promptSettings.saveSuccess'))
-    await loadGroups()
-  } catch (error) {
-    appStore.showError(errorMessage(error))
-  } finally {
-    savingPromptSettings.value = false
   }
 }
 

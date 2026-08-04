@@ -225,7 +225,7 @@ func (s *UserGroupPromptCaptureService) processTask(ctx context.Context, task us
 		Protocol: task.request.Protocol, Model: task.request.Model, Stage: normalizeStage(task.request.Stage),
 		RedactedPrompt: prompt.RedactedPrompt, PromptHash: prompt.PromptHash, PromptLength: prompt.PromptLength,
 		Truncated: prompt.Truncated, GroupIDs: task.groupIDs, CapturedAt: task.capturedAt,
-		ExpiresAt: task.capturedAt.Add(service.UserGroupPromptRetention),
+		ExpiresAt: task.capturedAt.Add(service.UserGroupPromptStagingRetention),
 	}
 	for attempt := 1; attempt <= s.options.PersistenceTries; attempt++ {
 		if err := s.repo.InsertCapture(ctx, write); err == nil {

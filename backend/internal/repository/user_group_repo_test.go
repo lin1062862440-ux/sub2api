@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"database/sql/driver"
 	"regexp"
 	"testing"
@@ -61,8 +62,8 @@ func TestUserGroupRepositoryListMembersReadsAvatarFromUserAvatars(t *testing.T) 
 	now := time.Now().UTC()
 	mock.ExpectQuery(`(?s)FROM user_group_members ugm.*LEFT JOIN user_avatars ua ON ua\.user_id = u\.id`).
 		WithArgs(int64(5)).
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "email", "username", "avatar_url", "status", "balance", "joined_at"}).
-			AddRow(7, "member@example.com", "Member", "https://cdn.example.com/member.png", "active", 12.5, now))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "email", "username", "avatar_url", "status", "joined_at"}).
+			AddRow(7, "member@example.com", "Member", "https://cdn.example.com/member.png", "active", now))
 
 	repo := NewUserGroupRepository(db)
 	members, err := repo.ListMembers(context.Background(), 5)
@@ -103,17 +104,54 @@ func TestUserGroupRepositoryReplaceMembersIsAtomic(t *testing.T) {
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT COUNT(*) FROM users WHERE id = ANY($1) AND deleted_at IS NULL") + `\s*$`).
 		WithArgs(sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
-	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM user_group_members WHERE user_group_id = $1")).
-		WithArgs(int64(5)).
+	mock.ExpectExec("UPDATE api_keys SET group_id=NULL").
+		WithArgs(int64(5), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE user_subscriptions SET status='suspended'").
+		WithArgs(int64(5), sqlmock.AnyArg()).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec(regexp.QuoteMeta("DELETE FROM user_group_members WHERE user_group_id = $1 AND NOT (user_id = ANY($2))")).
+		WithArgs(int64(5), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectExec("INSERT INTO user_group_members").
 		WithArgs(int64(5), sqlmock.AnyArg(), int64(1)).
 		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectQuery("SELECT enabled FROM user_group_quota_policies").
+		WithArgs(int64(5)).
+		WillReturnError(sql.ErrNoRows)
 	mock.ExpectCommit()
 
 	repo := NewUserGroupRepository(db)
 	err = repo.ReplaceMembers(context.Background(), 5, []int64{7, 9}, 1)
 	require.NoError(t, err)
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestUserGroupRepositoryArchiveDisablesQuotaAndReleasesMembers(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	mock.ExpectBegin()
+	mock.ExpectExec("UPDATE user_groups SET status = 'archived'").
+		WithArgs(int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("UPDATE user_group_quota_policies SET enabled = FALSE").
+		WithArgs(int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("DELETE FROM user_group_quota_members WHERE user_group_id = \\$1").
+		WithArgs(int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("UPDATE api_keys SET group_id=NULL").
+		WithArgs(int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec("UPDATE user_subscriptions SET status='suspended'").
+		WithArgs(int64(5)).
+		WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectCommit()
+
+	repo := NewUserGroupRepository(db)
+	require.NoError(t, repo.Archive(context.Background(), 5))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
 
@@ -123,21 +161,21 @@ func TestUserGroupRepositorySubscriptionsKeepMembersWithoutSubscription(t *testi
 	t.Cleanup(func() { _ = db.Close() })
 
 	mock.ExpectQuery("COUNT\\(DISTINCT ugm.user_id\\)").
-		WithArgs(int64(5)).
-		WillReturnRows(sqlmock.NewRows([]string{"member_count", "active_subscription_count", "no_subscription_count", "total_balance", "active_subscription_usage"}).
-			AddRow(2, 1, 1, 42.5, 3.25))
+		WithArgs(int64(5), sqlmock.AnyArg()).
+		WillReturnRows(sqlmock.NewRows([]string{"member_count", "active_subscription_count", "no_subscription_count", "allocated_quota", "team_usage"}).
+			AddRow(2, 1, 1, 50.0, 3.25))
 	mock.ExpectQuery("COUNT\\(\\*\\).*FROM user_group_members ugm").
 		WithArgs(int64(5)).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 	mock.ExpectQuery(`(?s)LEFT JOIN user_avatars ua ON ua\.user_id = u\.id.*LEFT JOIN user_subscriptions us`).
-		WithArgs(int64(5), 20, 0).
+		WithArgs(int64(5), sqlmock.AnyArg(), 20, 0).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"user_id", "email", "username", "avatar_url", "user_status", "balance", "joined_at",
+			"user_id", "email", "username", "avatar_url", "user_status", "joined_at",
 			"subscription_id", "billing_group_id", "billing_group", "platform", "subscription_status", "starts_at", "expires_at",
-			"daily_used", "daily_limit", "weekly_used", "weekly_limit", "monthly_used", "monthly_limit",
+			"weekly_used", "weekly_limit",
 		}).
-			AddRow(7, "with@example.com", "With", "", "active", 12.5, time.Now(), 21, 4, "Plan", "openai", "active", time.Now(), time.Now().Add(time.Hour), 1.0, 2.0, 2.0, 4.0, 3.0, 6.0).
-			AddRow(9, "none@example.com", "None", "", "active", 30.0, time.Now(), nil, nil, "", "", "", nil, nil, 0.0, nil, 0.0, nil, 0.0, nil))
+			AddRow(7, "with@example.com", "With", "", "active", time.Now(), 21, 4, "Plan", "openai", "active", time.Now(), time.Now().Add(time.Hour), 2.0, 4.0).
+			AddRow(9, "none@example.com", "None", "", "active", time.Now(), nil, nil, "", "", "", nil, nil, 0.0, nil))
 
 	repo := NewUserGroupRepository(db)
 	result, err := repo.ListSubscriptions(context.Background(), 5, service.UserGroupSubscriptionQuery{Page: 1, PageSize: 20})
@@ -161,7 +199,7 @@ func TestUserGroupSubscriptionStatusConditionUsesEffectiveStatus(t *testing.T) {
 	require.Contains(t, expired, "us.status = 'active' AND us.expires_at <= NOW()")
 }
 
-func TestUserGroupRepositoryUsageSplitsBillingModes(t *testing.T) {
+func TestUserGroupRepositoryUsageIncludesOnlyAttributedTeamUsage(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
@@ -169,27 +207,26 @@ func TestUserGroupRepositoryUsageSplitsBillingModes(t *testing.T) {
 	start := time.Now().Add(-24 * time.Hour).UTC()
 	end := time.Now().UTC()
 	baseArgs := []driver.Value{int64(5), start, end}
-	mock.ExpectQuery("SUM\\(CASE WHEN ul.billing_type = 0 THEN ul.actual_cost ELSE 0 END\\)").
+	mock.ExpectQuery("ul.business_user_group_id = \\$1").
 		WithArgs(baseArgs...).
-		WillReturnRows(sqlmock.NewRows([]string{"total_requests", "input_tokens", "output_tokens", "cache_tokens", "total_tokens", "actual_cost", "balance_cost", "subscription_cost"}).
-			AddRow(6, 100, 50, 10, 160, 8.5, 3.0, 5.5))
+		WillReturnRows(sqlmock.NewRows([]string{"total_requests", "input_tokens", "output_tokens", "cache_tokens", "total_tokens", "actual_cost"}).
+			AddRow(6, 100, 50, 10, 160, 8.5))
 	mock.ExpectQuery("GROUP BY u.id, u.email, u.username").
 		WithArgs(baseArgs...).
-		WillReturnRows(sqlmock.NewRows([]string{"user_id", "email", "username", "total_requests", "total_tokens", "actual_cost", "balance_cost", "subscription_cost"}).
-			AddRow(7, "member@example.com", "Member", 6, 160, 8.5, 3.0, 5.5))
+		WillReturnRows(sqlmock.NewRows([]string{"user_id", "email", "username", "total_requests", "total_tokens", "actual_cost"}).
+			AddRow(7, "member@example.com", "Member", 6, 160, 8.5))
 	mock.ExpectQuery("COUNT\\(\\*\\)").
 		WithArgs(baseArgs...).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1))
 	mock.ExpectQuery("SELECT ul.id").
 		WithArgs(int64(5), start, end, 20, 0).
-		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "email", "username", "request_id", "model", "input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens", "actual_cost", "billing_type", "created_at"}).
-			AddRow(31, 7, "member@example.com", "Member", "req-1", "gpt-5", 100, 50, 5, 5, 8.5, 1, end))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "user_id", "email", "username", "request_id", "model", "input_tokens", "output_tokens", "cache_creation_tokens", "cache_read_tokens", "actual_cost", "created_at"}).
+			AddRow(31, 7, "member@example.com", "Member", "req-1", "gpt-5", 100, 50, 5, 5, 8.5, end))
 
 	repo := NewUserGroupRepository(db)
 	result, err := repo.GetUsage(context.Background(), 5, service.UserGroupUsageQuery{StartTime: start, EndTime: end, Page: 1, PageSize: 20})
 	require.NoError(t, err)
-	require.Equal(t, 3.0, result.Summary.BalanceConsumption)
-	require.Equal(t, 5.5, result.Summary.SubscriptionConsumption)
+	require.Equal(t, 8.5, result.Summary.TotalActualCost)
 	require.Equal(t, 160, result.Items[0].TotalTokens)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

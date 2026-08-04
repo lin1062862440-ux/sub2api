@@ -40,6 +40,8 @@ const (
 	FieldGroupID = "group_id"
 	// FieldSubscriptionID holds the string denoting the subscription_id field in the database.
 	FieldSubscriptionID = "subscription_id"
+	// FieldBusinessUserGroupID holds the string denoting the business_user_group_id field in the database.
+	FieldBusinessUserGroupID = "business_user_group_id"
 	// FieldInputTokens holds the string denoting the input_tokens field in the database.
 	FieldInputTokens = "input_tokens"
 	// FieldOutputTokens holds the string denoting the output_tokens field in the database.
@@ -169,6 +171,7 @@ var Columns = []string{
 	FieldBillingMode,
 	FieldGroupID,
 	FieldSubscriptionID,
+	FieldBusinessUserGroupID,
 	FieldInputTokens,
 	FieldOutputTokens,
 	FieldCacheCreationTokens,
@@ -355,6 +358,11 @@ func ByGroupID(opts ...sql.OrderTermOption) OrderOption {
 // BySubscriptionID orders the results by the subscription_id field.
 func BySubscriptionID(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldSubscriptionID, opts...).ToFunc()
+}
+
+// ByBusinessUserGroupID orders the results by the business_user_group_id field.
+func ByBusinessUserGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldBusinessUserGroupID, opts...).ToFunc()
 }
 
 // ByInputTokens orders the results by the input_tokens field.

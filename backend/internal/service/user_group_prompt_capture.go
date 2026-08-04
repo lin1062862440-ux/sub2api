@@ -5,7 +5,10 @@ import (
 	"time"
 )
 
-const UserGroupPromptRetention = 14 * 24 * time.Hour
+const (
+	UserGroupPromptRetention        = 14 * 24 * time.Hour
+	UserGroupPromptStagingRetention = 15 * time.Minute
+)
 
 type UserPromptCaptureWrite struct {
 	EventID        string

@@ -25,6 +25,7 @@ type userGroupServiceStub struct {
 	promptIDs     []int64
 	promptUsageID int64
 	prompts       []service.UserPromptCaptureDetail
+	teamGroupIDs  []int64
 }
 
 func (s *userGroupServiceStub) Capabilities(_ context.Context, actor service.UserGroupActor) (service.UserGroupCapabilities, error) {
@@ -63,6 +64,12 @@ func (s *userGroupServiceStub) ListViewers(context.Context, service.UserGroupAct
 }
 
 func (s *userGroupServiceStub) ReplaceViewers(context.Context, service.UserGroupActor, int64, []int64) error {
+	return nil
+}
+
+func (s *userGroupServiceStub) ReplaceTeamSubscriptionGroups(_ context.Context, actor service.UserGroupActor, _ int64, ids []int64) error {
+	s.actor = actor
+	s.teamGroupIDs = append([]int64(nil), ids...)
 	return nil
 }
 

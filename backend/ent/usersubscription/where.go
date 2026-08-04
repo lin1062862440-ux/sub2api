@@ -130,6 +130,11 @@ func AssignedBy(v int64) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldAssignedBy, v))
 }
 
+// OwnerUserGroupID applies equality check predicate on the "owner_user_group_id" field. It's identical to OwnerUserGroupIDEQ.
+func OwnerUserGroupID(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldOwnerUserGroupID, v))
+}
+
 // AssignedAt applies equality check predicate on the "assigned_at" field. It's identical to AssignedAtEQ.
 func AssignedAt(v time.Time) predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldEQ(FieldAssignedAt, v))
@@ -753,6 +758,56 @@ func AssignedByIsNil() predicate.UserSubscription {
 // AssignedByNotNil applies the NotNil predicate on the "assigned_by" field.
 func AssignedByNotNil() predicate.UserSubscription {
 	return predicate.UserSubscription(sql.FieldNotNull(FieldAssignedBy))
+}
+
+// OwnerUserGroupIDEQ applies the EQ predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDEQ(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldEQ(FieldOwnerUserGroupID, v))
+}
+
+// OwnerUserGroupIDNEQ applies the NEQ predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDNEQ(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNEQ(FieldOwnerUserGroupID, v))
+}
+
+// OwnerUserGroupIDIn applies the In predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDIn(vs ...int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIn(FieldOwnerUserGroupID, vs...))
+}
+
+// OwnerUserGroupIDNotIn applies the NotIn predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDNotIn(vs ...int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotIn(FieldOwnerUserGroupID, vs...))
+}
+
+// OwnerUserGroupIDGT applies the GT predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDGT(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGT(FieldOwnerUserGroupID, v))
+}
+
+// OwnerUserGroupIDGTE applies the GTE predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDGTE(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldGTE(FieldOwnerUserGroupID, v))
+}
+
+// OwnerUserGroupIDLT applies the LT predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDLT(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLT(FieldOwnerUserGroupID, v))
+}
+
+// OwnerUserGroupIDLTE applies the LTE predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDLTE(v int64) predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldLTE(FieldOwnerUserGroupID, v))
+}
+
+// OwnerUserGroupIDIsNil applies the IsNil predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDIsNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldIsNull(FieldOwnerUserGroupID))
+}
+
+// OwnerUserGroupIDNotNil applies the NotNil predicate on the "owner_user_group_id" field.
+func OwnerUserGroupIDNotNil() predicate.UserSubscription {
+	return predicate.UserSubscription(sql.FieldNotNull(FieldOwnerUserGroupID))
 }
 
 // AssignedAtEQ applies the EQ predicate on the "assigned_at" field.

@@ -176,6 +176,11 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 			slog.Error("increment account quota used failed", "account_id", p.Account.ID, "cost", accountCost, "error", err)
 		}
 	}
+	if cost.ActualCost > 0 && p.User != nil && p.Subscription != nil && p.Subscription.OwnerUserGroupID != nil && p.APIKey.Group != nil && p.APIKey.Group.IsTeamSubscriptionType() && deps.billingCacheService != nil {
+		if err := deps.billingCacheService.IncrementUserGroupQuotaUsage(billingCtx, *p.Subscription.OwnerUserGroupID, p.APIKey.Group.ID, p.User.ID, cost.ActualCost); err != nil {
+			slog.Error("increment user group quota usage failed", "user_id", p.User.ID, "error", err)
+		}
+	}
 
 	// Platform quota 累加（legacy 兜底路径）：仅对 standard（余额）模式生效；订阅模式豁免；仅对有 limit 的用户写
 	//   - HasUserPlatformQuotaLimit 守卫:与正常路径对齐，无 limit 公司跳过
@@ -272,6 +277,11 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	if p.IsSubscriptionBill && p.Subscription != nil && p.Cost.TotalCost > 0 {
 		cmd.SubscriptionID = &p.Subscription.ID
 		cmd.SubscriptionCost = p.Cost.ActualCost
+		if p.APIKey.Group != nil && p.APIKey.Group.IsTeamSubscriptionType() && p.Subscription.OwnerUserGroupID != nil {
+			cmd.BusinessUserGroupID = p.Subscription.OwnerUserGroupID
+			cmd.BillingGroupID = p.APIKey.Group.ID
+			cmd.UserGroupQuotaCost = p.Cost.ActualCost
+		}
 	} else if p.Cost.ActualCost > 0 {
 		cmd.BalanceCost = p.Cost.ActualCost
 	}
@@ -285,7 +295,6 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	if p.shouldUpdateAccountQuota() {
 		cmd.AccountQuotaCost = p.Cost.TotalCost * p.AccountRateMultiplier
 	}
-
 	cmd.Normalize()
 	return cmd
 }
@@ -1028,6 +1037,9 @@ func (s *GatewayService) buildRecordUsageLog(
 		GroupID:               apiKey.GroupID,
 		SubscriptionID:        optionalSubscriptionID(subscription),
 		CreatedAt:             time.Now(),
+	}
+	if subscription != nil && subscription.OwnerUserGroupID != nil && apiKey.Group != nil && apiKey.Group.IsTeamSubscriptionType() {
+		usageLog.BusinessUserGroupID = subscription.OwnerUserGroupID
 	}
 	if result.ImageCount > 0 && (cost == nil || cost.BillingMode != string(BillingModeToken)) {
 		usageLog.RateMultiplier = imageMultiplier

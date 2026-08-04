@@ -120,6 +120,11 @@ func SubscriptionID(v int64) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldSubscriptionID, v))
 }
 
+// BusinessUserGroupID applies equality check predicate on the "business_user_group_id" field. It's identical to BusinessUserGroupIDEQ.
+func BusinessUserGroupID(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldBusinessUserGroupID, v))
+}
+
 // InputTokens applies equality check predicate on the "input_tokens" field. It's identical to InputTokensEQ.
 func InputTokens(v int) predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldEQ(FieldInputTokens, v))
@@ -948,6 +953,56 @@ func SubscriptionIDIsNil() predicate.UsageLog {
 // SubscriptionIDNotNil applies the NotNil predicate on the "subscription_id" field.
 func SubscriptionIDNotNil() predicate.UsageLog {
 	return predicate.UsageLog(sql.FieldNotNull(FieldSubscriptionID))
+}
+
+// BusinessUserGroupIDEQ applies the EQ predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDEQ(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldEQ(FieldBusinessUserGroupID, v))
+}
+
+// BusinessUserGroupIDNEQ applies the NEQ predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDNEQ(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNEQ(FieldBusinessUserGroupID, v))
+}
+
+// BusinessUserGroupIDIn applies the In predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDIn(vs ...int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIn(FieldBusinessUserGroupID, vs...))
+}
+
+// BusinessUserGroupIDNotIn applies the NotIn predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDNotIn(vs ...int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotIn(FieldBusinessUserGroupID, vs...))
+}
+
+// BusinessUserGroupIDGT applies the GT predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDGT(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGT(FieldBusinessUserGroupID, v))
+}
+
+// BusinessUserGroupIDGTE applies the GTE predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDGTE(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldGTE(FieldBusinessUserGroupID, v))
+}
+
+// BusinessUserGroupIDLT applies the LT predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDLT(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLT(FieldBusinessUserGroupID, v))
+}
+
+// BusinessUserGroupIDLTE applies the LTE predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDLTE(v int64) predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldLTE(FieldBusinessUserGroupID, v))
+}
+
+// BusinessUserGroupIDIsNil applies the IsNil predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDIsNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldIsNull(FieldBusinessUserGroupID))
+}
+
+// BusinessUserGroupIDNotNil applies the NotNil predicate on the "business_user_group_id" field.
+func BusinessUserGroupIDNotNil() predicate.UsageLog {
+	return predicate.UsageLog(sql.FieldNotNull(FieldBusinessUserGroupID))
 }
 
 // InputTokensEQ applies the EQ predicate on the "input_tokens" field.

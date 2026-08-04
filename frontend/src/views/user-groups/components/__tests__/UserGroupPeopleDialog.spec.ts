@@ -65,4 +65,18 @@ describe('UserGroupPeopleDialog', () => {
     expect(listUsers).toHaveBeenLastCalledWith(1, 100, { search: 'bob' })
     wrapper.unmount()
   })
+
+  it('renders quota manager copy with a localized selected count', async () => {
+    const wrapper = mount(UserGroupPeopleDialog, {
+      props: { show: true, mode: 'quota-managers', groupName: '研发一组', selectedIds: [1] },
+      global: { stubs: { Icon: { template: '<i />' }, Teleport: true } },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('userGroups.quotas.manageManagers')
+    expect(wrapper.text()).toContain('userGroups.common.selectedCount')
+    expect(wrapper.text()).not.toContain('1 common.selected')
+    wrapper.unmount()
+  })
 })

@@ -177,7 +177,7 @@ describe('useAuthStore', () => {
 
     it('loads delegated read-only access for ordinary users', async () => {
       mockLogin.mockResolvedValue(fakeAuthResponse)
-      mockGetUserGroupCapabilities.mockResolvedValue({ can_access: true, can_manage: false, group_count: 2 })
+      mockGetUserGroupCapabilities.mockResolvedValue({ can_access: true, can_manage: false, can_manage_quota: true, group_count: 2 })
       const store = useAuthStore()
       await store.login({ email: 'test@example.com', password: '123456' })
 

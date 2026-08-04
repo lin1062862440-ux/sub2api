@@ -5,6 +5,9 @@ import type {
   UserGroupMember,
   UserGroupMutation,
   UserGroupPromptDetail,
+  UserGroupQuotaOverview,
+  UserGroupQuotaPolicyMutation,
+  UserGroupMemberQuotaMutation,
   UserGroupSubscriptionParams,
   UserGroupSubscriptionResult,
   UserGroupUsageParams,
@@ -81,5 +84,30 @@ export const userGroupAPI = {
   async getUsagePrompts(groupId: number, usageLogId: number): Promise<UserGroupPromptDetail[]> {
     const { data } = await apiClient.get<UserGroupPromptDetail[]>(`/user-groups/${groupId}/usage/${usageLogId}/prompts`)
     return data
+  },
+
+  async getQuotaOverview(groupId: number): Promise<UserGroupQuotaOverview> {
+    const { data } = await apiClient.get<UserGroupQuotaOverview>(`/user-groups/${groupId}/quota`)
+    return data
+  },
+
+  async setQuotaPolicy(groupId: number, payload: UserGroupQuotaPolicyMutation): Promise<void> {
+    await apiClient.put(`/user-groups/${groupId}/quota-policy`, payload)
+  },
+
+  async replaceQuotaManagers(groupId: number, userIds: number[]): Promise<void> {
+    await apiClient.put(`/user-groups/${groupId}/quota-managers`, { user_ids: userIds })
+  },
+
+  async updateMemberQuotas(groupId: number, members: UserGroupMemberQuotaMutation[]): Promise<void> {
+    await apiClient.put(`/user-groups/${groupId}/member-quotas`, { members })
+  },
+
+  async replaceTeamSubscriptionGroups(groupId: number, billingGroupIds: number[]): Promise<void> {
+    await apiClient.put(`/user-groups/${groupId}/team-subscription-groups`, { billing_group_ids: billingGroupIds })
+  },
+
+  async resetQuotaUsage(groupId: number): Promise<void> {
+    await apiClient.post(`/user-groups/${groupId}/quota-reset`)
   },
 }

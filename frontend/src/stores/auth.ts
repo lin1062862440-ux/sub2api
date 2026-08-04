@@ -97,6 +97,7 @@ export const useAuthStore = defineStore('auth', () => {
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
   const hasUserGroupAccess = computed(() => isAdmin.value || userGroupCapabilities.value?.can_access === true)
   const canManageUserGroups = computed(() => isAdmin.value || userGroupCapabilities.value?.can_manage === true)
+  const canManageUserGroupQuotas = computed(() => isAdmin.value || userGroupCapabilities.value?.can_manage_quota === true)
 
   // ==================== Actions ====================
 
@@ -158,13 +159,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function loadUserGroupCapabilities(force = false): Promise<UserGroupCapabilities> {
     if (isAdmin.value) {
-      const adminCapabilities: UserGroupCapabilities = { can_access: true, can_manage: true, group_count: 0 }
+      const adminCapabilities: UserGroupCapabilities = { can_access: true, can_manage: true, can_manage_quota: true, group_count: 0 }
       userGroupCapabilities.value = adminCapabilities
       userGroupCapabilitiesLoaded.value = true
       return adminCapabilities
     }
     if (!token.value || !user.value) {
-      const unavailable: UserGroupCapabilities = { can_access: false, can_manage: false, group_count: 0 }
+      const unavailable: UserGroupCapabilities = { can_access: false, can_manage: false, can_manage_quota: false, group_count: 0 }
       userGroupCapabilities.value = null
       userGroupCapabilitiesLoaded.value = false
       return unavailable
@@ -178,7 +179,7 @@ export const useAuthStore = defineStore('auth', () => {
       userGroupCapabilitiesLoaded.value = true
       return capabilities
     } catch {
-      const unavailable: UserGroupCapabilities = { can_access: false, can_manage: false, group_count: 0 }
+      const unavailable: UserGroupCapabilities = { can_access: false, can_manage: false, can_manage_quota: false, group_count: 0 }
       userGroupCapabilities.value = unavailable
       userGroupCapabilitiesLoaded.value = true
       return unavailable
@@ -535,6 +536,7 @@ export const useAuthStore = defineStore('auth', () => {
     hasPendingAuthSession,
     hasUserGroupAccess,
     canManageUserGroups,
+    canManageUserGroupQuotas,
 
     // Actions
     login,

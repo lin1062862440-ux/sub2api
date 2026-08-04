@@ -203,6 +203,20 @@ func (_c *UserSubscriptionCreate) SetNillableAssignedBy(v *int64) *UserSubscript
 	return _c
 }
 
+// SetOwnerUserGroupID sets the "owner_user_group_id" field.
+func (_c *UserSubscriptionCreate) SetOwnerUserGroupID(v int64) *UserSubscriptionCreate {
+	_c.mutation.SetOwnerUserGroupID(v)
+	return _c
+}
+
+// SetNillableOwnerUserGroupID sets the "owner_user_group_id" field if the given value is not nil.
+func (_c *UserSubscriptionCreate) SetNillableOwnerUserGroupID(v *int64) *UserSubscriptionCreate {
+	if v != nil {
+		_c.SetOwnerUserGroupID(*v)
+	}
+	return _c
+}
+
 // SetAssignedAt sets the "assigned_at" field.
 func (_c *UserSubscriptionCreate) SetAssignedAt(v time.Time) *UserSubscriptionCreate {
 	_c.mutation.SetAssignedAt(v)
@@ -472,6 +486,10 @@ func (_c *UserSubscriptionCreate) createSpec() (*UserSubscription, *sqlgraph.Cre
 	if value, ok := _c.mutation.MonthlyUsageUsd(); ok {
 		_spec.SetField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
 		_node.MonthlyUsageUsd = value
+	}
+	if value, ok := _c.mutation.OwnerUserGroupID(); ok {
+		_spec.SetField(usersubscription.FieldOwnerUserGroupID, field.TypeInt64, value)
+		_node.OwnerUserGroupID = &value
 	}
 	if value, ok := _c.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -816,6 +834,30 @@ func (u *UserSubscriptionUpsert) ClearAssignedBy() *UserSubscriptionUpsert {
 	return u
 }
 
+// SetOwnerUserGroupID sets the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsert) SetOwnerUserGroupID(v int64) *UserSubscriptionUpsert {
+	u.Set(usersubscription.FieldOwnerUserGroupID, v)
+	return u
+}
+
+// UpdateOwnerUserGroupID sets the "owner_user_group_id" field to the value that was provided on create.
+func (u *UserSubscriptionUpsert) UpdateOwnerUserGroupID() *UserSubscriptionUpsert {
+	u.SetExcluded(usersubscription.FieldOwnerUserGroupID)
+	return u
+}
+
+// AddOwnerUserGroupID adds v to the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsert) AddOwnerUserGroupID(v int64) *UserSubscriptionUpsert {
+	u.Add(usersubscription.FieldOwnerUserGroupID, v)
+	return u
+}
+
+// ClearOwnerUserGroupID clears the value of the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsert) ClearOwnerUserGroupID() *UserSubscriptionUpsert {
+	u.SetNull(usersubscription.FieldOwnerUserGroupID)
+	return u
+}
+
 // SetAssignedAt sets the "assigned_at" field.
 func (u *UserSubscriptionUpsert) SetAssignedAt(v time.Time) *UserSubscriptionUpsert {
 	u.Set(usersubscription.FieldAssignedAt, v)
@@ -1140,6 +1182,34 @@ func (u *UserSubscriptionUpsertOne) UpdateAssignedBy() *UserSubscriptionUpsertOn
 func (u *UserSubscriptionUpsertOne) ClearAssignedBy() *UserSubscriptionUpsertOne {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.ClearAssignedBy()
+	})
+}
+
+// SetOwnerUserGroupID sets the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsertOne) SetOwnerUserGroupID(v int64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetOwnerUserGroupID(v)
+	})
+}
+
+// AddOwnerUserGroupID adds v to the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsertOne) AddOwnerUserGroupID(v int64) *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddOwnerUserGroupID(v)
+	})
+}
+
+// UpdateOwnerUserGroupID sets the "owner_user_group_id" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertOne) UpdateOwnerUserGroupID() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateOwnerUserGroupID()
+	})
+}
+
+// ClearOwnerUserGroupID clears the value of the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsertOne) ClearOwnerUserGroupID() *UserSubscriptionUpsertOne {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearOwnerUserGroupID()
 	})
 }
 
@@ -1638,6 +1708,34 @@ func (u *UserSubscriptionUpsertBulk) UpdateAssignedBy() *UserSubscriptionUpsertB
 func (u *UserSubscriptionUpsertBulk) ClearAssignedBy() *UserSubscriptionUpsertBulk {
 	return u.Update(func(s *UserSubscriptionUpsert) {
 		s.ClearAssignedBy()
+	})
+}
+
+// SetOwnerUserGroupID sets the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsertBulk) SetOwnerUserGroupID(v int64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.SetOwnerUserGroupID(v)
+	})
+}
+
+// AddOwnerUserGroupID adds v to the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsertBulk) AddOwnerUserGroupID(v int64) *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.AddOwnerUserGroupID(v)
+	})
+}
+
+// UpdateOwnerUserGroupID sets the "owner_user_group_id" field to the value that was provided on create.
+func (u *UserSubscriptionUpsertBulk) UpdateOwnerUserGroupID() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.UpdateOwnerUserGroupID()
+	})
+}
+
+// ClearOwnerUserGroupID clears the value of the "owner_user_group_id" field.
+func (u *UserSubscriptionUpsertBulk) ClearOwnerUserGroupID() *UserSubscriptionUpsertBulk {
+	return u.Update(func(s *UserSubscriptionUpsert) {
+		s.ClearOwnerUserGroupID()
 	})
 }
 

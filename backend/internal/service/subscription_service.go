@@ -223,7 +223,7 @@ func (s *SubscriptionService) assignOrExtendSubscription(ctx context.Context, in
 	if err != nil {
 		return nil, false, fmt.Errorf("group not found: %w", err)
 	}
-	if !group.IsSubscriptionType() {
+	if !group.IsPersonalSubscriptionType() {
 		return nil, false, ErrGroupNotSubscriptionType
 	}
 
@@ -496,7 +496,7 @@ func (s *SubscriptionService) assignSubscriptionWithReuse(ctx context.Context, i
 	if err != nil {
 		return nil, false, fmt.Errorf("group not found: %w", err)
 	}
-	if !group.IsSubscriptionType() {
+	if !group.IsPersonalSubscriptionType() {
 		return nil, false, ErrGroupNotSubscriptionType
 	}
 

@@ -113,6 +113,7 @@ type BillingCacheService struct {
 	cfg                   *config.Config
 	circuitBreaker        *billingCircuitBreaker
 	userPlatformQuotaRepo UserPlatformQuotaRepository
+	userGroupQuotaRepo    UserGroupQuotaRepository
 
 	cacheWriteChan     chan cacheWriteTask
 	cacheWriteWg       sync.WaitGroup
@@ -739,6 +740,20 @@ func (s *BillingCacheService) CheckBillingEligibility(ctx context.Context, user 
 	}
 	if s.circuitBreaker != nil && !s.circuitBreaker.Allow() {
 		return ErrBillingServiceUnavailable
+	}
+
+	if user == nil {
+		return ErrBillingServiceUnavailable
+	}
+	// Team keys fail closed. A missing or stale subscription must never fall back
+	// to the member's personal balance.
+	if group != nil && group.IsTeamSubscriptionType() {
+		if subscription == nil || subscription.OwnerUserGroupID == nil {
+			return ErrUserGroupQuotaMemberNotFound
+		}
+		if err := s.checkUserGroupQuotaEligibility(ctx, *subscription.OwnerUserGroupID, group.ID, user.ID); err != nil {
+			return err
+		}
 	}
 
 	// 判断计费模式

@@ -43361,6 +43361,8 @@ type UsageLogMutation struct {
 	model_mapping_chain          *string
 	billing_tier                 *string
 	billing_mode                 *string
+	business_user_group_id       *int64
+	addbusiness_user_group_id    *int64
 	input_tokens                 *int
 	addinput_tokens              *int
 	output_tokens                *int
@@ -44118,6 +44120,76 @@ func (m *UsageLogMutation) SubscriptionIDCleared() bool {
 func (m *UsageLogMutation) ResetSubscriptionID() {
 	m.subscription = nil
 	delete(m.clearedFields, usagelog.FieldSubscriptionID)
+}
+
+// SetBusinessUserGroupID sets the "business_user_group_id" field.
+func (m *UsageLogMutation) SetBusinessUserGroupID(i int64) {
+	m.business_user_group_id = &i
+	m.addbusiness_user_group_id = nil
+}
+
+// BusinessUserGroupID returns the value of the "business_user_group_id" field in the mutation.
+func (m *UsageLogMutation) BusinessUserGroupID() (r int64, exists bool) {
+	v := m.business_user_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldBusinessUserGroupID returns the old "business_user_group_id" field's value of the UsageLog entity.
+// If the UsageLog object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UsageLogMutation) OldBusinessUserGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldBusinessUserGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldBusinessUserGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldBusinessUserGroupID: %w", err)
+	}
+	return oldValue.BusinessUserGroupID, nil
+}
+
+// AddBusinessUserGroupID adds i to the "business_user_group_id" field.
+func (m *UsageLogMutation) AddBusinessUserGroupID(i int64) {
+	if m.addbusiness_user_group_id != nil {
+		*m.addbusiness_user_group_id += i
+	} else {
+		m.addbusiness_user_group_id = &i
+	}
+}
+
+// AddedBusinessUserGroupID returns the value that was added to the "business_user_group_id" field in this mutation.
+func (m *UsageLogMutation) AddedBusinessUserGroupID() (r int64, exists bool) {
+	v := m.addbusiness_user_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearBusinessUserGroupID clears the value of the "business_user_group_id" field.
+func (m *UsageLogMutation) ClearBusinessUserGroupID() {
+	m.business_user_group_id = nil
+	m.addbusiness_user_group_id = nil
+	m.clearedFields[usagelog.FieldBusinessUserGroupID] = struct{}{}
+}
+
+// BusinessUserGroupIDCleared returns if the "business_user_group_id" field was cleared in this mutation.
+func (m *UsageLogMutation) BusinessUserGroupIDCleared() bool {
+	_, ok := m.clearedFields[usagelog.FieldBusinessUserGroupID]
+	return ok
+}
+
+// ResetBusinessUserGroupID resets all changes to the "business_user_group_id" field.
+func (m *UsageLogMutation) ResetBusinessUserGroupID() {
+	m.business_user_group_id = nil
+	m.addbusiness_user_group_id = nil
+	delete(m.clearedFields, usagelog.FieldBusinessUserGroupID)
 }
 
 // SetInputTokens sets the "input_tokens" field.
@@ -46001,7 +46073,7 @@ func (m *UsageLogMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UsageLogMutation) Fields() []string {
-	fields := make([]string, 0, 45)
+	fields := make([]string, 0, 46)
 	if m.user != nil {
 		fields = append(fields, usagelog.FieldUserID)
 	}
@@ -46040,6 +46112,9 @@ func (m *UsageLogMutation) Fields() []string {
 	}
 	if m.subscription != nil {
 		fields = append(fields, usagelog.FieldSubscriptionID)
+	}
+	if m.business_user_group_id != nil {
+		fields = append(fields, usagelog.FieldBusinessUserGroupID)
 	}
 	if m.input_tokens != nil {
 		fields = append(fields, usagelog.FieldInputTokens)
@@ -46171,6 +46246,8 @@ func (m *UsageLogMutation) Field(name string) (ent.Value, bool) {
 		return m.GroupID()
 	case usagelog.FieldSubscriptionID:
 		return m.SubscriptionID()
+	case usagelog.FieldBusinessUserGroupID:
+		return m.BusinessUserGroupID()
 	case usagelog.FieldInputTokens:
 		return m.InputTokens()
 	case usagelog.FieldOutputTokens:
@@ -46270,6 +46347,8 @@ func (m *UsageLogMutation) OldField(ctx context.Context, name string) (ent.Value
 		return m.OldGroupID(ctx)
 	case usagelog.FieldSubscriptionID:
 		return m.OldSubscriptionID(ctx)
+	case usagelog.FieldBusinessUserGroupID:
+		return m.OldBusinessUserGroupID(ctx)
 	case usagelog.FieldInputTokens:
 		return m.OldInputTokens(ctx)
 	case usagelog.FieldOutputTokens:
@@ -46433,6 +46512,13 @@ func (m *UsageLogMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetSubscriptionID(v)
+		return nil
+	case usagelog.FieldBusinessUserGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetBusinessUserGroupID(v)
 		return nil
 	case usagelog.FieldInputTokens:
 		v, ok := value.(int)
@@ -46669,6 +46755,9 @@ func (m *UsageLogMutation) AddedFields() []string {
 	if m.addchannel_id != nil {
 		fields = append(fields, usagelog.FieldChannelID)
 	}
+	if m.addbusiness_user_group_id != nil {
+		fields = append(fields, usagelog.FieldBusinessUserGroupID)
+	}
 	if m.addinput_tokens != nil {
 		fields = append(fields, usagelog.FieldInputTokens)
 	}
@@ -46739,6 +46828,8 @@ func (m *UsageLogMutation) AddedField(name string) (ent.Value, bool) {
 	switch name {
 	case usagelog.FieldChannelID:
 		return m.AddedChannelID()
+	case usagelog.FieldBusinessUserGroupID:
+		return m.AddedBusinessUserGroupID()
 	case usagelog.FieldInputTokens:
 		return m.AddedInputTokens()
 	case usagelog.FieldOutputTokens:
@@ -46794,6 +46885,13 @@ func (m *UsageLogMutation) AddField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.AddChannelID(v)
+		return nil
+	case usagelog.FieldBusinessUserGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddBusinessUserGroupID(v)
 		return nil
 	case usagelog.FieldInputTokens:
 		v, ok := value.(int)
@@ -46967,6 +47065,9 @@ func (m *UsageLogMutation) ClearedFields() []string {
 	if m.FieldCleared(usagelog.FieldSubscriptionID) {
 		fields = append(fields, usagelog.FieldSubscriptionID)
 	}
+	if m.FieldCleared(usagelog.FieldBusinessUserGroupID) {
+		fields = append(fields, usagelog.FieldBusinessUserGroupID)
+	}
 	if m.FieldCleared(usagelog.FieldAccountRateMultiplier) {
 		fields = append(fields, usagelog.FieldAccountRateMultiplier)
 	}
@@ -47040,6 +47141,9 @@ func (m *UsageLogMutation) ClearField(name string) error {
 		return nil
 	case usagelog.FieldSubscriptionID:
 		m.ClearSubscriptionID()
+		return nil
+	case usagelog.FieldBusinessUserGroupID:
+		m.ClearBusinessUserGroupID()
 		return nil
 	case usagelog.FieldAccountRateMultiplier:
 		m.ClearAccountRateMultiplier()
@@ -47123,6 +47227,9 @@ func (m *UsageLogMutation) ResetField(name string) error {
 		return nil
 	case usagelog.FieldSubscriptionID:
 		m.ResetSubscriptionID()
+		return nil
+	case usagelog.FieldBusinessUserGroupID:
+		m.ResetBusinessUserGroupID()
 		return nil
 	case usagelog.FieldInputTokens:
 		m.ResetInputTokens()
@@ -54005,6 +54112,8 @@ type UserSubscriptionMutation struct {
 	addweekly_usage_usd     *float64
 	monthly_usage_usd       *float64
 	addmonthly_usage_usd    *float64
+	owner_user_group_id     *int64
+	addowner_user_group_id  *int64
 	assigned_at             *time.Time
 	notes                   *string
 	clearedFields           map[string]struct{}
@@ -54785,6 +54894,76 @@ func (m *UserSubscriptionMutation) ResetAssignedBy() {
 	delete(m.clearedFields, usersubscription.FieldAssignedBy)
 }
 
+// SetOwnerUserGroupID sets the "owner_user_group_id" field.
+func (m *UserSubscriptionMutation) SetOwnerUserGroupID(i int64) {
+	m.owner_user_group_id = &i
+	m.addowner_user_group_id = nil
+}
+
+// OwnerUserGroupID returns the value of the "owner_user_group_id" field in the mutation.
+func (m *UserSubscriptionMutation) OwnerUserGroupID() (r int64, exists bool) {
+	v := m.owner_user_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldOwnerUserGroupID returns the old "owner_user_group_id" field's value of the UserSubscription entity.
+// If the UserSubscription object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *UserSubscriptionMutation) OldOwnerUserGroupID(ctx context.Context) (v *int64, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldOwnerUserGroupID is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldOwnerUserGroupID requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldOwnerUserGroupID: %w", err)
+	}
+	return oldValue.OwnerUserGroupID, nil
+}
+
+// AddOwnerUserGroupID adds i to the "owner_user_group_id" field.
+func (m *UserSubscriptionMutation) AddOwnerUserGroupID(i int64) {
+	if m.addowner_user_group_id != nil {
+		*m.addowner_user_group_id += i
+	} else {
+		m.addowner_user_group_id = &i
+	}
+}
+
+// AddedOwnerUserGroupID returns the value that was added to the "owner_user_group_id" field in this mutation.
+func (m *UserSubscriptionMutation) AddedOwnerUserGroupID() (r int64, exists bool) {
+	v := m.addowner_user_group_id
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// ClearOwnerUserGroupID clears the value of the "owner_user_group_id" field.
+func (m *UserSubscriptionMutation) ClearOwnerUserGroupID() {
+	m.owner_user_group_id = nil
+	m.addowner_user_group_id = nil
+	m.clearedFields[usersubscription.FieldOwnerUserGroupID] = struct{}{}
+}
+
+// OwnerUserGroupIDCleared returns if the "owner_user_group_id" field was cleared in this mutation.
+func (m *UserSubscriptionMutation) OwnerUserGroupIDCleared() bool {
+	_, ok := m.clearedFields[usersubscription.FieldOwnerUserGroupID]
+	return ok
+}
+
+// ResetOwnerUserGroupID resets all changes to the "owner_user_group_id" field.
+func (m *UserSubscriptionMutation) ResetOwnerUserGroupID() {
+	m.owner_user_group_id = nil
+	m.addowner_user_group_id = nil
+	delete(m.clearedFields, usersubscription.FieldOwnerUserGroupID)
+}
+
 // SetAssignedAt sets the "assigned_at" field.
 func (m *UserSubscriptionMutation) SetAssignedAt(t time.Time) {
 	m.assigned_at = &t
@@ -55052,7 +55231,7 @@ func (m *UserSubscriptionMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *UserSubscriptionMutation) Fields() []string {
-	fields := make([]string, 0, 17)
+	fields := make([]string, 0, 18)
 	if m.created_at != nil {
 		fields = append(fields, usersubscription.FieldCreatedAt)
 	}
@@ -55098,6 +55277,9 @@ func (m *UserSubscriptionMutation) Fields() []string {
 	if m.assigned_by_user != nil {
 		fields = append(fields, usersubscription.FieldAssignedBy)
 	}
+	if m.owner_user_group_id != nil {
+		fields = append(fields, usersubscription.FieldOwnerUserGroupID)
+	}
 	if m.assigned_at != nil {
 		fields = append(fields, usersubscription.FieldAssignedAt)
 	}
@@ -55142,6 +55324,8 @@ func (m *UserSubscriptionMutation) Field(name string) (ent.Value, bool) {
 		return m.MonthlyUsageUsd()
 	case usersubscription.FieldAssignedBy:
 		return m.AssignedBy()
+	case usersubscription.FieldOwnerUserGroupID:
+		return m.OwnerUserGroupID()
 	case usersubscription.FieldAssignedAt:
 		return m.AssignedAt()
 	case usersubscription.FieldNotes:
@@ -55185,6 +55369,8 @@ func (m *UserSubscriptionMutation) OldField(ctx context.Context, name string) (e
 		return m.OldMonthlyUsageUsd(ctx)
 	case usersubscription.FieldAssignedBy:
 		return m.OldAssignedBy(ctx)
+	case usersubscription.FieldOwnerUserGroupID:
+		return m.OldOwnerUserGroupID(ctx)
 	case usersubscription.FieldAssignedAt:
 		return m.OldAssignedAt(ctx)
 	case usersubscription.FieldNotes:
@@ -55303,6 +55489,13 @@ func (m *UserSubscriptionMutation) SetField(name string, value ent.Value) error 
 		}
 		m.SetAssignedBy(v)
 		return nil
+	case usersubscription.FieldOwnerUserGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetOwnerUserGroupID(v)
+		return nil
 	case usersubscription.FieldAssignedAt:
 		v, ok := value.(time.Time)
 		if !ok {
@@ -55334,6 +55527,9 @@ func (m *UserSubscriptionMutation) AddedFields() []string {
 	if m.addmonthly_usage_usd != nil {
 		fields = append(fields, usersubscription.FieldMonthlyUsageUsd)
 	}
+	if m.addowner_user_group_id != nil {
+		fields = append(fields, usersubscription.FieldOwnerUserGroupID)
+	}
 	return fields
 }
 
@@ -55348,6 +55544,8 @@ func (m *UserSubscriptionMutation) AddedField(name string) (ent.Value, bool) {
 		return m.AddedWeeklyUsageUsd()
 	case usersubscription.FieldMonthlyUsageUsd:
 		return m.AddedMonthlyUsageUsd()
+	case usersubscription.FieldOwnerUserGroupID:
+		return m.AddedOwnerUserGroupID()
 	}
 	return nil, false
 }
@@ -55378,6 +55576,13 @@ func (m *UserSubscriptionMutation) AddField(name string, value ent.Value) error 
 		}
 		m.AddMonthlyUsageUsd(v)
 		return nil
+	case usersubscription.FieldOwnerUserGroupID:
+		v, ok := value.(int64)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.AddOwnerUserGroupID(v)
+		return nil
 	}
 	return fmt.Errorf("unknown UserSubscription numeric field %s", name)
 }
@@ -55400,6 +55605,9 @@ func (m *UserSubscriptionMutation) ClearedFields() []string {
 	}
 	if m.FieldCleared(usersubscription.FieldAssignedBy) {
 		fields = append(fields, usersubscription.FieldAssignedBy)
+	}
+	if m.FieldCleared(usersubscription.FieldOwnerUserGroupID) {
+		fields = append(fields, usersubscription.FieldOwnerUserGroupID)
 	}
 	if m.FieldCleared(usersubscription.FieldNotes) {
 		fields = append(fields, usersubscription.FieldNotes)
@@ -55432,6 +55640,9 @@ func (m *UserSubscriptionMutation) ClearField(name string) error {
 		return nil
 	case usersubscription.FieldAssignedBy:
 		m.ClearAssignedBy()
+		return nil
+	case usersubscription.FieldOwnerUserGroupID:
+		m.ClearOwnerUserGroupID()
 		return nil
 	case usersubscription.FieldNotes:
 		m.ClearNotes()
@@ -55488,6 +55699,9 @@ func (m *UserSubscriptionMutation) ResetField(name string) error {
 		return nil
 	case usersubscription.FieldAssignedBy:
 		m.ResetAssignedBy()
+		return nil
+	case usersubscription.FieldOwnerUserGroupID:
+		m.ResetOwnerUserGroupID()
 		return nil
 	case usersubscription.FieldAssignedAt:
 		m.ResetAssignedAt()

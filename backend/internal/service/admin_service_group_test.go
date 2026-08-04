@@ -15,6 +15,13 @@ func ptrString[T ~string](v T) *string {
 	return &s
 }
 
+func TestValidateTeamSubscriptionGroupPlatform(t *testing.T) {
+	require.NoError(t, validateTeamSubscriptionGroupPlatform(SubscriptionTypeTeam, PlatformOpenAI))
+	require.NoError(t, validateTeamSubscriptionGroupPlatform(SubscriptionTypeTeam, PlatformAnthropic))
+	require.Error(t, validateTeamSubscriptionGroupPlatform(SubscriptionTypeTeam, PlatformGemini))
+	require.NoError(t, validateTeamSubscriptionGroupPlatform(SubscriptionTypeSubscription, PlatformGemini))
+}
+
 // groupRepoStubForAdmin 用于测试 AdminService 的 GroupRepository Stub
 type groupRepoStubForAdmin struct {
 	created  *Group // 记录 Create 调用的参数

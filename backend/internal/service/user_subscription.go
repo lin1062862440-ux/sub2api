@@ -21,9 +21,10 @@ type UserSubscription struct {
 	WeeklyUsageUSD  float64
 	MonthlyUsageUSD float64
 
-	AssignedBy *int64
-	AssignedAt time.Time
-	Notes      string
+	AssignedBy       *int64
+	OwnerUserGroupID *int64
+	AssignedAt       time.Time
+	Notes            string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

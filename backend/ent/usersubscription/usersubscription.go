@@ -45,6 +45,8 @@ const (
 	FieldMonthlyUsageUsd = "monthly_usage_usd"
 	// FieldAssignedBy holds the string denoting the assigned_by field in the database.
 	FieldAssignedBy = "assigned_by"
+	// FieldOwnerUserGroupID holds the string denoting the owner_user_group_id field in the database.
+	FieldOwnerUserGroupID = "owner_user_group_id"
 	// FieldAssignedAt holds the string denoting the assigned_at field in the database.
 	FieldAssignedAt = "assigned_at"
 	// FieldNotes holds the string denoting the notes field in the database.
@@ -107,6 +109,7 @@ var Columns = []string{
 	FieldWeeklyUsageUsd,
 	FieldMonthlyUsageUsd,
 	FieldAssignedBy,
+	FieldOwnerUserGroupID,
 	FieldAssignedAt,
 	FieldNotes,
 }
@@ -230,6 +233,11 @@ func ByMonthlyUsageUsd(opts ...sql.OrderTermOption) OrderOption {
 // ByAssignedBy orders the results by the assigned_by field.
 func ByAssignedBy(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldAssignedBy, opts...).ToFunc()
+}
+
+// ByOwnerUserGroupID orders the results by the owner_user_group_id field.
+func ByOwnerUserGroupID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldOwnerUserGroupID, opts...).ToFunc()
 }
 
 // ByAssignedAt orders the results by the assigned_at field.

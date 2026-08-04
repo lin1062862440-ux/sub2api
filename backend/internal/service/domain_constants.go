@@ -102,6 +102,7 @@ const (
 const (
 	SubscriptionTypeStandard     = domain.SubscriptionTypeStandard     // 标准计费模式（按余额扣费）
 	SubscriptionTypeSubscription = domain.SubscriptionTypeSubscription // 订阅模式（按限额控制）
+	SubscriptionTypeTeam         = domain.SubscriptionTypeTeam         // 团队订阅模式（由业务用户组授权）
 )
 
 // Subscription status constants

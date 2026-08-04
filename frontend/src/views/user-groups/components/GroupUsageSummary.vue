@@ -12,13 +12,13 @@
       <p class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.totalCost') }}</p>
       <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ formatCurrency(summary.total_actual_cost) }}</p>
     </div>
-    <div data-test="balance-consumption" class="px-5 py-4">
-      <p class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.balanceConsumption') }}</p>
-      <p class="mt-1 text-2xl font-semibold tabular-nums text-amber-600 dark:text-amber-400">{{ formatCurrency(summary.balance_consumption) }}</p>
+    <div data-test="input-tokens" class="px-5 py-4">
+      <p class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.inputTokens') }}</p>
+      <p class="mt-1 text-2xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ formatNumber(summary.total_input_tokens) }}</p>
     </div>
-    <div data-test="subscription-consumption" class="px-5 py-4 sm:col-span-2 xl:col-span-1">
-      <p class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.subscriptionConsumption') }}</p>
-      <p class="mt-1 text-2xl font-semibold tabular-nums text-primary-600 dark:text-primary-400">{{ formatCurrency(summary.subscription_consumption) }}</p>
+    <div data-test="output-tokens" class="px-5 py-4 sm:col-span-2 xl:col-span-1">
+      <p class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ t('userGroups.usage.outputTokens') }}</p>
+      <p class="mt-1 text-2xl font-semibold tabular-nums text-primary-600 dark:text-primary-400">{{ formatNumber(summary.total_output_tokens) }}</p>
     </div>
   </section>
 </template>

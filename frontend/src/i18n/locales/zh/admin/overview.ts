@@ -952,10 +952,11 @@ export default {
       subscription: {
         title: '订阅设置',
         type: '计费类型',
-        typeHint: '标准计费从用户余额扣除。订阅模式使用配额限制。',
+        typeHint: '标准计费使用个人余额，订阅使用个人套餐，团队订阅由用户组统一分配周额度。',
         typeNotEditable: '分组创建后无法修改计费类型。',
         standard: '标准（余额）',
         subscription: '订阅（配额）',
+        teamSubscription: '团队订阅（用户组额度）',
         dailyLimit: '每日限额（USD）',
         weeklyLimit: '每周限额（USD）',
         monthlyLimit: '每月限额（USD）',

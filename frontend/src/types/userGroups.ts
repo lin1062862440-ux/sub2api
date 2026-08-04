@@ -1,6 +1,7 @@
 export interface UserGroupCapabilities {
   can_access: boolean
   can_manage: boolean
+  can_manage_quota: boolean
   group_count: number
 }
 
@@ -29,8 +30,14 @@ export interface UserGroupMember {
   username: string
   avatar_url?: string
   status: string
-  balance: number
   joined_at: string
+}
+
+export interface UserGroupTeamSubscriptionGroup {
+  billing_group_id: number
+  name: string
+  platform: 'openai' | 'anthropic' | string
+  status: string
 }
 
 export interface UserGroupViewer {
@@ -51,12 +58,8 @@ export interface UserGroupSubscriptionRow {
   status: string
   starts_at?: string | null
   expires_at?: string | null
-  daily_used: number
-  daily_limit?: number | null
   weekly_used: number
   weekly_limit?: number | null
-  monthly_used: number
-  monthly_limit?: number | null
 }
 
 export interface UserGroupSubscriptionResult {
@@ -64,8 +67,8 @@ export interface UserGroupSubscriptionResult {
     member_count: number
     active_subscription_count: number
     no_subscription_count: number
-    total_balance: number
-    active_subscription_usage: number
+    allocated_quota_usd: number
+    team_subscription_usage: number
   }
   items: UserGroupSubscriptionRow[]
   total: number
@@ -81,8 +84,6 @@ export interface UserGroupUsageSummary {
   total_cache_tokens: number
   total_tokens: number
   total_actual_cost: number
-  balance_consumption: number
-  subscription_consumption: number
 }
 
 export interface UserGroupUsageByUser {
@@ -92,8 +93,6 @@ export interface UserGroupUsageByUser {
   total_requests: number
   total_tokens: number
   total_actual_cost: number
-  balance_consumption: number
-  subscription_consumption: number
 }
 
 export interface UserGroupUsageItem {
@@ -109,7 +108,6 @@ export interface UserGroupUsageItem {
   cache_read_tokens: number
   total_tokens: number
   actual_cost: number
-  billing_type: 0 | 1
   created_at: string
   prompt_available?: boolean
 }
@@ -149,7 +147,47 @@ export interface UserGroupUsageParams {
   timezone?: string
   user_id?: number
   model?: string
-  billing_type?: 0 | 1
   page?: number
   page_size?: number
+}
+
+export interface UserGroupQuotaPolicy {
+  enabled: boolean
+  weekly_limit_usd: number
+  weekly_usage_usd: number
+  weekly_window_start?: string | null
+  weekly_reset_at?: string | null
+}
+
+export interface UserGroupQuotaMember {
+  user_id: number
+  email: string
+  username: string
+  avatar_url?: string
+  status: string
+  weekly_limit_usd: number
+  weekly_usage_usd: number
+  weekly_window_start?: string | null
+}
+
+export interface UserGroupQuotaOverview {
+  group_id: number
+  policy: UserGroupQuotaPolicy
+  managers: UserGroupViewer[]
+  members: UserGroupQuotaMember[]
+  allocated_usd: number
+  can_manage: boolean
+  can_configure: boolean
+  team_subscription_groups: UserGroupTeamSubscriptionGroup[]
+  available_team_subscription_groups?: UserGroupTeamSubscriptionGroup[]
+}
+
+export interface UserGroupQuotaPolicyMutation {
+  enabled: boolean
+  weekly_limit_usd: number
+}
+
+export interface UserGroupMemberQuotaMutation {
+  user_id: number
+  weekly_limit_usd: number
 }

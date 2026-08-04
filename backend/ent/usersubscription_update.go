@@ -270,6 +270,33 @@ func (_u *UserSubscriptionUpdate) ClearAssignedBy() *UserSubscriptionUpdate {
 	return _u
 }
 
+// SetOwnerUserGroupID sets the "owner_user_group_id" field.
+func (_u *UserSubscriptionUpdate) SetOwnerUserGroupID(v int64) *UserSubscriptionUpdate {
+	_u.mutation.ResetOwnerUserGroupID()
+	_u.mutation.SetOwnerUserGroupID(v)
+	return _u
+}
+
+// SetNillableOwnerUserGroupID sets the "owner_user_group_id" field if the given value is not nil.
+func (_u *UserSubscriptionUpdate) SetNillableOwnerUserGroupID(v *int64) *UserSubscriptionUpdate {
+	if v != nil {
+		_u.SetOwnerUserGroupID(*v)
+	}
+	return _u
+}
+
+// AddOwnerUserGroupID adds value to the "owner_user_group_id" field.
+func (_u *UserSubscriptionUpdate) AddOwnerUserGroupID(v int64) *UserSubscriptionUpdate {
+	_u.mutation.AddOwnerUserGroupID(v)
+	return _u
+}
+
+// ClearOwnerUserGroupID clears the value of the "owner_user_group_id" field.
+func (_u *UserSubscriptionUpdate) ClearOwnerUserGroupID() *UserSubscriptionUpdate {
+	_u.mutation.ClearOwnerUserGroupID()
+	return _u
+}
+
 // SetAssignedAt sets the "assigned_at" field.
 func (_u *UserSubscriptionUpdate) SetAssignedAt(v time.Time) *UserSubscriptionUpdate {
 	_u.mutation.SetAssignedAt(v)
@@ -515,6 +542,15 @@ func (_u *UserSubscriptionUpdate) sqlSave(ctx context.Context) (_node int, err e
 	}
 	if value, ok := _u.mutation.AddedMonthlyUsageUsd(); ok {
 		_spec.AddField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.OwnerUserGroupID(); ok {
+		_spec.SetField(usersubscription.FieldOwnerUserGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedOwnerUserGroupID(); ok {
+		_spec.AddField(usersubscription.FieldOwnerUserGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.OwnerUserGroupIDCleared() {
+		_spec.ClearField(usersubscription.FieldOwnerUserGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)
@@ -916,6 +952,33 @@ func (_u *UserSubscriptionUpdateOne) ClearAssignedBy() *UserSubscriptionUpdateOn
 	return _u
 }
 
+// SetOwnerUserGroupID sets the "owner_user_group_id" field.
+func (_u *UserSubscriptionUpdateOne) SetOwnerUserGroupID(v int64) *UserSubscriptionUpdateOne {
+	_u.mutation.ResetOwnerUserGroupID()
+	_u.mutation.SetOwnerUserGroupID(v)
+	return _u
+}
+
+// SetNillableOwnerUserGroupID sets the "owner_user_group_id" field if the given value is not nil.
+func (_u *UserSubscriptionUpdateOne) SetNillableOwnerUserGroupID(v *int64) *UserSubscriptionUpdateOne {
+	if v != nil {
+		_u.SetOwnerUserGroupID(*v)
+	}
+	return _u
+}
+
+// AddOwnerUserGroupID adds value to the "owner_user_group_id" field.
+func (_u *UserSubscriptionUpdateOne) AddOwnerUserGroupID(v int64) *UserSubscriptionUpdateOne {
+	_u.mutation.AddOwnerUserGroupID(v)
+	return _u
+}
+
+// ClearOwnerUserGroupID clears the value of the "owner_user_group_id" field.
+func (_u *UserSubscriptionUpdateOne) ClearOwnerUserGroupID() *UserSubscriptionUpdateOne {
+	_u.mutation.ClearOwnerUserGroupID()
+	return _u
+}
+
 // SetAssignedAt sets the "assigned_at" field.
 func (_u *UserSubscriptionUpdateOne) SetAssignedAt(v time.Time) *UserSubscriptionUpdateOne {
 	_u.mutation.SetAssignedAt(v)
@@ -1191,6 +1254,15 @@ func (_u *UserSubscriptionUpdateOne) sqlSave(ctx context.Context) (_node *UserSu
 	}
 	if value, ok := _u.mutation.AddedMonthlyUsageUsd(); ok {
 		_spec.AddField(usersubscription.FieldMonthlyUsageUsd, field.TypeFloat64, value)
+	}
+	if value, ok := _u.mutation.OwnerUserGroupID(); ok {
+		_spec.SetField(usersubscription.FieldOwnerUserGroupID, field.TypeInt64, value)
+	}
+	if value, ok := _u.mutation.AddedOwnerUserGroupID(); ok {
+		_spec.AddField(usersubscription.FieldOwnerUserGroupID, field.TypeInt64, value)
+	}
+	if _u.mutation.OwnerUserGroupIDCleared() {
+		_spec.ClearField(usersubscription.FieldOwnerUserGroupID, field.TypeInt64)
 	}
 	if value, ok := _u.mutation.AssignedAt(); ok {
 		_spec.SetField(usersubscription.FieldAssignedAt, field.TypeTime, value)

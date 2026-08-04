@@ -26,7 +26,10 @@ func (r *userGroupPromptCaptureRepository) LoadEligibility(ctx context.Context) 
 		FROM user_group_members ugm
 		JOIN user_groups ug ON ug.id = ugm.user_group_id
 		JOIN users u ON u.id = ugm.user_id AND u.deleted_at IS NULL
+		JOIN user_group_quota_policies policy ON policy.user_group_id = ugm.user_group_id AND policy.enabled = TRUE
+		JOIN user_group_quota_members quota ON quota.user_group_id = ugm.user_group_id AND quota.user_id = ugm.user_id AND quota.weekly_limit_usd > 0
 		WHERE ug.status = 'active' AND ug.prompt_capture_enabled = TRUE
+		  AND EXISTS (SELECT 1 FROM user_group_team_subscription_groups mapping WHERE mapping.user_group_id = ugm.user_group_id)
 		ORDER BY ugm.user_id, ugm.user_group_id`)
 	if err != nil {
 		return nil, fmt.Errorf("load user group prompt eligibility: %w", err)
@@ -129,8 +132,22 @@ func (r *userGroupPromptCaptureRepository) InsertCapture(ctx context.Context, ca
 	if len(groupIDs) == 0 {
 		return errors.New("user prompt capture requires a business group")
 	}
-	if _, err = tx.ExecContext(ctx, `INSERT INTO user_group_prompt_captures (capture_id, user_group_id) SELECT $1, UNNEST($2::bigint[]) ON CONFLICT DO NOTHING`, captureID, pq.Array(groupIDs)); err != nil {
+	result, err := tx.ExecContext(ctx, `
+		INSERT INTO user_group_prompt_captures (capture_id, user_group_id)
+		SELECT $1, ul.business_user_group_id
+		FROM usage_logs ul
+		WHERE ul.user_id=$3 AND ul.request_id=$4
+		  AND ul.business_user_group_id = ANY($2::bigint[])
+		ON CONFLICT DO NOTHING`, captureID, pq.Array(groupIDs), capture.UserID, capture.RequestID)
+	if err != nil {
 		return fmt.Errorf("associate user prompt capture groups: %w", err)
+	}
+	if linked, rowsErr := result.RowsAffected(); rowsErr != nil {
+		return fmt.Errorf("count associated user prompt capture groups: %w", rowsErr)
+	} else if linked > 0 {
+		if _, err = tx.ExecContext(ctx, `UPDATE user_prompt_captures SET expires_at=captured_at + INTERVAL '14 days' WHERE id=$1`, captureID); err != nil {
+			return fmt.Errorf("extend committed user prompt capture retention: %w", err)
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("commit user prompt capture: %w", err)
@@ -145,8 +162,8 @@ func (r *userGroupPromptCaptureRepository) PromptAvailableForUsage(ctx context.C
 		FROM usage_logs ul
 		JOIN user_prompt_captures upc ON upc.user_id=ul.user_id AND upc.request_id=ul.request_id
 		JOIN user_group_prompt_captures ugpc ON ugpc.capture_id=upc.id
-		JOIN user_group_members ugm ON ugm.user_group_id=ugpc.user_group_id AND ugm.user_id=ul.user_id
-		WHERE ugpc.user_group_id=$1 AND ul.id=$2 AND upc.expires_at > NOW()
+		WHERE ugpc.user_group_id=$1 AND ul.id=$2
+		  AND ul.business_user_group_id=$1 AND upc.expires_at > NOW()
 	)`, groupID, usageLogID).Scan(&available)
 	if err != nil {
 		return false, fmt.Errorf("check user group prompt availability: %w", err)
@@ -161,8 +178,8 @@ func (r *userGroupPromptCaptureRepository) ListUsagePrompts(ctx context.Context,
 		FROM user_prompt_captures upc
 		JOIN usage_logs ul ON ul.user_id = upc.user_id AND ul.request_id = upc.request_id
 		JOIN user_group_prompt_captures ugpc ON ugpc.capture_id = upc.id
-		JOIN user_group_members ugm ON ugm.user_group_id = ugpc.user_group_id AND ugm.user_id = ul.user_id
-		WHERE ugpc.user_group_id = $1 AND ul.id = $2 AND upc.expires_at > NOW()
+		WHERE ugpc.user_group_id = $1 AND ul.id = $2
+		  AND ul.business_user_group_id = $1 AND upc.expires_at > NOW()
 		ORDER BY upc.captured_at, upc.id`, groupID, usageLogID)
 	if err != nil {
 		return nil, fmt.Errorf("list user group usage prompts: %w", err)

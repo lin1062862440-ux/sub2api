@@ -167,8 +167,14 @@ func (r *userGroupRepository) Update(ctx context.Context, groupID int64, group s
 	return &updated, nil
 }
 
-func (r *userGroupRepository) Archive(ctx context.Context, groupID int64) error {
-	result, err := r.db.ExecContext(ctx, `UPDATE user_groups SET status = 'archived', prompt_capture_enabled = FALSE, updated_at = NOW() WHERE id = $1 AND status = 'active'`, groupID)
+func (r *userGroupRepository) Archive(ctx context.Context, groupID int64) (err error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin archive user group: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	result, err := tx.ExecContext(ctx, `UPDATE user_groups SET status = 'archived', prompt_capture_enabled = FALSE, updated_at = NOW() WHERE id = $1 AND status = 'active'`, groupID)
 	if err != nil {
 		return fmt.Errorf("archive user group: %w", err)
 	}
@@ -179,12 +185,24 @@ func (r *userGroupRepository) Archive(ctx context.Context, groupID int64) error 
 	if affected == 0 {
 		return service.ErrUserGroupNotFound
 	}
+	if _, err = tx.ExecContext(ctx, `UPDATE user_group_quota_policies SET enabled = FALSE, updated_at = NOW() WHERE user_group_id = $1`, groupID); err != nil {
+		return fmt.Errorf("disable archived user group quota: %w", err)
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM user_group_quota_members WHERE user_group_id = $1`, groupID); err != nil {
+		return fmt.Errorf("release archived user group quota members: %w", err)
+	}
+	if err = disableTeamSubscriptionsForUserGroupTx(ctx, tx, groupID, nil); err != nil {
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit archive user group: %w", err)
+	}
 	return nil
 }
 
 func (r *userGroupRepository) ListMembers(ctx context.Context, groupID int64) ([]service.UserGroupMember, error) {
 	const query = `
-		SELECT u.id, u.email, u.username, COALESCE(ua.url, ''), u.status, u.balance, ugm.created_at
+		SELECT u.id, u.email, u.username, COALESCE(ua.url, ''), u.status, ugm.created_at
 		FROM user_group_members ugm
 		JOIN users u ON u.id = ugm.user_id AND u.deleted_at IS NULL
 		LEFT JOIN user_avatars ua ON ua.user_id = u.id
@@ -198,7 +216,7 @@ func (r *userGroupRepository) ListMembers(ctx context.Context, groupID int64) ([
 	members := make([]service.UserGroupMember, 0)
 	for rows.Next() {
 		var member service.UserGroupMember
-		if err := rows.Scan(&member.UserID, &member.Email, &member.Username, &member.AvatarURL, &member.Status, &member.Balance, &member.JoinedAt); err != nil {
+		if err := rows.Scan(&member.UserID, &member.Email, &member.Username, &member.AvatarURL, &member.Status, &member.JoinedAt); err != nil {
 			return nil, fmt.Errorf("scan user group member: %w", err)
 		}
 		members = append(members, member)
@@ -207,7 +225,230 @@ func (r *userGroupRepository) ListMembers(ctx context.Context, groupID int64) ([
 }
 
 func (r *userGroupRepository) ReplaceMembers(ctx context.Context, groupID int64, userIDs []int64, actorID int64) error {
-	return r.replacePeople(ctx, groupID, userIDs, actorID, "user_group_members", "user_id")
+	return r.replaceMembers(ctx, groupID, userIDs, actorID)
+}
+
+func (r *userGroupRepository) replaceMembers(ctx context.Context, groupID int64, userIDs []int64, actorID int64) (err error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin replace user group members: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var lockedID int64
+	if err = tx.QueryRowContext(ctx, "SELECT id FROM user_groups WHERE id = $1 AND status = 'active' FOR UPDATE", groupID).Scan(&lockedID); errors.Is(err, sql.ErrNoRows) {
+		return service.ErrUserGroupNotFound
+	} else if err != nil {
+		return fmt.Errorf("lock user group: %w", err)
+	}
+	if len(userIDs) > 0 {
+		var count int
+		if err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM users WHERE id = ANY($1) AND deleted_at IS NULL", pq.Array(userIDs)).Scan(&count); err != nil {
+			return fmt.Errorf("validate user group members: %w", err)
+		}
+		if count != len(userIDs) {
+			return service.ErrUserGroupInvalidUserIDs
+		}
+		if err = disableTeamSubscriptionsForUserGroupTx(ctx, tx, groupID, userIDs); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `DELETE FROM user_group_members WHERE user_group_id = $1 AND NOT (user_id = ANY($2))`, groupID, pq.Array(userIDs)); err != nil {
+			return fmt.Errorf("remove user group members: %w", err)
+		}
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO user_group_members (user_group_id, user_id, created_by, created_at)
+			SELECT $1, user_id, $3, NOW() FROM unnest($2::bigint[]) AS user_id
+			ON CONFLICT (user_group_id, user_id) DO NOTHING`, groupID, pq.Array(userIDs), actorID); err != nil {
+			return fmt.Errorf("insert user group members: %w", err)
+		}
+	} else {
+		if err = disableTeamSubscriptionsForUserGroupTx(ctx, tx, groupID, nil); err != nil {
+			return err
+		}
+		if _, err = tx.ExecContext(ctx, `DELETE FROM user_group_members WHERE user_group_id = $1`, groupID); err != nil {
+			return fmt.Errorf("clear user group members: %w", err)
+		}
+	}
+
+	var quotaEnabled bool
+	err = tx.QueryRowContext(ctx, `SELECT enabled FROM user_group_quota_policies WHERE user_group_id = $1`, groupID).Scan(&quotaEnabled)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("get user group quota policy while replacing members: %w", err)
+	}
+	if quotaEnabled {
+		weekStart := service.CurrentUserGroupQuotaWeek(time.Now())
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO user_group_quota_members (
+				user_id, user_group_id, weekly_limit_usd, weekly_usage_usd, weekly_window_start, updated_by
+			)
+			SELECT member.user_id, member.user_group_id, 0, 0, $2, $3
+			FROM user_group_members member
+			WHERE member.user_group_id = $1
+			ON CONFLICT (user_id) DO NOTHING`, groupID, weekStart, actorID); err != nil {
+			return fmt.Errorf("initialize added user group quota members: %w", err)
+		}
+		var memberCount, quotaMemberCount int64
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_group_members WHERE user_group_id = $1`, groupID).Scan(&memberCount); err != nil {
+			return err
+		}
+		if err = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM user_group_quota_members WHERE user_group_id = $1`, groupID).Scan(&quotaMemberCount); err != nil {
+			return err
+		}
+		if memberCount != quotaMemberCount {
+			return service.ErrUserGroupQuotaMembershipConflict
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		return fmt.Errorf("commit replace user group members: %w", err)
+	}
+	return nil
+}
+
+func (r *userGroupRepository) ListTeamSubscriptionGroups(ctx context.Context, groupID int64) ([]service.UserGroupTeamSubscriptionGroup, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT g.id, g.name, g.platform, g.status
+		FROM user_group_team_subscription_groups mapping
+		JOIN groups g ON g.id = mapping.billing_group_id AND g.deleted_at IS NULL
+		WHERE mapping.user_group_id = $1
+		ORDER BY g.platform, g.name, g.id`, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("list user group team subscription groups: %w", err)
+	}
+	defer rows.Close()
+	return scanUserGroupTeamSubscriptionGroups(rows)
+}
+
+func (r *userGroupRepository) ListAvailableTeamSubscriptionGroups(ctx context.Context) ([]service.UserGroupTeamSubscriptionGroup, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, name, platform, status
+		FROM groups
+		WHERE deleted_at IS NULL AND status = 'active' AND subscription_type = 'team_subscription'
+		  AND platform IN ('openai', 'anthropic')
+		ORDER BY platform, name, id`)
+	if err != nil {
+		return nil, fmt.Errorf("list available team subscription groups: %w", err)
+	}
+	defer rows.Close()
+	return scanUserGroupTeamSubscriptionGroups(rows)
+}
+
+func scanUserGroupTeamSubscriptionGroups(rows *sql.Rows) ([]service.UserGroupTeamSubscriptionGroup, error) {
+	items := make([]service.UserGroupTeamSubscriptionGroup, 0)
+	for rows.Next() {
+		var item service.UserGroupTeamSubscriptionGroup
+		if err := rows.Scan(&item.BillingGroupID, &item.Name, &item.Platform, &item.Status); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *userGroupRepository) ReplaceTeamSubscriptionGroups(ctx context.Context, groupID int64, billingGroupIDs []int64, actorID int64) (err error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin replace team subscription groups: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	var lockedID int64
+	if err = tx.QueryRowContext(ctx, `SELECT id FROM user_groups WHERE id=$1 AND status='active' FOR UPDATE`, groupID).Scan(&lockedID); errors.Is(err, sql.ErrNoRows) {
+		return service.ErrUserGroupNotFound
+	} else if err != nil {
+		return err
+	}
+	if len(billingGroupIDs) > 0 {
+		var validCount, platformCount int
+		if err = tx.QueryRowContext(ctx, `
+			SELECT COUNT(*), COUNT(DISTINCT platform)
+			FROM groups
+			WHERE id = ANY($1) AND deleted_at IS NULL AND status='active'
+			  AND subscription_type='team_subscription' AND platform IN ('openai','anthropic')`, pq.Array(billingGroupIDs)).Scan(&validCount, &platformCount); err != nil {
+			return err
+		}
+		if validCount != len(billingGroupIDs) {
+			return service.ErrUserGroupInvalidTeamSubscription
+		}
+		if platformCount != len(billingGroupIDs) {
+			return service.ErrUserGroupDuplicateTeamPlatform
+		}
+	}
+	if err = disableRemovedTeamSubscriptionGroupsTx(ctx, tx, groupID, billingGroupIDs); err != nil {
+		return err
+	}
+	if _, err = tx.ExecContext(ctx, `DELETE FROM user_group_team_subscription_groups WHERE user_group_id=$1`, groupID); err != nil {
+		return err
+	}
+	if len(billingGroupIDs) > 0 {
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO user_group_team_subscription_groups (user_group_id, billing_group_id, platform, created_by)
+			SELECT $1, g.id, g.platform, $3 FROM groups g WHERE g.id = ANY($2)
+			ON CONFLICT DO NOTHING`, groupID, pq.Array(billingGroupIDs), actorID); err != nil {
+			return err
+		}
+		if err = syncTeamSubscriptionsForUserGroupTx(ctx, tx, groupID, actorID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func disableRemovedTeamSubscriptionGroupsTx(ctx context.Context, tx *sql.Tx, groupID int64, retainedGroupIDs []int64) error {
+	condition := ""
+	args := []any{groupID}
+	if len(retainedGroupIDs) > 0 {
+		condition = " AND group_id <> ALL($2)"
+		args = append(args, pq.Array(retainedGroupIDs))
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE user_subscriptions SET status='suspended', deleted_at=NOW(), updated_at=NOW()
+		WHERE owner_user_group_id=$1 AND deleted_at IS NULL`+condition, args...); err != nil {
+		return fmt.Errorf("disable removed team subscriptions: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE api_keys SET group_id=NULL, updated_at=NOW()
+		WHERE deleted_at IS NULL AND user_id IN (SELECT user_id FROM user_group_members WHERE user_group_id=$1)
+		  AND group_id IN (SELECT group_id FROM user_subscriptions WHERE owner_user_group_id=$1`+condition+`)`, args...); err != nil {
+		return fmt.Errorf("detach removed team api keys: %w", err)
+	}
+	return nil
+}
+
+func disableTeamSubscriptionsForUserGroupTx(ctx context.Context, tx *sql.Tx, groupID int64, retainedUserIDs []int64) error {
+	condition := ""
+	args := []any{groupID}
+	if len(retainedUserIDs) > 0 {
+		condition = " AND user_id <> ALL($2)"
+		args = append(args, pq.Array(retainedUserIDs))
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE api_keys SET group_id=NULL, updated_at=NOW()
+		WHERE deleted_at IS NULL AND user_id IN (SELECT user_id FROM user_group_members WHERE user_group_id=$1`+condition+`)
+		  AND group_id IN (SELECT billing_group_id FROM user_group_team_subscription_groups WHERE user_group_id=$1)`, args...); err != nil {
+		return fmt.Errorf("detach member team api keys: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE user_subscriptions SET status='suspended', deleted_at=NOW(), updated_at=NOW()
+		WHERE owner_user_group_id=$1 AND deleted_at IS NULL`+condition, args...); err != nil {
+		return fmt.Errorf("disable member team subscriptions: %w", err)
+	}
+	return nil
+}
+
+func syncTeamSubscriptionsForUserGroupTx(ctx context.Context, tx *sql.Tx, groupID, actorID int64) error {
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE user_subscriptions us SET owner_user_group_id=$1, status='active', expires_at='2099-12-31 23:59:59+00', updated_at=NOW()
+		WHERE us.deleted_at IS NULL AND EXISTS (
+			SELECT 1 FROM user_group_quota_members qm
+			JOIN user_group_team_subscription_groups mapping ON mapping.user_group_id=qm.user_group_id AND mapping.billing_group_id=us.group_id
+			WHERE qm.user_group_id=$1 AND qm.user_id=us.user_id AND qm.weekly_limit_usd > 0
+		)`, groupID); err != nil {
+		return fmt.Errorf("activate existing team subscriptions: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO user_subscriptions (user_id, group_id, starts_at, expires_at, status, assigned_by, assigned_at, notes, owner_user_group_id, created_at, updated_at)
+		SELECT qm.user_id, mapping.billing_group_id, NOW(), '2099-12-31 23:59:59+00', 'active', $2, NOW(), 'Issued by user group', $1, NOW(), NOW()
+		FROM user_group_quota_members qm
+		JOIN user_group_team_subscription_groups mapping ON mapping.user_group_id=qm.user_group_id
+		WHERE qm.user_group_id=$1 AND qm.weekly_limit_usd > 0
+		  AND NOT EXISTS (SELECT 1 FROM user_subscriptions us WHERE us.user_id=qm.user_id AND us.group_id=mapping.billing_group_id AND us.deleted_at IS NULL)`, groupID, actorID); err != nil {
+		return fmt.Errorf("create team subscriptions: %w", err)
+	}
+	return nil
 }
 
 func (r *userGroupRepository) ListViewers(ctx context.Context, groupID int64) ([]service.UserGroupViewer, error) {
@@ -273,6 +514,16 @@ func (r *userGroupRepository) replacePeople(ctx context.Context, groupID int64, 
 			return fmt.Errorf("insert user group people: %w", err)
 		}
 	}
+	if table == "user_group_viewer_grants" {
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO user_group_viewer_grants (user_group_id, viewer_user_id, created_by, created_at)
+			SELECT manager.user_group_id, manager.user_id, $2, NOW()
+			FROM user_group_quota_managers manager
+			WHERE manager.user_group_id = $1
+			ON CONFLICT (user_group_id, viewer_user_id) DO NOTHING`, groupID, actorID); err != nil {
+			return fmt.Errorf("preserve user group quota manager access: %w", err)
+		}
+	}
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("commit replace user group people: %w", err)
 	}
@@ -281,18 +532,23 @@ func (r *userGroupRepository) replacePeople(ctx context.Context, groupID int64, 
 
 func (r *userGroupRepository) ListSubscriptions(ctx context.Context, groupID int64, query service.UserGroupSubscriptionQuery) (*service.UserGroupSubscriptionResult, error) {
 	result := &service.UserGroupSubscriptionResult{Page: query.Page, PageSize: query.PageSize}
+	weekStart := service.CurrentUserGroupQuotaWeek(time.Now())
 	const summarySQL = `
 		SELECT COUNT(DISTINCT ugm.user_id),
-		       (SELECT COUNT(*) FROM user_subscriptions us JOIN user_group_members m ON m.user_id = us.user_id WHERE m.user_group_id = $1 AND us.deleted_at IS NULL AND us.status = 'active' AND us.expires_at > NOW()),
-		       COUNT(DISTINCT ugm.user_id) FILTER (WHERE NOT EXISTS (SELECT 1 FROM user_subscriptions all_us WHERE all_us.user_id = ugm.user_id AND all_us.deleted_at IS NULL)),
-		       COALESCE(SUM(u.balance), 0),
-		       COALESCE((SELECT SUM(active_us.daily_usage_usd) FROM user_subscriptions active_us JOIN user_group_members active_m ON active_m.user_id = active_us.user_id WHERE active_m.user_group_id = $1 AND active_us.deleted_at IS NULL AND active_us.status = 'active' AND active_us.expires_at > NOW()), 0)
+		       (SELECT COUNT(*) FROM user_subscriptions us WHERE us.owner_user_group_id = $1 AND us.deleted_at IS NULL AND us.status = 'active' AND us.expires_at > NOW()),
+		       COUNT(DISTINCT ugm.user_id) FILTER (WHERE NOT EXISTS (
+		           SELECT 1 FROM user_subscriptions team_us
+		           WHERE team_us.user_id = ugm.user_id AND team_us.owner_user_group_id = $1 AND team_us.deleted_at IS NULL
+		       )),
+		       COALESCE((SELECT SUM(qm.weekly_limit_usd) FROM user_group_quota_members qm WHERE qm.user_group_id = $1), 0),
+		       COALESCE((SELECT CASE WHEN policy.weekly_window_start IS NULL OR policy.weekly_window_start < $2 THEN 0 ELSE policy.weekly_usage_usd END
+		                 FROM user_group_quota_policies policy WHERE policy.user_group_id = $1), 0)
 		FROM user_group_members ugm
 		JOIN users u ON u.id = ugm.user_id AND u.deleted_at IS NULL
 		WHERE ugm.user_group_id = $1`
-	if err := r.db.QueryRowContext(ctx, summarySQL, groupID).Scan(
+	if err := r.db.QueryRowContext(ctx, summarySQL, groupID, weekStart).Scan(
 		&result.Summary.MemberCount, &result.Summary.ActiveSubscriptionCount, &result.Summary.NoSubscriptionCount,
-		&result.Summary.TotalBalance, &result.Summary.ActiveSubscriptionUsage,
+		&result.Summary.AllocatedQuotaUSD, &result.Summary.TeamSubscriptionUsage,
 	); err != nil {
 		return nil, fmt.Errorf("summarize user group subscriptions: %w", err)
 	}
@@ -300,7 +556,7 @@ func (r *userGroupRepository) ListSubscriptions(ctx context.Context, groupID int
 	statusCondition, statusArgs := userGroupSubscriptionStatusCondition(query.Status, 2)
 	countSQL := `SELECT COUNT(*) FROM user_group_members ugm
 		JOIN users u ON u.id = ugm.user_id AND u.deleted_at IS NULL
-		LEFT JOIN user_subscriptions us ON us.user_id = ugm.user_id AND us.deleted_at IS NULL
+		LEFT JOIN user_subscriptions us ON us.user_id = ugm.user_id AND us.owner_user_group_id = $1 AND us.deleted_at IS NULL
 		WHERE ugm.user_group_id = $1` + statusCondition
 	args := []any{groupID}
 	args = append(args, statusArgs...)
@@ -311,20 +567,20 @@ func (r *userGroupRepository) ListSubscriptions(ctx context.Context, groupID int
 	limitPos := len(args) + 1
 	offsetPos := limitPos + 1
 	rowsSQL := fmt.Sprintf(`
-		SELECT u.id, u.email, u.username, COALESCE(ua.url, ''), u.status, u.balance, ugm.created_at,
+		SELECT u.id, u.email, u.username, COALESCE(ua.url, ''), u.status, ugm.created_at,
 		       us.id, us.group_id, COALESCE(g.name, ''), COALESCE(g.platform, ''), COALESCE(us.status, ''), us.starts_at, us.expires_at,
-		       COALESCE(us.daily_usage_usd, 0), g.daily_limit_usd,
-		       COALESCE(us.weekly_usage_usd, 0), g.weekly_limit_usd,
-		       COALESCE(us.monthly_usage_usd, 0), g.monthly_limit_usd
+		       CASE WHEN qm.weekly_window_start IS NULL OR qm.weekly_window_start < $2 THEN 0 ELSE qm.weekly_usage_usd END,
+		       qm.weekly_limit_usd
 		FROM user_group_members ugm
 		JOIN users u ON u.id = ugm.user_id AND u.deleted_at IS NULL
 		LEFT JOIN user_avatars ua ON ua.user_id = u.id
-		LEFT JOIN user_subscriptions us ON us.user_id = ugm.user_id AND us.deleted_at IS NULL
-		LEFT JOIN groups g ON g.id = us.group_id AND g.deleted_at IS NULL
+		LEFT JOIN user_subscriptions us ON us.user_id = ugm.user_id AND us.owner_user_group_id = $1 AND us.deleted_at IS NULL
+		LEFT JOIN groups g ON g.id = us.group_id AND g.deleted_at IS NULL AND g.subscription_type = 'team_subscription'
+		LEFT JOIN user_group_quota_members qm ON qm.user_group_id = ugm.user_group_id AND qm.user_id = ugm.user_id
 		WHERE ugm.user_group_id = $1%s
 		ORDER BY LOWER(COALESCE(NULLIF(u.username, ''), u.email)), u.id, us.created_at DESC NULLS LAST
-		LIMIT $%d OFFSET $%d`, statusCondition, limitPos, offsetPos)
-	args = append(args, query.PageSize, (query.Page-1)*query.PageSize)
+		LIMIT $%d OFFSET $%d`, statusCondition, limitPos+1, offsetPos+1)
+	args = append(args, weekStart, query.PageSize, (query.Page-1)*query.PageSize)
 	rows, err := r.db.QueryContext(ctx, rowsSQL, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list user group subscriptions: %w", err)
@@ -368,17 +624,13 @@ func (r *userGroupRepository) GetUsage(ctx context.Context, groupID int64, query
 		SELECT COUNT(*), COALESCE(SUM(ul.input_tokens), 0), COALESCE(SUM(ul.output_tokens), 0),
 		       COALESCE(SUM(ul.cache_creation_tokens + ul.cache_read_tokens), 0),
 		       COALESCE(SUM(ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens), 0),
-		       COALESCE(SUM(ul.actual_cost), 0),
-		       COALESCE(SUM(CASE WHEN ul.billing_type = 0 THEN ul.actual_cost ELSE 0 END), 0),
-		       COALESCE(SUM(CASE WHEN ul.billing_type = 1 THEN ul.actual_cost ELSE 0 END), 0)
+		       COALESCE(SUM(ul.actual_cost), 0)
 		FROM usage_logs ul
-		JOIN user_group_members ugm ON ugm.user_id = ul.user_id
 		JOIN users u ON u.id = ul.user_id AND u.deleted_at IS NULL
 		WHERE ` + where
 	if err := r.db.QueryRowContext(ctx, summarySQL, args...).Scan(
 		&result.Summary.TotalRequests, &result.Summary.TotalInputTokens, &result.Summary.TotalOutputTokens,
 		&result.Summary.TotalCacheTokens, &result.Summary.TotalTokens, &result.Summary.TotalActualCost,
-		&result.Summary.BalanceConsumption, &result.Summary.SubscriptionConsumption,
 	); err != nil {
 		return nil, fmt.Errorf("summarize user group usage: %w", err)
 	}
@@ -386,11 +638,8 @@ func (r *userGroupRepository) GetUsage(ctx context.Context, groupID int64, query
 	byUserSQL := `
 		SELECT u.id, u.email, u.username, COUNT(*),
 		       COALESCE(SUM(ul.input_tokens + ul.output_tokens + ul.cache_creation_tokens + ul.cache_read_tokens), 0),
-		       COALESCE(SUM(ul.actual_cost), 0),
-		       COALESCE(SUM(CASE WHEN ul.billing_type = 0 THEN ul.actual_cost ELSE 0 END), 0),
-		       COALESCE(SUM(CASE WHEN ul.billing_type = 1 THEN ul.actual_cost ELSE 0 END), 0)
+		       COALESCE(SUM(ul.actual_cost), 0)
 		FROM usage_logs ul
-		JOIN user_group_members ugm ON ugm.user_id = ul.user_id
 		JOIN users u ON u.id = ul.user_id AND u.deleted_at IS NULL
 		WHERE ` + where + `
 		GROUP BY u.id, u.email, u.username
@@ -402,7 +651,7 @@ func (r *userGroupRepository) GetUsage(ctx context.Context, groupID int64, query
 	result.ByUser = make([]service.UserGroupUsageByUser, 0)
 	for rows.Next() {
 		var item service.UserGroupUsageByUser
-		if err := rows.Scan(&item.UserID, &item.Email, &item.Username, &item.TotalRequests, &item.TotalTokens, &item.TotalActualCost, &item.BalanceConsumption, &item.SubscriptionConsumption); err != nil {
+		if err := rows.Scan(&item.UserID, &item.Email, &item.Username, &item.TotalRequests, &item.TotalTokens, &item.TotalActualCost); err != nil {
 			_ = rows.Close()
 			return nil, fmt.Errorf("scan user group usage by user: %w", err)
 		}
@@ -413,7 +662,6 @@ func (r *userGroupRepository) GetUsage(ctx context.Context, groupID int64, query
 	}
 
 	countSQL := `SELECT COUNT(*) FROM usage_logs ul
-		JOIN user_group_members ugm ON ugm.user_id = ul.user_id
 		JOIN users u ON u.id = ul.user_id AND u.deleted_at IS NULL
 		WHERE ` + where
 	if err := r.db.QueryRowContext(ctx, countSQL, args...).Scan(&result.Total); err != nil {
@@ -425,9 +673,8 @@ func (r *userGroupRepository) GetUsage(ctx context.Context, groupID int64, query
 		SELECT ul.id, u.id, u.email, u.username, ul.request_id,
 		       COALESCE(NULLIF(ul.requested_model, ''), ul.model),
 		       ul.input_tokens, ul.output_tokens, ul.cache_creation_tokens, ul.cache_read_tokens,
-		       ul.actual_cost, ul.billing_type, ul.created_at
+		       ul.actual_cost, ul.created_at
 		FROM usage_logs ul
-		JOIN user_group_members ugm ON ugm.user_id = ul.user_id
 		JOIN users u ON u.id = ul.user_id AND u.deleted_at IS NULL
 		WHERE %s
 		ORDER BY ul.created_at DESC, ul.id DESC
@@ -443,7 +690,7 @@ func (r *userGroupRepository) GetUsage(ctx context.Context, groupID int64, query
 		var item service.UserGroupUsageItem
 		if err := rows.Scan(&item.ID, &item.UserID, &item.Email, &item.Username, &item.RequestID, &item.Model,
 			&item.InputTokens, &item.OutputTokens, &item.CacheCreationTokens, &item.CacheReadTokens,
-			&item.ActualCost, &item.BillingType, &item.CreatedAt); err != nil {
+			&item.ActualCost, &item.CreatedAt); err != nil {
 			return nil, fmt.Errorf("scan user group usage: %w", err)
 		}
 		item.TotalTokens = item.InputTokens + item.OutputTokens + item.CacheCreationTokens + item.CacheReadTokens
@@ -457,7 +704,7 @@ func (r *userGroupRepository) GetUsage(ctx context.Context, groupID int64, query
 }
 
 func buildUserGroupUsageWhere(groupID int64, query service.UserGroupUsageQuery) (string, []any) {
-	conditions := []string{"ugm.user_group_id = $1", "ul.created_at >= $2", "ul.created_at < $3"}
+	conditions := []string{"ul.business_user_group_id = $1", "ul.created_at >= $2", "ul.created_at < $3"}
 	args := []any{groupID, query.StartTime, query.EndTime}
 	if query.UserID != nil {
 		args = append(args, *query.UserID)
@@ -496,11 +743,11 @@ func scanUserGroupSubscriptionRow(scanner userGroupRowScanner) (service.UserGrou
 	var row service.UserGroupSubscriptionRow
 	var subscriptionID, billingGroupID sql.NullInt64
 	var startsAt, expiresAt sql.NullTime
-	var dailyLimit, weeklyLimit, monthlyLimit sql.NullFloat64
+	var weeklyLimit sql.NullFloat64
 	if err := scanner.Scan(
-		&row.Member.UserID, &row.Member.Email, &row.Member.Username, &row.Member.AvatarURL, &row.Member.Status, &row.Member.Balance, &row.Member.JoinedAt,
+		&row.Member.UserID, &row.Member.Email, &row.Member.Username, &row.Member.AvatarURL, &row.Member.Status, &row.Member.JoinedAt,
 		&subscriptionID, &billingGroupID, &row.BillingGroup, &row.Platform, &row.Status, &startsAt, &expiresAt,
-		&row.DailyUsed, &dailyLimit, &row.WeeklyUsed, &weeklyLimit, &row.MonthlyUsed, &monthlyLimit,
+		&row.WeeklyUsed, &weeklyLimit,
 	); err != nil {
 		return service.UserGroupSubscriptionRow{}, fmt.Errorf("scan user group subscription: %w", err)
 	}
@@ -508,9 +755,7 @@ func scanUserGroupSubscriptionRow(scanner userGroupRowScanner) (service.UserGrou
 	row.BillingGroupID = nullableInt64Pointer(billingGroupID)
 	row.StartsAt = nullableTimePointer(startsAt)
 	row.ExpiresAt = nullableTimePointer(expiresAt)
-	row.DailyLimit = nullableFloat64Pointer(dailyLimit)
 	row.WeeklyLimit = nullableFloat64Pointer(weeklyLimit)
-	row.MonthlyLimit = nullableFloat64Pointer(monthlyLimit)
 	return row, nil
 }
 

@@ -715,8 +715,6 @@ function buildSelfNavItems(withDashboard: boolean): NavItem[] {
   return items
 }
 
-const userGroupWorkspacePaths = ['/user-groups', '/user-group-subscriptions', '/user-group-usage']
-
 function buildUserGroupNavItems(): NavItem[] {
   return [{ path: '/user-groups', label: t('userGroups.nav.workspace'), icon: FolderIcon }]
 }
@@ -877,7 +875,6 @@ function handleMenuItemClick(itemPath: string) {
 }
 
 function isActive(path: string): boolean {
-  if (path === '/user-groups' && userGroupWorkspacePaths.includes(route.path)) return true
   return route.path === path || route.path.startsWith(path + '/')
 }
 

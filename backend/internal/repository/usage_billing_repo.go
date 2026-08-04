@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -207,6 +208,12 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 			return err
 		}
 		result.QuotaState = quotaState
+	}
+
+	if cmd.UserGroupQuotaCost > 0 && cmd.BusinessUserGroupID != nil {
+		if err := incrementUserGroupQuotaUsageTx(ctx, tx, *cmd.BusinessUserGroupID, cmd.BillingGroupID, cmd.UserID, cmd.UserGroupQuotaCost, service.CurrentUserGroupQuotaWeek(time.Now())); err != nil {
+			return err
+		}
 	}
 
 	return nil

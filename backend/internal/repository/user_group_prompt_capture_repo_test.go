@@ -2,7 +2,6 @@ package repository
 
 import (
 	"context"
-	"regexp"
 	"testing"
 	"time"
 
@@ -34,8 +33,10 @@ func TestUserGroupPromptCaptureRepositoryInsertsCaptureAndAssociationsAtomically
 	mock.ExpectQuery(`(?s)INSERT INTO user_prompt_captures.*ON CONFLICT \(event_id\).*RETURNING id`).
 		WithArgs("event-1", "req-1", int64(7), "anthropic_messages", "claude", "http", "safe text", "hash", 9, false, now, now.Add(service.UserGroupPromptRetention)).
 		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(41))
-	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO user_group_prompt_captures (capture_id, user_group_id) SELECT $1, UNNEST($2::bigint[]) ON CONFLICT DO NOTHING")).
-		WithArgs(int64(41), sqlmock.AnyArg()).WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(`(?s)INSERT INTO user_group_prompt_captures.*SELECT \$1, ul.business_user_group_id.*ul.business_user_group_id = ANY`).
+		WithArgs(int64(41), sqlmock.AnyArg(), int64(7), "req-1").WillReturnResult(sqlmock.NewResult(0, 2))
+	mock.ExpectExec(`UPDATE user_prompt_captures SET expires_at=captured_at \+ INTERVAL '14 days'`).
+		WithArgs(int64(41)).WillReturnResult(sqlmock.NewResult(0, 1))
 	mock.ExpectCommit()
 
 	repo := NewUserGroupPromptCaptureRepository(db)

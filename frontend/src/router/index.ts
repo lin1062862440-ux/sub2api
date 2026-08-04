@@ -315,20 +315,33 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
-    path: '/user-group-subscriptions',
-    name: 'UserGroupSubscriptions',
-    component: () => import('@/views/user-groups/UserGroupSubscriptionsView.vue'),
+    path: '/user-groups/:id/members',
+    name: 'UserGroupMembers',
+    component: () => import('@/views/user-groups/UserGroupMembersView.vue'),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
       requiresUserGroupAccess: true,
-      title: 'Group Subscriptions',
-      titleKey: 'userGroups.subscriptions.title',
-      descriptionKey: 'userGroups.subscriptions.description'
+      title: 'Team members',
+      titleKey: 'userGroups.detail.tabs.members',
+      descriptionKey: 'userGroups.groups.description'
     }
   },
   {
-    path: '/user-group-usage',
+    path: '/user-groups/:id/plan-quota',
+    name: 'UserGroupPlanQuota',
+    component: () => import('@/views/user-groups/UserGroupQuotasView.vue'),
+    meta: {
+      requiresAuth: true,
+      requiresAdmin: false,
+      requiresUserGroupAccess: true,
+      title: 'Team plan and quota',
+      titleKey: 'userGroups.detail.tabs.planQuota',
+      descriptionKey: 'userGroups.quotas.description'
+    }
+  },
+  {
+    path: '/user-groups/:id/usage',
     name: 'UserGroupUsage',
     component: () => import('@/views/user-groups/UserGroupUsageView.vue'),
     meta: {
@@ -339,6 +352,27 @@ const routes: RouteRecordRaw[] = [
       titleKey: 'userGroups.usage.title',
       descriptionKey: 'userGroups.usage.description'
     }
+  },
+  {
+    path: '/user-group-subscriptions',
+    redirect: to => {
+      const id = typeof to.query.group_id === 'string' ? to.query.group_id : ''
+      return /^\d+$/.test(id) ? { name: 'UserGroupPlanQuota', params: { id } } : { name: 'UserGroups' }
+    },
+  },
+  {
+    path: '/user-group-usage',
+    redirect: to => {
+      const id = typeof to.query.group_id === 'string' ? to.query.group_id : ''
+      return /^\d+$/.test(id) ? { name: 'UserGroupUsage', params: { id } } : { name: 'UserGroups' }
+    },
+  },
+  {
+    path: '/user-group-quotas',
+    redirect: to => {
+      const id = typeof to.query.group_id === 'string' ? to.query.group_id : ''
+      return /^\d+$/.test(id) ? { name: 'UserGroupPlanQuota', params: { id } } : { name: 'UserGroups' }
+    },
   },
   {
     path: '/purchase',

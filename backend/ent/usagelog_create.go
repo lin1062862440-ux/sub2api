@@ -169,6 +169,20 @@ func (_c *UsageLogCreate) SetNillableSubscriptionID(v *int64) *UsageLogCreate {
 	return _c
 }
 
+// SetBusinessUserGroupID sets the "business_user_group_id" field.
+func (_c *UsageLogCreate) SetBusinessUserGroupID(v int64) *UsageLogCreate {
+	_c.mutation.SetBusinessUserGroupID(v)
+	return _c
+}
+
+// SetNillableBusinessUserGroupID sets the "business_user_group_id" field if the given value is not nil.
+func (_c *UsageLogCreate) SetNillableBusinessUserGroupID(v *int64) *UsageLogCreate {
+	if v != nil {
+		_c.SetBusinessUserGroupID(*v)
+	}
+	return _c
+}
+
 // SetInputTokens sets the "input_tokens" field.
 func (_c *UsageLogCreate) SetInputTokens(v int) *UsageLogCreate {
 	_c.mutation.SetInputTokens(v)
@@ -966,6 +980,10 @@ func (_c *UsageLogCreate) createSpec() (*UsageLog, *sqlgraph.CreateSpec) {
 		_spec.SetField(usagelog.FieldBillingMode, field.TypeString, value)
 		_node.BillingMode = &value
 	}
+	if value, ok := _c.mutation.BusinessUserGroupID(); ok {
+		_spec.SetField(usagelog.FieldBusinessUserGroupID, field.TypeInt64, value)
+		_node.BusinessUserGroupID = &value
+	}
 	if value, ok := _c.mutation.InputTokens(); ok {
 		_spec.SetField(usagelog.FieldInputTokens, field.TypeInt, value)
 		_node.InputTokens = value
@@ -1438,6 +1456,30 @@ func (u *UsageLogUpsert) UpdateSubscriptionID() *UsageLogUpsert {
 // ClearSubscriptionID clears the value of the "subscription_id" field.
 func (u *UsageLogUpsert) ClearSubscriptionID() *UsageLogUpsert {
 	u.SetNull(usagelog.FieldSubscriptionID)
+	return u
+}
+
+// SetBusinessUserGroupID sets the "business_user_group_id" field.
+func (u *UsageLogUpsert) SetBusinessUserGroupID(v int64) *UsageLogUpsert {
+	u.Set(usagelog.FieldBusinessUserGroupID, v)
+	return u
+}
+
+// UpdateBusinessUserGroupID sets the "business_user_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsert) UpdateBusinessUserGroupID() *UsageLogUpsert {
+	u.SetExcluded(usagelog.FieldBusinessUserGroupID)
+	return u
+}
+
+// AddBusinessUserGroupID adds v to the "business_user_group_id" field.
+func (u *UsageLogUpsert) AddBusinessUserGroupID(v int64) *UsageLogUpsert {
+	u.Add(usagelog.FieldBusinessUserGroupID, v)
+	return u
+}
+
+// ClearBusinessUserGroupID clears the value of the "business_user_group_id" field.
+func (u *UsageLogUpsert) ClearBusinessUserGroupID() *UsageLogUpsert {
+	u.SetNull(usagelog.FieldBusinessUserGroupID)
 	return u
 }
 
@@ -2292,6 +2334,34 @@ func (u *UsageLogUpsertOne) UpdateSubscriptionID() *UsageLogUpsertOne {
 func (u *UsageLogUpsertOne) ClearSubscriptionID() *UsageLogUpsertOne {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearSubscriptionID()
+	})
+}
+
+// SetBusinessUserGroupID sets the "business_user_group_id" field.
+func (u *UsageLogUpsertOne) SetBusinessUserGroupID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBusinessUserGroupID(v)
+	})
+}
+
+// AddBusinessUserGroupID adds v to the "business_user_group_id" field.
+func (u *UsageLogUpsertOne) AddBusinessUserGroupID(v int64) *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddBusinessUserGroupID(v)
+	})
+}
+
+// UpdateBusinessUserGroupID sets the "business_user_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertOne) UpdateBusinessUserGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBusinessUserGroupID()
+	})
+}
+
+// ClearBusinessUserGroupID clears the value of the "business_user_group_id" field.
+func (u *UsageLogUpsertOne) ClearBusinessUserGroupID() *UsageLogUpsertOne {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBusinessUserGroupID()
 	})
 }
 
@@ -3406,6 +3476,34 @@ func (u *UsageLogUpsertBulk) UpdateSubscriptionID() *UsageLogUpsertBulk {
 func (u *UsageLogUpsertBulk) ClearSubscriptionID() *UsageLogUpsertBulk {
 	return u.Update(func(s *UsageLogUpsert) {
 		s.ClearSubscriptionID()
+	})
+}
+
+// SetBusinessUserGroupID sets the "business_user_group_id" field.
+func (u *UsageLogUpsertBulk) SetBusinessUserGroupID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.SetBusinessUserGroupID(v)
+	})
+}
+
+// AddBusinessUserGroupID adds v to the "business_user_group_id" field.
+func (u *UsageLogUpsertBulk) AddBusinessUserGroupID(v int64) *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.AddBusinessUserGroupID(v)
+	})
+}
+
+// UpdateBusinessUserGroupID sets the "business_user_group_id" field to the value that was provided on create.
+func (u *UsageLogUpsertBulk) UpdateBusinessUserGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.UpdateBusinessUserGroupID()
+	})
+}
+
+// ClearBusinessUserGroupID clears the value of the "business_user_group_id" field.
+func (u *UsageLogUpsertBulk) ClearBusinessUserGroupID() *UsageLogUpsertBulk {
+	return u.Update(func(s *UsageLogUpsert) {
+		s.ClearBusinessUserGroupID()
 	})
 }
 

@@ -78,7 +78,7 @@ func (Group) Fields() []ent.Field {
 			MaxLen(50).
 			Default(domain.PlatformAnthropic),
 		field.String("subscription_type").
-			MaxLen(20).
+			MaxLen(24).
 			Default(domain.SubscriptionTypeStandard),
 		field.Float("daily_limit_usd").
 			Optional().

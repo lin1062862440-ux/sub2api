@@ -1,7 +1,7 @@
 <template>
   <BaseDialog
     :show="show"
-    :title="mode === 'members' ? t('userGroups.groups.manageMembers') : t('userGroups.groups.manageViewers')"
+    :title="dialogTitle"
     width="wide"
     @close="emit('close')"
   >
@@ -9,7 +9,7 @@
       <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 dark:border-dark-700 dark:bg-dark-900/60">
         <p class="text-xs font-medium uppercase text-gray-500 dark:text-gray-400">{{ groupName }}</p>
         <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
-          {{ mode === 'members' ? t('userGroups.groups.members') : t('userGroups.groups.viewers') }} · {{ selected.size }}
+          {{ peopleLabel }} · {{ selected.size }}
         </p>
       </div>
 
@@ -65,7 +65,7 @@
 
     <template #footer>
       <div class="flex items-center justify-between gap-3">
-        <span class="text-sm text-gray-500 dark:text-gray-400">{{ selected.size }} {{ t('common.selected') }}</span>
+        <span class="text-sm text-gray-500 dark:text-gray-400">{{ t('userGroups.common.selectedCount', { count: selected.size }) }}</span>
         <div class="flex gap-3">
           <button type="button" class="btn btn-secondary" :disabled="saving" @click="emit('close')">{{ t('common.cancel') }}</button>
           <button type="button" class="btn btn-primary" data-test="save-people" :disabled="saving" @click="save">
@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -88,7 +88,7 @@ import type { AdminUser } from '@/types'
 
 const props = defineProps<{
   show: boolean
-  mode: 'members' | 'viewers'
+  mode: 'members' | 'viewers' | 'quota-managers'
   groupName: string
   selectedIds: number[]
   saving?: boolean
@@ -105,6 +105,13 @@ const selected = ref(new Set<number>())
 const search = ref('')
 const loading = ref(false)
 const loadError = ref('')
+
+const dialogTitle = computed(() => {
+  if (props.mode === 'members') return t('userGroups.groups.manageMembers')
+  if (props.mode === 'quota-managers') return t('userGroups.quotas.manageManagers')
+  return t('userGroups.groups.manageViewers')
+})
+const peopleLabel = computed(() => props.mode === 'quota-managers' ? t('userGroups.quotas.managers') : props.mode === 'members' ? t('userGroups.groups.members') : t('userGroups.groups.viewers'))
 
 watch(
   () => props.show,
@@ -126,7 +133,7 @@ async function loadUsers() {
     })
     users.value = result.items
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : t('common.loadFailed')
+    loadError.value = error instanceof Error ? error.message : t('userGroups.common.loadFailed')
   } finally {
     loading.value = false
   }

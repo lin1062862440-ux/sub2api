@@ -22,10 +22,10 @@ describe('user group API', () => {
   })
 
   it('loads capability and accessible groups', async () => {
-    get.mockResolvedValueOnce({ data: { can_access: true, can_manage: false, group_count: 2 } })
+    get.mockResolvedValueOnce({ data: { can_access: true, can_manage: false, can_manage_quota: true, group_count: 2 } })
     get.mockResolvedValueOnce({ data: [{ id: 3, name: 'Team A' }] })
 
-    await expect(userGroupAPI.getCapabilities()).resolves.toEqual({ can_access: true, can_manage: false, group_count: 2 })
+    await expect(userGroupAPI.getCapabilities()).resolves.toEqual({ can_access: true, can_manage: false, can_manage_quota: true, group_count: 2 })
     await expect(userGroupAPI.list()).resolves.toEqual([{ id: 3, name: 'Team A' }])
     expect(get).toHaveBeenNthCalledWith(1, '/user-groups/capabilities')
     expect(get).toHaveBeenNthCalledWith(2, '/user-groups')
@@ -62,6 +62,25 @@ describe('user group API', () => {
     expect(get).toHaveBeenCalledWith('/user-groups/7/usage/42/prompts')
   })
 
+  it('uses user group quota management endpoints', async () => {
+    get.mockResolvedValueOnce({ data: { group_id: 5, policy: { enabled: true, weekly_limit_usd: 800 } } })
+    put.mockResolvedValue({ data: { message: 'ok' } })
+
+    await expect(userGroupAPI.getQuotaOverview(5)).resolves.toEqual({ group_id: 5, policy: { enabled: true, weekly_limit_usd: 800 } })
+    await userGroupAPI.setQuotaPolicy(5, { enabled: true, weekly_limit_usd: 800 })
+    await userGroupAPI.replaceQuotaManagers(5, [7])
+    await userGroupAPI.updateMemberQuotas(5, [{ user_id: 9, weekly_limit_usd: 300 }])
+    await userGroupAPI.replaceTeamSubscriptionGroups(5, [31, 32])
+    await userGroupAPI.resetQuotaUsage(5)
+
+    expect(get).toHaveBeenCalledWith('/user-groups/5/quota')
+    expect(put).toHaveBeenNthCalledWith(1, '/user-groups/5/quota-policy', { enabled: true, weekly_limit_usd: 800 })
+    expect(put).toHaveBeenNthCalledWith(2, '/user-groups/5/quota-managers', { user_ids: [7] })
+    expect(put).toHaveBeenNthCalledWith(3, '/user-groups/5/member-quotas', { members: [{ user_id: 9, weekly_limit_usd: 300 }] })
+    expect(put).toHaveBeenNthCalledWith(4, '/user-groups/5/team-subscription-groups', { billing_group_ids: [31, 32] })
+    expect(post).toHaveBeenCalledWith('/user-groups/5/quota-reset')
+  })
+
   it('serializes subscription and usage filters', async () => {
     get.mockResolvedValue({ data: { items: [] } })
 
@@ -71,7 +90,6 @@ describe('user group API', () => {
       end_date: '2026-08-02',
       user_id: 7,
       model: 'gpt-5',
-      billing_type: 1,
       page: 1,
       page_size: 20,
     })
@@ -80,7 +98,7 @@ describe('user group API', () => {
       params: { status: 'active', page: 2, page_size: 50 },
     })
     expect(get).toHaveBeenNthCalledWith(2, '/user-groups/5/usage', {
-      params: expect.objectContaining({ user_id: 7, model: 'gpt-5', billing_type: 1 }),
+      params: expect.objectContaining({ user_id: 7, model: 'gpt-5' }),
     })
   })
 

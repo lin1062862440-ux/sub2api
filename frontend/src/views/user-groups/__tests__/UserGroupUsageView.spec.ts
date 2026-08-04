@@ -8,13 +8,11 @@ const mocks = vi.hoisted(() => ({
   getMembers: vi.fn(),
   getUsage: vi.fn(),
   getUsagePrompts: vi.fn(),
-  route: { name: 'UserGroupUsage', query: { group_id: '7' } as Record<string, string> },
-  replace: vi.fn(),
+  route: { name: 'UserGroupUsage', params: { id: '7' } as Record<string, string> },
 }))
 
 vi.mock('vue-router', () => ({
   useRoute: () => mocks.route,
-  useRouter: () => ({ replace: mocks.replace }),
 }))
 
 vi.mock('vue-i18n', () => ({
@@ -35,8 +33,8 @@ const groups = [
   { id: 8, name: '运营组', description: '', status: 'active', member_count: 1, viewer_count: 0, can_view_prompt: false, created_at: '', updated_at: '' },
 ]
 const members = [
-  { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', balance: 30, joined_at: '' },
-  { user_id: 12, email: 'bob@example.com', username: 'Bob', status: 'active', balance: 12, joined_at: '' },
+  { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', joined_at: '' },
+  { user_id: 12, email: 'bob@example.com', username: 'Bob', status: 'active', joined_at: '' },
 ]
 const usageResult = {
   summary: {
@@ -46,14 +44,12 @@ const usageResult = {
     total_cache_tokens: 250,
     total_tokens: 1750,
     total_actual_cost: 13.25,
-    balance_consumption: 3.25,
-    subscription_consumption: 10,
   },
   by_user: [
-    { user_id: 11, email: 'alice@example.com', username: 'Alice', total_requests: 8, total_tokens: 1750, total_actual_cost: 13.25, balance_consumption: 3.25, subscription_consumption: 10 },
+    { user_id: 11, email: 'alice@example.com', username: 'Alice', total_requests: 8, total_tokens: 1750, total_actual_cost: 13.25 },
   ],
   items: [
-    { id: 1, user_id: 11, email: 'alice@example.com', username: 'Alice', request_id: 'req-safe-1', model: 'claude-sonnet-4', input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 100, cache_read_tokens: 150, total_tokens: 1750, actual_cost: 13.25, billing_type: 1, prompt_available: true, created_at: '2026-08-02T08:00:00Z' },
+    { id: 1, user_id: 11, email: 'alice@example.com', username: 'Alice', request_id: 'req-safe-1', model: 'claude-sonnet-4', input_tokens: 1000, output_tokens: 500, cache_creation_tokens: 100, cache_read_tokens: 150, total_tokens: 1750, actual_cost: 13.25, prompt_available: true, created_at: '2026-08-02T08:00:00Z' },
   ],
   total: 1,
   page: 1,
@@ -66,6 +62,7 @@ function mountView() {
     global: {
       stubs: {
         AppLayout: { template: '<main><slot /></main>' },
+        UserGroupDetailShell: { template: '<section><slot name="actions" /><slot /></section>' },
         Icon: { template: '<i />' },
         Teleport: true,
         RouterLink: {
@@ -87,7 +84,7 @@ describe('UserGroupUsageView', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date(2026, 7, 2, 12, 0, 0))
     vi.clearAllMocks()
-    mocks.route.query = { group_id: '7' }
+    mocks.route.params = { id: '7' }
     mocks.list.mockResolvedValue(groups)
     mocks.getMembers.mockResolvedValue(members)
     mocks.getUsage.mockResolvedValue(usageResult)
@@ -117,15 +114,15 @@ describe('UserGroupUsageView', () => {
       page: 1,
       page_size: 20,
     }))
-    expect(wrapper.get('[data-test="balance-consumption"]').text()).toContain('$3.25')
-    expect(wrapper.get('[data-test="subscription-consumption"]').text()).toContain('$10.00')
+    expect(wrapper.get('[data-test="input-tokens"]').text()).toContain('1,000')
+    expect(wrapper.get('[data-test="output-tokens"]').text()).toContain('500')
     expect(wrapper.text()).toContain('Alice')
     expect(wrapper.get('[data-test="usage-member-table"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="usage-detail-table"]').exists()).toBe(false)
     expect(wrapper.get('[data-test="usage-summary-band"]').classes()).toContain('xl:grid-cols-5')
   })
 
-  it('applies member, model, and billing filters and paginates details', async () => {
+  it('applies member and model filters and paginates details', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -135,11 +132,11 @@ describe('UserGroupUsageView', () => {
 
     await wrapper.get('[data-test="member-filter"]').setValue('11')
     await wrapper.get('[data-test="model-filter"]').setValue('gpt-5')
-    await wrapper.get('[data-test="billing-filter"]').setValue('0')
     await wrapper.get('[data-test="apply-usage-filters"]').trigger('click')
     await flushPromises()
 
-    expect(mocks.getUsage).toHaveBeenLastCalledWith(7, expect.objectContaining({ user_id: 11, model: 'gpt-5', billing_type: 0, page: 1 }))
+    expect(mocks.getUsage).toHaveBeenLastCalledWith(7, expect.objectContaining({ user_id: 11, model: 'gpt-5', page: 1 }))
+    expect(mocks.getUsage).not.toHaveBeenLastCalledWith(7, expect.objectContaining({ billing_type: expect.anything() }))
 
     await wrapper.get('[data-test="usage-view-details"]').trigger('click')
     await wrapper.get('[data-test="next-page"]').trigger('click')
@@ -182,16 +179,13 @@ describe('UserGroupUsageView', () => {
     expect(wrapper.find('[data-test="prompt-details-1"]').exists()).toBe(false)
   })
 
-  it('uses the route group and updates the query when the group changes', async () => {
-    mocks.route.query = { group_id: '8' }
+  it('uses the team id from the detail route without rendering a group selector', async () => {
+    mocks.route.params = { id: '8' }
     const wrapper = mountView()
     await flushPromises()
-    expect(mocks.getUsage).toHaveBeenCalledWith(8, expect.any(Object))
 
-    await wrapper.get('[data-test="group-select"]').setValue('7')
-    await flushPromises()
-    expect(mocks.replace).toHaveBeenCalledWith({ query: { group_id: '7' } })
-    expect(mocks.getUsage).toHaveBeenLastCalledWith(7, expect.any(Object))
+    expect(mocks.getUsage).toHaveBeenCalledWith(8, expect.any(Object))
+    expect(wrapper.find('[data-test="group-select"]').exists()).toBe(false)
   })
 
   it('keeps filters visible when the usage result is empty', async () => {
@@ -216,7 +210,7 @@ describe('UserGroupUsageView', () => {
 
     await wrapper.get('[data-test="toggle-usage-filters"]').trigger('click')
     const classes = wrapper.get('[data-test="advanced-usage-filters"]').classes()
-    expect(classes).toContain('lg:grid-cols-3')
+    expect(classes).toContain('sm:grid-cols-2')
     expect(classes.some(className => className.startsWith('sm:grid-cols-'))).toBe(true)
   })
 

@@ -22,6 +22,7 @@ type UserGroupApplicationService interface {
 	ReplaceMembers(ctx context.Context, actor service.UserGroupActor, groupID int64, userIDs []int64) error
 	ListViewers(ctx context.Context, actor service.UserGroupActor, groupID int64) ([]service.UserGroupViewer, error)
 	ReplaceViewers(ctx context.Context, actor service.UserGroupActor, groupID int64, userIDs []int64) error
+	ReplaceTeamSubscriptionGroups(ctx context.Context, actor service.UserGroupActor, groupID int64, billingGroupIDs []int64) error
 	ListSubscriptions(ctx context.Context, actor service.UserGroupActor, groupID int64, query service.UserGroupSubscriptionQuery) (*service.UserGroupSubscriptionResult, error)
 	GetUsage(ctx context.Context, actor service.UserGroupActor, groupID int64, query service.UserGroupUsageQuery) (*service.UserGroupUsageResult, error)
 	SetPromptCapture(ctx context.Context, actor service.UserGroupActor, groupID int64, enabled bool) error
@@ -30,16 +31,29 @@ type UserGroupApplicationService interface {
 	GetUsagePrompts(ctx context.Context, actor service.UserGroupActor, groupID, usageLogID int64) ([]service.UserPromptCaptureDetail, error)
 }
 
+type UserGroupQuotaApplicationService interface {
+	GetQuotaOverview(ctx context.Context, actor service.UserGroupActor, groupID int64) (*service.UserGroupQuotaOverview, error)
+	SetQuotaPolicy(ctx context.Context, actor service.UserGroupActor, groupID int64, mutation service.UserGroupQuotaPolicyMutation) error
+	ReplaceQuotaManagers(ctx context.Context, actor service.UserGroupActor, groupID int64, userIDs []int64) error
+	UpdateMemberQuotas(ctx context.Context, actor service.UserGroupActor, groupID int64, mutations []service.UserGroupMemberQuotaMutation) error
+	ResetQuotaUsage(ctx context.Context, actor service.UserGroupActor, groupID int64) error
+}
+
 type UserGroupHandler struct {
-	service UserGroupApplicationService
+	service      UserGroupApplicationService
+	quotaService UserGroupQuotaApplicationService
 }
 
 func NewUserGroupHandler(userGroupService *service.UserGroupService) *UserGroupHandler {
-	return &UserGroupHandler{service: userGroupService}
+	return &UserGroupHandler{service: userGroupService, quotaService: userGroupService}
 }
 
 func newUserGroupHandlerWithService(userGroupService UserGroupApplicationService) *UserGroupHandler {
 	return &UserGroupHandler{service: userGroupService}
+}
+
+func newUserGroupHandlerWithQuotaServices(userGroupService UserGroupApplicationService, quotaService UserGroupQuotaApplicationService) *UserGroupHandler {
+	return &UserGroupHandler{service: userGroupService, quotaService: quotaService}
 }
 
 func (h *UserGroupHandler) Capabilities(c *gin.Context) {
@@ -143,6 +157,24 @@ func (h *UserGroupHandler) ReplaceViewers(c *gin.Context) {
 	h.replacePeople(c, h.service.ReplaceViewers)
 }
 
+func (h *UserGroupHandler) ReplaceTeamSubscriptionGroups(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	var payload struct {
+		BillingGroupIDs []int64 `json:"billing_group_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		response.BadRequest(c, "billing_group_ids is required")
+		return
+	}
+	if err := h.service.ReplaceTeamSubscriptionGroups(c.Request.Context(), actor, groupID, payload.BillingGroupIDs); response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, gin.H{"message": "User group team subscriptions updated"})
+}
+
 func (h *UserGroupHandler) replacePeople(c *gin.Context, replace func(context.Context, service.UserGroupActor, int64, []int64) error) {
 	actor, groupID, ok := userGroupActorAndID(c)
 	if !ok {
@@ -191,6 +223,81 @@ func (h *UserGroupHandler) GetUsage(c *gin.Context) {
 		return
 	}
 	response.Success(c, result)
+}
+
+func (h *UserGroupHandler) GetQuotaOverview(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	overview, err := h.quotaService.GetQuotaOverview(c.Request.Context(), actor, groupID)
+	if response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, overview)
+}
+
+func (h *UserGroupHandler) SetQuotaPolicy(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	var mutation service.UserGroupQuotaPolicyMutation
+	if err := c.ShouldBindJSON(&mutation); err != nil {
+		response.BadRequest(c, "Invalid user group quota policy")
+		return
+	}
+	if err := h.quotaService.SetQuotaPolicy(c.Request.Context(), actor, groupID, mutation); response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, gin.H{"message": "User group quota policy updated"})
+}
+
+func (h *UserGroupHandler) ReplaceQuotaManagers(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	var payload struct {
+		UserIDs []int64 `json:"user_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		response.BadRequest(c, "user_ids is required")
+		return
+	}
+	if err := h.quotaService.ReplaceQuotaManagers(c.Request.Context(), actor, groupID, payload.UserIDs); response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, gin.H{"message": "User group quota managers updated"})
+}
+
+func (h *UserGroupHandler) UpdateMemberQuotas(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	var payload struct {
+		Members []service.UserGroupMemberQuotaMutation `json:"members" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&payload); err != nil {
+		response.BadRequest(c, "members is required")
+		return
+	}
+	if err := h.quotaService.UpdateMemberQuotas(c.Request.Context(), actor, groupID, payload.Members); response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, gin.H{"message": "User group member quotas updated"})
+}
+
+func (h *UserGroupHandler) ResetQuotaUsage(c *gin.Context) {
+	actor, groupID, ok := userGroupActorAndID(c)
+	if !ok {
+		return
+	}
+	if err := h.quotaService.ResetQuotaUsage(c.Request.Context(), actor, groupID); response.ErrorFrom(c, err) {
+		return
+	}
+	response.Success(c, gin.H{"message": "User group quota usage reset"})
 }
 
 func (h *UserGroupHandler) SetPromptCapture(c *gin.Context) {

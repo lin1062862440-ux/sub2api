@@ -10,7 +10,7 @@ describe('AppSidebar user group menus', () => {
     expect(source.match(/path: '\/user-groups'/g)).toHaveLength(1)
     expect(source).not.toContain("{ path: '/user-group-subscriptions'")
     expect(source).not.toContain("{ path: '/user-group-usage'")
-    expect(source).toContain('userGroupWorkspacePaths')
+    expect(source).toContain("route.path.startsWith(path + '/')")
   })
 
   it('gates regular-user menu items by backend capability', () => {

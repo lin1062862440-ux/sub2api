@@ -160,15 +160,19 @@
               <span
                 :class="[
                   'inline-block rounded-full px-2 py-0.5 text-xs font-medium',
-                  row.subscription_type === 'subscription'
-                    ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
-                    : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+                  row.subscription_type === 'team_subscription'
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300'
+                    : row.subscription_type === 'subscription'
+                      ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
                 ]"
               >
                 {{
-                  row.subscription_type === "subscription"
-                    ? t("admin.groups.subscription.subscription")
-                    : t("admin.groups.subscription.standard")
+                  row.subscription_type === "team_subscription"
+                    ? t("admin.groups.subscription.teamSubscription")
+                    : row.subscription_type === "subscription"
+                      ? t("admin.groups.subscription.subscription")
+                      : t("admin.groups.subscription.standard")
                 }}
               </span>
               <!-- Subscription Limits - compact single line -->
@@ -628,7 +632,7 @@
           v-model:mappings="createForm.reasoning_effort_mappings"
         />
         <div
-          v-if="createForm.subscription_type !== 'subscription'"
+          v-if="createForm.subscription_type === 'standard'"
           data-tour="group-form-exclusive"
         >
           <div class="mb-1.5 flex items-center gap-1">
@@ -710,7 +714,7 @@
             }}</label>
             <Select
               v-model="createForm.subscription_type"
-              :options="subscriptionTypeOptions"
+              :options="createSubscriptionTypeOptions"
             />
             <p class="input-hint">
               {{ t("admin.groups.subscription.typeHint") }}
@@ -1806,7 +1810,7 @@
         <div
           v-if="
             ['anthropic', 'antigravity'].includes(createForm.platform) &&
-            createForm.subscription_type !== 'subscription'
+            createForm.subscription_type === 'standard'
           "
           class="border-t pt-4"
         >
@@ -2230,7 +2234,7 @@
           v-model:max-effort="editForm.max_reasoning_effort"
           v-model:mappings="editForm.reasoning_effort_mappings"
         />
-        <div v-if="editForm.subscription_type !== 'subscription'">
+        <div v-if="editForm.subscription_type === 'standard'">
           <div class="mb-1.5 flex items-center gap-1">
             <label class="text-sm font-medium text-gray-700 dark:text-gray-300">
               {{ t("admin.groups.form.exclusive") }}
@@ -2314,7 +2318,7 @@
             }}</label>
             <Select
               v-model="editForm.subscription_type"
-              :options="subscriptionTypeOptions"
+              :options="editSubscriptionTypeOptions"
               :disabled="true"
             />
             <p class="input-hint">
@@ -3407,7 +3411,7 @@
         <div
           v-if="
             ['anthropic', 'antigravity'].includes(editForm.platform) &&
-            editForm.subscription_type !== 'subscription'
+            editForm.subscription_type === 'standard'
           "
           class="border-t pt-4"
         >
@@ -4481,10 +4485,24 @@ const editStatusOptions = computed(() => [
   { value: "inactive", label: t("admin.accounts.status.inactive") },
 ]);
 
-const subscriptionTypeOptions = computed(() => [
+const editSubscriptionTypeOptions = computed(() => [
   { value: "standard", label: t("admin.groups.subscription.standard") },
   { value: "subscription", label: t("admin.groups.subscription.subscription") },
+  { value: "team_subscription", label: t("admin.groups.subscription.teamSubscription") },
 ]);
+
+const createSubscriptionTypeOptions = computed(() => {
+  const options = editSubscriptionTypeOptions.value.filter(
+    (option) => option.value !== "team_subscription",
+  );
+  if (["openai", "anthropic"].includes(createForm.platform)) {
+    options.push({
+      value: "team_subscription",
+      label: t("admin.groups.subscription.teamSubscription"),
+    });
+  }
+  return options;
+});
 
 // 降级分组选项（创建时）- 仅包含 anthropic 平台且未启用 claude_code_only 的分组
 const fallbackGroupOptions = computed(() => {
@@ -4531,7 +4549,7 @@ const invalidRequestFallbackOptions = computed(() => {
     (g) =>
       g.platform === "anthropic" &&
       g.status === "active" &&
-      g.subscription_type !== "subscription" &&
+	  g.subscription_type === "standard" &&
       g.fallback_group_id_on_invalid_request === null,
   );
   eligibleGroups.forEach((g) => {
@@ -4550,7 +4568,7 @@ const invalidRequestFallbackOptionsForEdit = computed(() => {
     (g) =>
       g.platform === "anthropic" &&
       g.status === "active" &&
-      g.subscription_type !== "subscription" &&
+	  g.subscription_type === "standard" &&
       g.fallback_group_id_on_invalid_request === null &&
       g.id !== currentId,
   );
@@ -5301,7 +5319,7 @@ const deleteConfirmMessage = computed(() => {
   if (!deletingGroup.value) {
     return "";
   }
-  if (deletingGroup.value.subscription_type === "subscription") {
+	if (deletingGroup.value.subscription_type !== "standard") {
     return t("admin.groups.deleteConfirmSubscription", {
       name: deletingGroup.value.name,
     });
@@ -6237,14 +6255,15 @@ const confirmDelete = async () => {
   }
 };
 
-// 监听 subscription_type 变化，订阅模式时 is_exclusive 默认为 true；标准模式清空高峰配置
+// 订阅类分组始终专属；只有个人订阅分组使用内置高峰配置。
 watch(
   () => createForm.subscription_type,
   (newVal) => {
-    if (newVal === "subscription") {
+    if (newVal !== "standard") {
       createForm.is_exclusive = true;
       createForm.fallback_group_id_on_invalid_request = null;
-    } else {
+    }
+    if (newVal !== "subscription") {
       createForm.peak_rate_enabled = false;
       createForm.peak_start = "";
       createForm.peak_end = "";
@@ -6269,6 +6288,9 @@ watch(
 watch(
   () => createForm.platform,
   (newVal) => {
+    if (createForm.subscription_type === "team_subscription" && !["openai", "anthropic"].includes(newVal)) {
+      createForm.subscription_type = "standard";
+    }
     if (!["anthropic", "antigravity"].includes(newVal)) {
       createForm.fallback_group_id_on_invalid_request = null;
     }

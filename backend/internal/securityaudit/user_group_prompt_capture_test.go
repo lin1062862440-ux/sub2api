@@ -86,7 +86,7 @@ func TestUserGroupPromptCaptureDispatchesEligibleRequestAsynchronously(t *testin
 	require.NotContains(t, write.RedactedPrompt, "old")
 	require.NotContains(t, write.RedactedPrompt, "alice@example.com")
 	require.Equal(t, now, write.CapturedAt)
-	require.Equal(t, now.Add(service.UserGroupPromptRetention), write.ExpiresAt)
+	require.Equal(t, now.Add(service.UserGroupPromptStagingRetention), write.ExpiresAt)
 }
 
 func TestUserGroupPromptCaptureSkipsIneligibleAndDropsFullQueue(t *testing.T) {

@@ -152,7 +152,7 @@ async function loadUsers() {
     const result = await usersAPI.list(1, 100, { search: search.value.trim() || undefined })
     users.value = result.items
   } catch (error) {
-    loadError.value = error instanceof Error ? error.message : t('common.loadFailed')
+    loadError.value = error instanceof Error ? error.message : t('userGroups.common.loadFailed')
   } finally {
     loading.value = false
   }

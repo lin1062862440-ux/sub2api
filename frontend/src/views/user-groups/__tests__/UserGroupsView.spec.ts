@@ -124,7 +124,7 @@ describe('UserGroupsView', () => {
     mocks.replacePromptViewers.mockResolvedValue(undefined)
   })
 
-  it('renders granted groups as a full-width read-only directory with report links', async () => {
+  it('renders granted teams as a directory with one detail entry point', async () => {
     const wrapper = mountView()
     await flushPromises()
 
@@ -132,28 +132,11 @@ describe('UserGroupsView', () => {
     expect(wrapper.get('[data-test="group-directory"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="group-roster-panel"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('研发一组')
-    expect(wrapper.get('[data-test="open-subscriptions-7"]').exists()).toBe(true)
-    expect(wrapper.get('[data-test="open-usage-7"]').exists()).toBe(true)
+    expect(wrapper.get('[data-test="open-group-7"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="create-group"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="edit-group"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="manage-members-7"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="archive-group"]').exists()).toBe(false)
     expect(mocks.getMembers).not.toHaveBeenCalled()
-    expect(mocks.getViewers).not.toHaveBeenCalled()
-  })
-
-  it('loads group people only when an administrator opens a management action', async () => {
-    mocks.canManage = true
-    const wrapper = mountView()
-    await flushPromises()
-
-    expect(mocks.getMembers).not.toHaveBeenCalled()
-    expect(mocks.getViewers).not.toHaveBeenCalled()
-
-    await wrapper.get('[data-test="manage-members-7"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.getMembers).toHaveBeenCalledWith(7)
     expect(mocks.getViewers).not.toHaveBeenCalled()
   })
 
@@ -179,32 +162,6 @@ describe('UserGroupsView', () => {
     await wrapper.get('[data-test="confirm-archive"]').trigger('click')
     await flushPromises()
     expect(mocks.archive).toHaveBeenCalledWith(7)
-  })
-
-  it('shows prompt security settings only to administrators and saves independent viewers', async () => {
-    const ordinary = mountView()
-    await flushPromises()
-    expect(ordinary.find('[data-test="manage-prompt-7"]').exists()).toBe(false)
-    ordinary.unmount()
-
-    mocks.canManage = true
-    mocks.getPromptViewers.mockResolvedValue([{ ...member, granted_at: member.joined_at }])
-    const wrapper = mountView()
-    await flushPromises()
-
-    await wrapper.get('[data-test="manage-prompt-7"]').trigger('click')
-    await flushPromises()
-    expect(mocks.getPromptViewers).toHaveBeenCalledWith(7)
-    expect(wrapper.get('[data-test="prompt-capture-toggle"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain('userGroups.promptSettings.retention')
-
-    await wrapper.get('[data-test="prompt-capture-toggle"]').trigger('click')
-    await wrapper.get('[data-test="save-prompt-settings"]').trigger('click')
-    await flushPromises()
-
-    expect(mocks.setPromptCapture).toHaveBeenCalledWith(7, true)
-    expect(mocks.replacePromptViewers).toHaveBeenCalledWith(7, [11])
-    expect(mocks.replaceViewers).not.toHaveBeenCalled()
   })
 
   it('shows a focused error and retry action when groups cannot load', async () => {

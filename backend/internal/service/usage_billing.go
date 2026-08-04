@@ -22,6 +22,8 @@ type UsageBillingCommand struct {
 	UserID              int64
 	AccountID           int64
 	SubscriptionID      *int64
+	BusinessUserGroupID *int64
+	BillingGroupID      int64
 	AccountType         string
 	Model               string
 	ServiceTier         string
@@ -39,6 +41,7 @@ type UsageBillingCommand struct {
 	APIKeyQuotaCost     float64
 	APIKeyRateLimitCost float64
 	AccountQuotaCost    float64
+	UserGroupQuotaCost  float64
 }
 
 func (c *UsageBillingCommand) Normalize() {
@@ -78,6 +81,9 @@ func buildUsageBillingFingerprint(c *UsageBillingCommand) string {
 		c.APIKeyRateLimitCost,
 		c.AccountQuotaCost,
 	)
+	raw += fmt.Sprintf("|%0.10f", c.UserGroupQuotaCost)
+	raw += fmt.Sprintf("|%d", valueOrZero(c.BusinessUserGroupID))
+	raw += fmt.Sprintf("|%d", c.BillingGroupID)
 	if payloadHash := strings.TrimSpace(c.RequestPayloadHash); payloadHash != "" {
 		raw += "|" + payloadHash
 	}

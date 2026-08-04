@@ -21,6 +21,9 @@ type userGroupRepositoryStub struct {
 	replacedViewers   []int64
 	created           *UserGroup
 	getByIDErr        error
+	teamGroups        []UserGroupTeamSubscriptionGroup
+	availableTeams    []UserGroupTeamSubscriptionGroup
+	replacedTeamIDs   []int64
 }
 
 type userGroupPromptRepositoryStub struct {
@@ -122,6 +125,19 @@ func (s *userGroupRepositoryStub) ReplaceViewers(_ context.Context, _ int64, use
 	return nil
 }
 
+func (s *userGroupRepositoryStub) ListTeamSubscriptionGroups(context.Context, int64) ([]UserGroupTeamSubscriptionGroup, error) {
+	return s.teamGroups, nil
+}
+
+func (s *userGroupRepositoryStub) ListAvailableTeamSubscriptionGroups(context.Context) ([]UserGroupTeamSubscriptionGroup, error) {
+	return s.availableTeams, nil
+}
+
+func (s *userGroupRepositoryStub) ReplaceTeamSubscriptionGroups(_ context.Context, _ int64, billingGroupIDs []int64, _ int64) error {
+	s.replacedTeamIDs = append([]int64(nil), billingGroupIDs...)
+	return nil
+}
+
 func (s *userGroupRepositoryStub) ListSubscriptions(_ context.Context, _ int64, query UserGroupSubscriptionQuery) (*UserGroupSubscriptionResult, error) {
 	s.subscriptionQuery = query
 	return s.subscriptions, nil
@@ -136,7 +152,7 @@ func TestUserGroupServiceCapabilities(t *testing.T) {
 		svc := NewUserGroupService(&userGroupRepositoryStub{})
 		got, err := svc.Capabilities(context.Background(), UserGroupActor{UserID: 1, Role: RoleAdmin})
 		require.NoError(t, err)
-		require.Equal(t, UserGroupCapabilities{CanAccess: true, CanManage: true, GroupCount: 0}, got)
+		require.Equal(t, UserGroupCapabilities{CanAccess: true, CanManage: true, CanManageQuota: true, GroupCount: 0}, got)
 	})
 
 	t.Run("delegated user can access assigned groups read only", func(t *testing.T) {
