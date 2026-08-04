@@ -438,6 +438,7 @@ onBeforeUnmount(() => {
     :product-name="brand.name"
     :can-use-usage-display="appCapabilities.externalUsageDisplay"
     :can-use-updater="appCapabilities.desktopUpdater"
+    :can-manage-launch-at-startup="appCapabilities.launchAtStartup"
     :update-checking="updateChecking"
     :update-installing="updateInstalling"
     :update-progress="updateProgress"

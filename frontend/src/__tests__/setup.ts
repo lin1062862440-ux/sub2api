@@ -4,6 +4,25 @@
  */
 import { config } from '@vue/test-utils'
 import { vi } from 'vitest'
+import { defineComponent, h } from 'vue'
+
+vi.mock('vue-echarts', () => ({
+  default: defineComponent({
+    name: 'VChart',
+    props: {
+      option: { type: Object, required: true }
+    },
+    setup(props, { expose }) {
+      expose({
+        chart: {
+          dispatchAction: vi.fn(),
+          getDataURL: vi.fn(() => 'data:image/png;base64,test')
+        }
+      })
+      return () => h('div', { class: 'vue-echarts-stub' }, JSON.stringify(props.option))
+    }
+  })
+}))
 
 function createMemoryStorage(): Storage {
   const values = new Map<string, string>()

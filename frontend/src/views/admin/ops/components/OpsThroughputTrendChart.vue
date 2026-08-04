@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Chart as ChartJS, CategoryScale, Filler, Legend, LineElement, LinearScale, PointElement, Title, Tooltip } from 'chart.js'
-import { Line } from 'vue-chartjs'
-import type { ChartComponentRef } from 'vue-chartjs'
+import EChart from '@/components/charts/EChart.vue'
 import type { OpsThroughputGroupBreakdownItem, OpsThroughputPlatformBreakdownItem, OpsThroughputTrendPoint } from '@/api/admin/ops'
 import type { ChartState } from '../types'
 import { formatHistoryLabel, sumNumbers } from '../utils/opsFormatters'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { formatNumber } from '@/utils/format'
-
-ChartJS.register(Title, Tooltip, Legend, LineElement, LinearScale, PointElement, CategoryScale, Filler)
+import { useEChartTheme } from '@/composables/useEChartTheme'
+import { gradientAreaSeries } from '@/utils/echarts'
 
 interface Props {
   points: OpsThroughputTrendPoint[]
@@ -30,141 +28,88 @@ const emit = defineEmits<{
   (e: 'openDetails'): void
 }>()
 
-const throughputChartRef = ref<ChartComponentRef | null>(null)
+const theme = useEChartTheme()
+const throughputChartRef = ref<InstanceType<typeof EChart> | null>(null)
 watch(
   () => props.timeRange,
   () => {
-    setTimeout(() => {
-      const chart: any = throughputChartRef.value?.chart
-      if (chart && typeof chart.resetZoom === 'function') {
-        chart.resetZoom()
-      }
-    }, 100)
+    setTimeout(() => throughputChartRef.value?.resetZoom(), 100)
   }
 )
 
-const isDarkMode = computed(() => document.documentElement.classList.contains('dark'))
 const colors = computed(() => ({
   blue: '#3b82f6',
-  blueAlpha: '#3b82f620',
   green: '#10b981',
-  greenAlpha: '#10b98120',
-  grid: isDarkMode.value ? '#374151' : '#f3f4f6',
-  text: isDarkMode.value ? '#9ca3af' : '#6b7280'
 }))
 
 const totalRequests = computed(() => sumNumbers(props.points.map((p) => p.request_count)))
 
-const chartData = computed(() => {
+const chartOption = computed<Record<string, unknown> | null>(() => {
   if (!props.points.length || totalRequests.value <= 0) return null
   return {
-    labels: props.points.map((p) => formatHistoryLabel(p.bucket_start, props.timeRange)),
-    datasets: [
+    animationDuration: 450,
+    grid: { left: 42, right: 42, top: 42, bottom: 34 },
+    legend: {
+      top: 0,
+      right: 0,
+      textStyle: { color: theme.value.text, fontSize: 10 }
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: theme.value.tooltipBackground,
+      borderColor: theme.value.grid,
+      textStyle: { color: theme.value.text },
+      valueFormatter: (value: number) => Number(value).toFixed(1)
+    },
+    dataZoom: [
+      { type: 'inside', xAxisIndex: 0, filterMode: 'none', zoomOnMouseWheel: true, moveOnMouseMove: true },
+      { type: 'slider', show: false, xAxisIndex: 0, start: 0, end: 100 }
+    ],
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: props.points.map((p) => formatHistoryLabel(p.bucket_start, props.timeRange)),
+      axisLabel: { color: theme.value.mutedText, fontSize: 10, hideOverlap: true },
+      axisLine: { lineStyle: { color: theme.value.grid } },
+      splitLine: { show: false }
+    },
+    yAxis: [
       {
-        label: 'QPS',
-        data: props.points.map((p) => p.qps ?? 0),
-        borderColor: colors.value.blue,
-        backgroundColor: colors.value.blueAlpha,
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
-        pointHitRadius: 10
+        type: 'value',
+        position: 'left',
+        axisLabel: { color: theme.value.mutedText, fontSize: 10 },
+        splitLine: { lineStyle: { color: theme.value.grid, type: 'dashed' } }
       },
       {
-        label: t('admin.ops.tpsK'),
-        data: props.points.map((p) => (p.tps ?? 0) / 1000),
-        borderColor: colors.value.green,
-        backgroundColor: colors.value.greenAlpha,
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
-        pointHitRadius: 10,
-        yAxisID: 'y1'
+        type: 'value',
+        position: 'right',
+        axisLabel: { color: colors.value.green, fontSize: 10 },
+        splitLine: { show: false }
       }
+    ],
+    series: [
+      gradientAreaSeries('QPS', props.points.map((p) => p.qps ?? 0), colors.value.blue, { stack: 'qps' }),
+      gradientAreaSeries(t('admin.ops.tpsK'), props.points.map((p) => (p.tps ?? 0) / 1000), colors.value.green, {
+        yAxisIndex: 1,
+        stack: 'tps'
+      })
     ]
   }
 })
 
 const state = computed<ChartState>(() => {
-  if (chartData.value) return 'ready'
+  if (chartOption.value) return 'ready'
   if (props.loading) return 'loading'
   return 'empty'
 })
 
-const options = computed(() => {
-  const c = colors.value
-  return {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: { intersect: false, mode: 'index' as const },
-    plugins: {
-      legend: {
-        position: 'top' as const,
-        align: 'end' as const,
-        labels: { color: c.text, usePointStyle: true, boxWidth: 6, font: { size: 10 } }
-      },
-      tooltip: {
-        backgroundColor: isDarkMode.value ? '#1f2937' : '#ffffff',
-        titleColor: isDarkMode.value ? '#f3f4f6' : '#111827',
-        bodyColor: isDarkMode.value ? '#d1d5db' : '#4b5563',
-        borderColor: c.grid,
-        borderWidth: 1,
-        padding: 10,
-        displayColors: true,
-        callbacks: {
-          label: (context: any) => {
-            let label = context.dataset.label || ''
-            if (label) label += ': '
-            if (context.raw !== null) label += context.parsed.y.toFixed(1)
-            return label
-          }
-        }
-      },
-      // Optional: if chartjs-plugin-zoom is installed, these options will enable zoom/pan.
-      zoom: {
-        pan: { enabled: true, mode: 'x' as const, modifierKey: 'ctrl' as const },
-        zoom: { wheel: { enabled: true }, pinch: { enabled: true }, mode: 'x' as const }
-      }
-    },
-    scales: {
-      x: {
-        type: 'category' as const,
-        grid: { display: false },
-        ticks: {
-          color: c.text,
-          font: { size: 10 },
-          maxTicksLimit: 8,
-          autoSkip: true,
-          autoSkipPadding: 10
-        }
-      },
-      y: {
-        type: 'linear' as const,
-        display: true,
-        position: 'left' as const,
-        grid: { color: c.grid, borderDash: [4, 4] },
-        ticks: { color: c.text, font: { size: 10 } }
-      },
-      y1: {
-        type: 'linear' as const,
-        display: true,
-        position: 'right' as const,
-        grid: { display: false },
-        ticks: { color: c.green, font: { size: 10 } }
-      }
-    }
-  }
-})
-
 function resetZoom() {
-  const chart: any = throughputChartRef.value?.chart
-  if (chart && typeof chart.resetZoom === 'function') chart.resetZoom()
+  throughputChartRef.value?.resetZoom()
 }
 
 function downloadChart() {
-  const chart: any = throughputChartRef.value?.chart
-  if (!chart || typeof chart.toBase64Image !== 'function') return
-  const url = chart.toBase64Image('image/png', 1)
+  const url = throughputChartRef.value?.getDataURL()
+  if (!url) return
   const a = document.createElement('a')
   a.href = url
   a.download = `ops-throughput-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.png`
@@ -251,7 +196,7 @@ function downloadChart() {
     </div>
 
     <div class="min-h-0 min-w-0 flex-1">
-      <Line v-if="state === 'ready' && chartData" ref="throughputChartRef" :data="chartData" :options="options" />
+      <EChart v-if="state === 'ready' && chartOption" ref="throughputChartRef" :option="chartOption" />
       <div v-else class="flex h-full items-center justify-center">
         <div v-if="state === 'loading'" class="animate-pulse text-sm text-gray-400">{{ t('common.loading') }}</div>
         <EmptyState v-else :title="t('common.noData')" :description="t('admin.ops.charts.emptyRequest')" />

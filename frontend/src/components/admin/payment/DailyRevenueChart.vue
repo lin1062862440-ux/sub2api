@@ -7,7 +7,7 @@
       <div v-if="loading" class="flex h-full items-center justify-center">
         <LoadingSpinner size="md" />
       </div>
-      <Line v-else-if="chartData" :data="chartData" :options="chartOptions" />
+      <EChart v-else-if="chartOption" :option="chartOption" />
       <div
         v-else
         class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400"
@@ -21,91 +21,75 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js'
-import { Line } from 'vue-chartjs'
+import EChart from '@/components/charts/EChart.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import { useEChartTheme } from '@/composables/useEChartTheme'
 import type { DailyPaymentStats } from '@/types/payment'
-
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Tooltip, Legend, Filler)
+import { gradientAreaSeries } from '@/utils/echarts'
 
 const { t } = useI18n()
+const theme = useEChartTheme()
 
 const props = defineProps<{
   data: DailyPaymentStats[]
   loading?: boolean
 }>()
 
-const colors = [
-  ['rgb(59, 130, 246)', 'rgba(59, 130, 246, 0.1)'],
-  ['rgb(168, 85, 247)', 'rgba(168, 85, 247, 0.1)'],
-  ['rgb(245, 158, 11)', 'rgba(245, 158, 11, 0.1)'],
-  ['rgb(239, 68, 68)', 'rgba(239, 68, 68, 0.1)'],
-]
+const colors = ['#3b82f6', '#a855f7', '#f59e0b', '#ef4444']
 
-const chartData = computed(() => {
+const chartOption = computed<Record<string, unknown> | null>(() => {
   if (!props.data || props.data.length === 0) return null
   const currencies = [...new Set(props.data.flatMap(day => Object.keys(day.amount)))].sort()
   return {
-    labels: props.data.map(d => d.date),
-    datasets: [
-      ...currencies.map((currency, index) => {
-        const [borderColor, backgroundColor] = colors[index % colors.length]
-        return {
-          label: `${currency} ${t('payment.admin.revenue')}`,
-          data: props.data.map(day => day.amount[currency] || 0),
-          borderColor,
-          backgroundColor,
-          fill: true,
-          tension: 0.3,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-        }
-      }),
+    animationDuration: 450,
+    grid: { left: 58, right: 58, top: 50, bottom: 28 },
+    legend: { type: 'scroll', top: 0, textStyle: { color: theme.value.text, fontSize: 11 } },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: theme.value.tooltipBackground,
+      borderColor: theme.value.grid,
+      textStyle: { color: theme.value.text }
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: props.data.map(d => d.date),
+      axisLine: { lineStyle: { color: theme.value.grid } },
+      axisLabel: { color: theme.value.mutedText, fontSize: 10 },
+      splitLine: { show: false }
+    },
+    yAxis: [
       {
-        label: t('payment.admin.orderCount'),
-        data: props.data.map(d => d.count),
-        borderColor: 'rgb(16, 185, 129)',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        fill: false,
-        tension: 0.3,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        yAxisID: 'y1',
+        type: 'value',
+        name: t('payment.admin.revenue'),
+        nameTextStyle: { color: theme.value.mutedText },
+        axisLabel: { color: theme.value.mutedText, fontSize: 10 },
+        splitLine: { lineStyle: { color: theme.value.grid, type: 'dashed' } }
+      },
+      {
+        type: 'value',
+        name: t('payment.admin.orderCount'),
+        position: 'right',
+        nameTextStyle: { color: '#10b981' },
+        axisLabel: { color: '#10b981', fontSize: 10 },
+        splitLine: { show: false }
       }
+    ],
+    series: [
+      ...currencies.map((currency, index) => {
+        const color = colors[index % colors.length]
+        return gradientAreaSeries(
+          `${currency} ${t('payment.admin.revenue')}`,
+          props.data.map(day => day.amount[currency] || 0),
+          color,
+          { stack: 'revenue' }
+        )
+      }),
+      gradientAreaSeries(t('payment.admin.orderCount'), props.data.map(d => d.count), '#10b981', {
+        yAxisIndex: 1,
+        stack: 'orders'
+      })
     ]
   }
 })
-
-const chartOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: 'index' as const, intersect: false },
-  scales: {
-    y: {
-      type: 'linear' as const,
-      display: true,
-      position: 'left' as const,
-      title: { display: true, text: t('payment.admin.revenue') },
-    },
-    y1: {
-      type: 'linear' as const,
-      display: true,
-      position: 'right' as const,
-      title: { display: true, text: t('payment.admin.orderCount') },
-      grid: { drawOnChartArea: false },
-    }
-  },
-  plugins: {
-    legend: { position: 'top' as const },
-  }
-}
 </script>

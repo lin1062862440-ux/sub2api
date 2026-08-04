@@ -8,7 +8,11 @@ pub mod local_config;
 #[cfg(desktop)]
 mod text_export;
 #[cfg(desktop)]
+mod startup;
+#[cfg(desktop)]
 mod usage_display;
+#[cfg(desktop)]
+mod windows_update;
 
 #[cfg(desktop)]
 fn show_main_window(app: &tauri::AppHandle) {
@@ -56,6 +60,9 @@ pub fn run() {
             usage_display::open_usage_main_window,
             usage_display::quit_usage_display,
             text_export::save_text_export,
+            startup::get_launch_at_startup,
+            startup::set_launch_at_startup,
+            windows_update::validate_windows_update_install_dir,
         ])
         .plugin(tauri_plugin_deep_link::init())
         // HTTP requests go through Rust (reqwest), so they are not subject to

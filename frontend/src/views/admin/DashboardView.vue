@@ -325,7 +325,7 @@
               <div v-if="userTrendLoading" class="flex h-full items-center justify-center">
                 <LoadingSpinner size="md" />
               </div>
-              <Line v-else-if="userTrendChartData" :data="userTrendChartData" :options="lineOptions" />
+              <EChart v-else-if="userTrendChartOption" :option="userTrendChartOption" />
               <div
                 v-else
                 class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400"
@@ -362,33 +362,14 @@ import DateRangePicker from '@/components/common/DateRangePicker.vue'
 import Select from '@/components/common/Select.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
+import EChart from '@/components/charts/EChart.vue'
 import { useBatchImageAccess } from '@/composables/useBatchImageAccess'
-
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js'
-import { Line } from 'vue-chartjs'
-
-// Register Chart.js components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Tooltip,
-  Legend,
-  Filler
-)
+import { useEChartTheme } from '@/composables/useEChartTheme'
+import { gradientAreaSeries } from '@/utils/echarts'
 
 const appStore = useAppStore()
 const router = useRouter()
+const chartTheme = useEChartTheme()
 const { canUseBatchImage, refreshBatchImageAccess } = useBatchImageAccess()
 const stats = ref<DashboardStats | null>(null)
 const loading = ref(false)
@@ -436,80 +417,7 @@ const granularityOptions = computed(() => [
   { value: 'hour', label: t('admin.dashboard.hour') }
 ])
 
-// Dark mode detection
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
-
-// Chart colors
-const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb'
-}))
-
-// Line chart options (for user trend chart)
-const lineOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: {
-    intersect: false,
-    mode: 'index' as const
-  },
-  plugins: {
-    legend: {
-      position: 'top' as const,
-      labels: {
-        color: chartColors.value.text,
-        usePointStyle: true,
-        pointStyle: 'circle',
-        padding: 15,
-        font: {
-          size: 11
-        }
-      }
-    },
-    tooltip: {
-      itemSort: (a: any, b: any) => {
-        const aValue = typeof a?.raw === 'number' ? a.raw : Number(a?.parsed?.y ?? 0)
-        const bValue = typeof b?.raw === 'number' ? b.raw : Number(b?.parsed?.y ?? 0)
-        return bValue - aValue
-      },
-      callbacks: {
-        label: (context: any) => {
-          return `${context.dataset.label}: ${formatTokens(context.raw)}`
-        }
-      }
-    }
-  },
-  scales: {
-    x: {
-      grid: {
-        color: chartColors.value.grid
-      },
-      ticks: {
-        color: chartColors.value.text,
-        font: {
-          size: 10
-        }
-      }
-    },
-    y: {
-      grid: {
-        color: chartColors.value.grid
-      },
-      ticks: {
-        color: chartColors.value.text,
-        font: {
-          size: 10
-        },
-        callback: (value: string | number) => formatTokens(Number(value))
-      }
-    }
-  }
-}))
-
-// User trend chart data
-const userTrendChartData = computed(() => {
+const userTrendChartOption = computed<Record<string, unknown> | null>(() => {
   if (!userTrend.value?.length) return null
 
   const getDisplayName = (point: UserUsageTrendPoint): string => {
@@ -555,18 +463,45 @@ const userTrendChartData = computed(() => {
     '#a855f7'
   ]
 
-  const datasets = Array.from(userGroups.values()).map((group, idx) => ({
-    label: group.name,
-    data: sortedDates.map((date) => group.data.get(date) || 0),
-    borderColor: colors[idx % colors.length],
-    backgroundColor: `${colors[idx % colors.length]}20`,
-    fill: false,
-    tension: 0.3
-  }))
-
   return {
-    labels: sortedDates,
-    datasets
+    animationDuration: 450,
+    grid: { left: 58, right: 20, top: 52, bottom: 28 },
+    legend: {
+      type: 'scroll',
+      top: 0,
+      textStyle: { color: chartTheme.value.text, fontSize: 11 },
+      itemWidth: 12,
+      itemHeight: 8
+    },
+    tooltip: {
+      trigger: 'axis',
+      order: 'valueDesc',
+      backgroundColor: chartTheme.value.tooltipBackground,
+      borderColor: chartTheme.value.grid,
+      textStyle: { color: chartTheme.value.text },
+      valueFormatter: (value: number) => formatTokens(Number(value))
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: sortedDates,
+      axisLabel: { color: chartTheme.value.mutedText, fontSize: 10, hideOverlap: true },
+      axisLine: { lineStyle: { color: chartTheme.value.grid } },
+      splitLine: { show: false }
+    },
+    yAxis: {
+      type: 'value',
+      axisLabel: { color: chartTheme.value.mutedText, fontSize: 10, formatter: (value: number) => formatTokens(value) },
+      splitLine: { lineStyle: { color: chartTheme.value.grid, type: 'dashed' } }
+    },
+    series: Array.from(userGroups.values()).map((group, idx) =>
+      gradientAreaSeries(
+        group.name,
+        sortedDates.map((date) => group.data.get(date) || 0),
+        colors[idx % colors.length],
+        { stack: 'users' }
+      )
+    )
   }
 })
 

@@ -59,11 +59,11 @@ describe('visual preview contract', () => {
     const productionAliases = production.resolve.alias
     const visualAliases = visual.resolve.alias
     const visualReplacements = visualAliases
-      .map((alias) => alias.replacement)
+      .map((alias) => alias.replacement.replaceAll('\\', '/'))
       .filter((replacement) => replacement.includes('/src/test/visual/'))
 
-    expect(productionAliases.some((alias) => alias.replacement.includes('/src/test/visual/'))).toBe(false)
-    expect(visualReplacements).toHaveLength(16)
+    expect(productionAliases.some((alias) => alias.replacement.replaceAll('\\', '/').includes('/src/test/visual/'))).toBe(false)
+    expect(visualReplacements).toHaveLength(17)
     expect(visualReplacements.some((replacement) => replacement.endsWith('/api.ts'))).toBe(true)
     expect(visualReplacements.some((replacement) => replacement.endsWith('/session.ts'))).toBe(true)
     expect(visualReplacements.some((replacement) => replacement.endsWith('/platform.ts'))).toBe(true)

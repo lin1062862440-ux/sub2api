@@ -6,8 +6,8 @@
     <div v-if="loading" class="flex h-48 items-center justify-center">
       <LoadingSpinner />
     </div>
-    <div v-else-if="trendData.length > 0 && chartData" class="h-48">
-      <Line :data="chartData" :options="lineOptions" />
+    <div v-else-if="trendData.length > 0 && chartOption" class="h-48">
+      <EChart :option="chartOption" />
     </div>
     <div
       v-else
@@ -21,31 +21,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js'
-import { Line } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
+import EChart from '@/components/charts/EChart.vue'
+import { useEChartTheme } from '@/composables/useEChartTheme'
 import type { TrendDataPoint } from '@/types'
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-)
+import { gradientAreaSeries } from '@/utils/echarts'
 
 const { t } = useI18n()
 
@@ -54,13 +34,9 @@ const props = defineProps<{
   loading?: boolean
 }>()
 
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
+const theme = useEChartTheme()
 
 const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb',
   input: '#3b82f6',
   output: '#10b981',
   cacheCreation: '#f59e0b',
@@ -68,141 +44,76 @@ const chartColors = computed(() => ({
   cacheHitRate: '#8b5cf6'
 }))
 
-const chartData = computed(() => {
+const chartOption = computed<Record<string, unknown> | null>(() => {
   if (!props.trendData?.length) return null
 
   return {
-    labels: props.trendData.map((d) => d.date),
-    datasets: [
+    animationDuration: 450,
+    grid: { left: 58, right: 48, top: 50, bottom: 26 },
+    legend: {
+      type: 'scroll',
+      top: 0,
+      textStyle: { color: theme.value.text, fontSize: 11 },
+      itemWidth: 12,
+      itemHeight: 8
+    },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: theme.value.tooltipBackground,
+      borderColor: theme.value.grid,
+      textStyle: { color: theme.value.text },
+      formatter: (params: any[]) => {
+        const dataIndex = params[0]?.dataIndex ?? 0
+        const rows = params.map((item) => {
+          const value = Number(item.value ?? 0)
+          const formatted = item.seriesName === 'Cache Hit Rate' ? `${value.toFixed(1)}%` : formatTokens(value)
+          return `${item.marker}${item.seriesName}: ${formatted}`
+        })
+        const point = props.trendData[dataIndex]
+        if (point) rows.push(`Actual: $${formatCost(point.actual_cost)} | Standard: $${formatCost(point.cost)}`)
+        return [params[0]?.axisValueLabel ?? '', ...rows].join('<br/>')
+      }
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: props.trendData.map((d) => d.date),
+      axisLine: { lineStyle: { color: theme.value.grid } },
+      axisLabel: { color: theme.value.mutedText, fontSize: 10 },
+      splitLine: { show: false }
+    },
+    yAxis: [
       {
-        label: 'Input',
-        data: props.trendData.map((d) => d.input_tokens),
-        borderColor: chartColors.value.input,
-        backgroundColor: `${chartColors.value.input}20`,
-        fill: true,
-        tension: 0.3
+        type: 'value',
+        axisLabel: { color: theme.value.mutedText, fontSize: 10, formatter: (value: number) => formatTokens(value) },
+        splitLine: { lineStyle: { color: theme.value.grid, type: 'dashed' } }
       },
       {
-        label: 'Output',
-        data: props.trendData.map((d) => d.output_tokens),
-        borderColor: chartColors.value.output,
-        backgroundColor: `${chartColors.value.output}20`,
-        fill: true,
-        tension: 0.3
-      },
-      {
-        label: 'Cache Creation',
-        data: props.trendData.map((d) => d.cache_creation_tokens),
-        borderColor: chartColors.value.cacheCreation,
-        backgroundColor: `${chartColors.value.cacheCreation}20`,
-        fill: true,
-        tension: 0.3
-      },
-      {
-        label: 'Cache Read',
-        data: props.trendData.map((d) => d.cache_read_tokens),
-        borderColor: chartColors.value.cacheRead,
-        backgroundColor: `${chartColors.value.cacheRead}20`,
-        fill: true,
-        tension: 0.3
-      },
-      {
-        label: 'Cache Hit Rate',
-        data: props.trendData.map((d) => {
+        type: 'value',
+        min: 0,
+        max: 100,
+        position: 'right',
+        axisLabel: { color: chartColors.value.cacheHitRate, fontSize: 10, formatter: '{value}%' },
+        splitLine: { show: false }
+      }
+    ],
+    series: [
+      gradientAreaSeries('Input', props.trendData.map((d) => d.input_tokens), chartColors.value.input, { stack: 'tokens' }),
+      gradientAreaSeries('Output', props.trendData.map((d) => d.output_tokens), chartColors.value.output, { stack: 'tokens' }),
+      gradientAreaSeries('Cache Creation', props.trendData.map((d) => d.cache_creation_tokens), chartColors.value.cacheCreation, { stack: 'tokens' }),
+      gradientAreaSeries('Cache Read', props.trendData.map((d) => d.cache_read_tokens), chartColors.value.cacheRead, { stack: 'tokens' }),
+      gradientAreaSeries(
+        'Cache Hit Rate',
+        props.trendData.map((d) => {
           const totalPromptTokens = d.input_tokens + d.cache_read_tokens + d.cache_creation_tokens
           return totalPromptTokens > 0 ? (d.cache_read_tokens / totalPromptTokens) * 100 : 0
         }),
-        borderColor: chartColors.value.cacheHitRate,
-        backgroundColor: `${chartColors.value.cacheHitRate}20`,
-        borderDash: [5, 5],
-        fill: false,
-        tension: 0.3,
-        yAxisID: 'yPercent'
-      }
+        chartColors.value.cacheHitRate,
+        { yAxisIndex: 1, stack: 'rate', lineStyle: { color: chartColors.value.cacheHitRate, width: 2, type: 'dashed' } }
+      )
     ]
   }
 })
-
-const lineOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: {
-    intersect: false,
-    mode: 'index' as const
-  },
-  plugins: {
-    legend: {
-      position: 'top' as const,
-      labels: {
-        color: chartColors.value.text,
-        usePointStyle: true,
-        pointStyle: 'circle',
-        padding: 15,
-        font: {
-          size: 11
-        }
-      }
-    },
-    tooltip: {
-      callbacks: {
-        label: (context: any) => {
-          if (context.dataset.yAxisID === 'yPercent') {
-            return `${context.dataset.label}: ${context.raw.toFixed(1)}%`
-          }
-          return `${context.dataset.label}: ${formatTokens(context.raw)}`
-        },
-        footer: (tooltipItems: any) => {
-          const dataIndex = tooltipItems[0]?.dataIndex
-          if (dataIndex !== undefined && props.trendData[dataIndex]) {
-            const data = props.trendData[dataIndex]
-            return `Actual: $${formatCost(data.actual_cost)} | Standard: $${formatCost(data.cost)}`
-          }
-          return ''
-        }
-      }
-    }
-  },
-  scales: {
-    x: {
-      grid: {
-        color: chartColors.value.grid
-      },
-      ticks: {
-        color: chartColors.value.text,
-        font: {
-          size: 10
-        }
-      }
-    },
-    y: {
-      grid: {
-        color: chartColors.value.grid
-      },
-      ticks: {
-        color: chartColors.value.text,
-        font: {
-          size: 10
-        },
-        callback: (value: string | number) => formatTokens(Number(value))
-      }
-    },
-    yPercent: {
-      position: 'right' as const,
-      min: 0,
-      max: 100,
-      grid: {
-        drawOnChartArea: false
-      },
-      ticks: {
-        color: chartColors.value.cacheHitRate,
-        font: {
-          size: 10
-        },
-        callback: (value: string | number) => `${value}%`
-      }
-    }
-  }
-}))
 
 const formatTokens = (value: number): string => {
   if (value >= 1_000_000_000) {

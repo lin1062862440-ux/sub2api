@@ -35,7 +35,7 @@ const densitySpecs = [
 const iconNames = ['ic_launcher.png', 'ic_launcher_round.png', 'ic_launcher_foreground.png']
 const pngSpecs = densitySpecs.flatMap((densitySpec) =>
   iconNames.map((iconName) => ({
-    relativePath: path.join(`mipmap-${densitySpec.density}`, iconName),
+    relativePath: path.posix.join(`mipmap-${densitySpec.density}`, iconName),
     density: densitySpec.density,
     iconName,
     expectedSize:
@@ -45,9 +45,9 @@ const pngSpecs = densitySpecs.flatMap((densitySpec) =>
   })),
 )
 const xmlSpecs = [
-  { relativePath: path.join('mipmap-anydpi-v26', 'ic_launcher.xml'), type: 'adaptive' },
-  { relativePath: path.join('mipmap-anydpi-v26', 'ic_launcher_round.xml'), type: 'adaptive' },
-  { relativePath: path.join('values', 'ic_launcher_background.xml'), type: 'color' },
+  { relativePath: path.posix.join('mipmap-anydpi-v26', 'ic_launcher.xml'), type: 'adaptive' },
+  { relativePath: path.posix.join('mipmap-anydpi-v26', 'ic_launcher_round.xml'), type: 'adaptive' },
+  { relativePath: path.posix.join('values', 'ic_launcher_background.xml'), type: 'color' },
 ]
 
 function hash(bytes) {
@@ -342,7 +342,7 @@ async function prepareSources(sourceRoot) {
       imageMetadata.height === 49
 
     if (isRegeneratedHdpiLegacy) {
-      const xhdpiRelativePath = path.join('mipmap-xhdpi', spec.iconName)
+      const xhdpiRelativePath = path.posix.join('mipmap-xhdpi', spec.iconName)
       const normalized = await sharp(rawPngs.get(xhdpiRelativePath))
         .resize(72, 72, { kernel: sharp.kernel.lanczos3 })
         .png()

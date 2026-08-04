@@ -27,7 +27,7 @@ describe('Android native updater boundary', () => {
   })
 
   it('never accepts a caller-provided download destination', () => {
-    const downloadArgs = plugin.slice(plugin.indexOf('class DownloadArgs'), plugin.indexOf('@InvokeArg\nclass PathArgs'))
+    const downloadArgs = plugin.slice(plugin.indexOf('class DownloadArgs'), plugin.indexOf('class PathArgs'))
     expect(downloadArgs).not.toContain('path:')
     expect(downloadArgs).not.toContain('destination')
   })

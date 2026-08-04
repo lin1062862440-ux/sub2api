@@ -98,7 +98,7 @@ describe('AdminDashboardView', () => {
     expect(wrapper.get('[data-testid="attention-count"]').text()).toContain('5')
     expect(wrapper.text()).toContain('claude-sonnet-4')
     expect(wrapper.text()).toContain('Claude Code')
-    expect(wrapper.find('[data-testid="trend-line"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="trend-echart"]').exists()).toBe(true)
   })
 
   it('keeps snapshot data visible when realtime health is unavailable', async () => {

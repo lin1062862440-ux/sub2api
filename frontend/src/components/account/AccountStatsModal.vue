@@ -434,7 +434,7 @@
             {{ t('admin.accounts.stats.usageTrend') }}
           </h3>
           <div class="h-64">
-            <Line v-if="trendChartData" :data="trendChartData" :options="lineChartOptions" />
+            <EChart v-if="trendChartOption" :option="trendChartOption" />
             <div
               v-else
               class="flex h-full items-center justify-center text-sm text-gray-500 dark:text-gray-400"
@@ -486,18 +486,7 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-} from 'chart.js'
-import { Line } from 'vue-chartjs'
+import EChart from '@/components/charts/EChart.vue'
 import BaseDialog from '@/components/common/BaseDialog.vue'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import ModelDistributionChart from '@/components/charts/ModelDistributionChart.vue'
@@ -505,19 +494,11 @@ import EndpointDistributionChart from '@/components/charts/EndpointDistributionC
 import Icon from '@/components/icons/Icon.vue'
 import { adminAPI } from '@/api/admin'
 import type { Account, AccountUsageStatsResponse } from '@/types'
-
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-)
+import { useEChartTheme } from '@/composables/useEChartTheme'
+import { gradientAreaSeries } from '@/utils/echarts'
 
 const { t } = useI18n()
+const theme = useEChartTheme()
 
 const props = defineProps<{
   show: boolean
@@ -531,152 +512,65 @@ const emit = defineEmits<{
 const loading = ref(false)
 const stats = ref<AccountUsageStatsResponse | null>(null)
 
-// Dark mode detection
-const isDarkMode = computed(() => {
-  return document.documentElement.classList.contains('dark')
-})
-
-// Chart colors
-const chartColors = computed(() => ({
-  text: isDarkMode.value ? '#e5e7eb' : '#374151',
-  grid: isDarkMode.value ? '#374151' : '#e5e7eb'
-}))
-
-// Line chart data
-const trendChartData = computed(() => {
+const trendChartOption = computed<Record<string, unknown> | null>(() => {
   if (!stats.value?.history?.length) return null
 
   return {
-    labels: stats.value.history.map((h) => h.label),
-    datasets: [
+    animationDuration: 450,
+    grid: { left: 62, right: 58, top: 50, bottom: 34 },
+    legend: { type: 'scroll', top: 0, textStyle: { color: theme.value.text, fontSize: 11 } },
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: theme.value.tooltipBackground,
+      borderColor: theme.value.grid,
+      textStyle: { color: theme.value.text },
+      formatter: (params: any[]) => [
+        params[0]?.axisValueLabel ?? '',
+        ...params.map((item) => {
+          const value = Number(item.value ?? 0)
+          const formatted = item.seriesName.includes('USD') ? `$${formatCost(value)}` : formatNumber(value)
+          return `${item.marker}${item.seriesName}: ${formatted}`
+        })
+      ].join('<br/>')
+    },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: stats.value.history.map((h) => h.label),
+      axisLabel: { color: theme.value.mutedText, fontSize: 10, rotate: 35, hideOverlap: true },
+      axisLine: { lineStyle: { color: theme.value.grid } },
+      splitLine: { show: false }
+    },
+    yAxis: [
       {
-        label: t('usage.accountBilled') + ' (USD)',
-        data: stats.value.history.map((h) => h.actual_cost),
-        borderColor: '#3b82f6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        fill: true,
-        tension: 0.3,
-        yAxisID: 'y'
+        type: 'value',
+        name: t('usage.accountBilled') + ' (USD)',
+        nameTextStyle: { color: '#3b82f6', fontSize: 11 },
+        axisLabel: { color: '#3b82f6', fontSize: 10, formatter: (value: number) => `$${formatCost(value)}` },
+        splitLine: { lineStyle: { color: theme.value.grid, type: 'dashed' } }
       },
       {
-        label: t('usage.userBilled') + ' (USD)',
-        data: stats.value.history.map((h) => h.user_cost),
-        borderColor: '#10b981',
-        backgroundColor: 'rgba(16, 185, 129, 0.08)',
-        fill: false,
-        tension: 0.3,
-        borderDash: [5, 5],
-        yAxisID: 'y'
-      },
-      {
-        label: t('admin.accounts.stats.requests'),
-        data: stats.value.history.map((h) => h.requests),
-        borderColor: '#f97316',
-        backgroundColor: 'rgba(249, 115, 22, 0.1)',
-        fill: false,
-        tension: 0.3,
-        yAxisID: 'y1'
+        type: 'value',
+        name: t('admin.accounts.stats.requests'),
+        position: 'right',
+        nameTextStyle: { color: '#f97316', fontSize: 11 },
+        axisLabel: { color: '#f97316', fontSize: 10, formatter: (value: number) => formatNumber(value) },
+        splitLine: { show: false }
       }
+    ],
+    series: [
+      gradientAreaSeries(t('usage.accountBilled') + ' (USD)', stats.value.history.map((h) => h.actual_cost), '#3b82f6', { stack: 'account-cost' }),
+      gradientAreaSeries(t('usage.userBilled') + ' (USD)', stats.value.history.map((h) => h.user_cost), '#10b981', {
+        stack: 'user-cost',
+        lineStyle: { color: '#10b981', width: 2, type: 'dashed' }
+      }),
+      gradientAreaSeries(t('admin.accounts.stats.requests'), stats.value.history.map((h) => h.requests), '#f97316', {
+        yAxisIndex: 1,
+        stack: 'requests'
+      })
     ]
   }
 })
-
-// Line chart options with dual Y-axis
-const lineChartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: {
-    intersect: false,
-    mode: 'index' as const
-  },
-  plugins: {
-    legend: {
-      position: 'top' as const,
-      labels: {
-        color: chartColors.value.text,
-        usePointStyle: true,
-        pointStyle: 'circle',
-        padding: 15,
-        font: {
-          size: 11
-        }
-      }
-    },
-    tooltip: {
-      callbacks: {
-        label: (context: any) => {
-          const label = context.dataset.label || ''
-          const value = context.raw
-          if (label.includes('USD')) {
-            return `${label}: $${formatCost(value)}`
-          }
-          return `${label}: ${formatNumber(value)}`
-        }
-      }
-    }
-  },
-  scales: {
-    x: {
-      grid: {
-        color: chartColors.value.grid
-      },
-      ticks: {
-        color: chartColors.value.text,
-        font: {
-          size: 10
-        },
-        maxRotation: 45,
-        minRotation: 0
-      }
-    },
-    y: {
-      type: 'linear' as const,
-      display: true,
-      position: 'left' as const,
-      grid: {
-        color: chartColors.value.grid
-      },
-      ticks: {
-        color: '#3b82f6',
-        font: {
-          size: 10
-        },
-        callback: (value: string | number) => '$' + formatCost(Number(value))
-      },
-      title: {
-        display: true,
-        text: t('usage.accountBilled') + ' (USD)',
-        color: '#3b82f6',
-        font: {
-          size: 11
-        }
-      }
-    },
-    y1: {
-      type: 'linear' as const,
-      display: true,
-      position: 'right' as const,
-      grid: {
-        drawOnChartArea: false
-      },
-      ticks: {
-        color: '#f97316',
-        font: {
-          size: 10
-        },
-        callback: (value: string | number) => formatNumber(Number(value))
-      },
-      title: {
-        display: true,
-        text: t('admin.accounts.stats.requests'),
-        color: '#f97316',
-        font: {
-          size: 11
-        }
-      }
-    }
-  }
-}))
 
 // Load stats when modal opens
 watch(

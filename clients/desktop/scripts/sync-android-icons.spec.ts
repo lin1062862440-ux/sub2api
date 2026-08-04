@@ -229,9 +229,9 @@ describe('syncAndroidIcons resources', () => {
       expect(actual.equals(expectedBytes), relativePath).toBe(true)
     }
     for (const relativePath of [
-      path.join('mipmap-anydpi-v26', 'ic_launcher.xml'),
-      path.join('mipmap-anydpi-v26', 'ic_launcher_round.xml'),
-      path.join('values', 'ic_launcher_background.xml'),
+      path.posix.join('mipmap-anydpi-v26', 'ic_launcher.xml'),
+      path.posix.join('mipmap-anydpi-v26', 'ic_launcher_round.xml'),
+      path.posix.join('values', 'ic_launcher_background.xml'),
     ]) {
       expect(await readFile(path.join(androidResRoot, relativePath), 'utf8')).toBe(
         await readFile(path.join(sourceRoot, relativePath), 'utf8'),
@@ -285,7 +285,7 @@ describe('syncAndroidIcons resources', () => {
     ['a corrupted IDAT chunk', corruptIdat],
   ])('fully decodes and rejects %s without changing any live files', async (_label, damage) => {
     const { sourceRoot, androidResRoot, manifestPath } = await createFixture()
-    const relativePath = path.join('mipmap-mdpi', 'ic_launcher.png')
+    const relativePath = path.posix.join('mipmap-mdpi', 'ic_launcher.png')
     const sourcePath = path.join(sourceRoot, relativePath)
     const damagedSource = damage(await readFile(sourcePath))
     await expect(sharp(damagedSource).metadata()).resolves.toMatchObject({
@@ -343,8 +343,8 @@ describe('syncAndroidIcons resources', () => {
   })
 
   it.each([
-    path.join('mipmap-anydpi-v26', 'ic_launcher_round.xml'),
-    path.join('values', 'ic_launcher_background.xml'),
+    path.posix.join('mipmap-anydpi-v26', 'ic_launcher_round.xml'),
+    path.posix.join('values', 'ic_launcher_background.xml'),
   ])('rejects non-UTF-8 XML with its relative source path: %s', async (relativePath) => {
     const { sourceRoot, androidResRoot } = await createFixture()
     await writeFile(
@@ -361,7 +361,7 @@ describe('syncAndroidIcons resources', () => {
     'rejects an invalid Android launcher background color: %s',
     async (color) => {
       const { sourceRoot, androidResRoot } = await createFixture()
-      const relativePath = path.join('values', 'ic_launcher_background.xml')
+      const relativePath = path.posix.join('values', 'ic_launcher_background.xml')
       await writeFile(
         path.join(sourceRoot, relativePath),
         backgroundColorXml.replace('#fff', color),

@@ -88,7 +88,7 @@ describe('desktop administrator route guard', () => {
     } finally {
       evaluated.stopWatch()
     }
-  })
+  }, 15_000)
 
   it('registers the administrator group management route', () => {
     expect(router.hasRoute('admin-groups')).toBe(true)

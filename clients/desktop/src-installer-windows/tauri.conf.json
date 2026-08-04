@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "LinAI Setup",
-  "version": "0.1.3",
+  "version": "0.1.6",
   "identifier": "ai.lin.desktop.installer",
   "build": {
     "frontendDist": "../dist-installer",

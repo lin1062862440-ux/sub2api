@@ -9,6 +9,7 @@ export interface PlatformCapabilities {
   androidUpdater: boolean
   textExport: boolean
   desktopSecondInstance: boolean
+  launchAtStartup: boolean
 }
 
 const desktop: PlatformCapabilities = {
@@ -20,6 +21,7 @@ const desktop: PlatformCapabilities = {
   androidUpdater: false,
   textExport: true,
   desktopSecondInstance: true,
+  launchAtStartup: false,
 }
 
 const mobile: PlatformCapabilities = {
@@ -31,11 +33,12 @@ const mobile: PlatformCapabilities = {
   androidUpdater: false,
   textExport: false,
   desktopSecondInstance: false,
+  launchAtStartup: false,
 }
 
 export const capabilitiesFor = (target: Platform): PlatformCapabilities =>
   target === 'android' || target === 'ios'
     ? { ...mobile, androidUpdater: target === 'android' }
-    : { ...desktop }
+    : { ...desktop, launchAtStartup: target === 'windows' }
 
 export const appCapabilities = capabilitiesFor(platform())

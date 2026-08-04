@@ -12,7 +12,12 @@ describe('platform capabilities', () => {
       androidUpdater: false,
       textExport: true,
       desktopSecondInstance: true,
+      launchAtStartup: false,
     })
+  })
+
+  it('allows Windows users to manage launch at startup', () => {
+    expect(capabilitiesFor('windows').launchAtStartup).toBe(true)
   })
 
   it('keeps Android focused on usage and administration', () => {
@@ -25,6 +30,7 @@ describe('platform capabilities', () => {
       androidUpdater: true,
       textExport: false,
       desktopSecondInstance: false,
+      launchAtStartup: false,
     })
   })
 })

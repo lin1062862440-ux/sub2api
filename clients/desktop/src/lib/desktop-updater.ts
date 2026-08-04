@@ -1,5 +1,7 @@
+import { invoke } from '@tauri-apps/api/core'
 import { relaunch } from '@tauri-apps/plugin-process'
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater'
+import { isWindows } from '@/lib/platform'
 
 export interface AvailableDesktopUpdate {
   version: string
@@ -39,6 +41,10 @@ export async function installDesktopUpdate(
   update: Update,
   onProgress?: (progress: DesktopUpdateProgress) => void,
 ): Promise<void> {
+  if (isWindows()) {
+    await invoke('validate_windows_update_install_dir')
+  }
+
   let downloaded = 0
   let total: number | undefined
 

@@ -27,6 +27,10 @@ export default defineConfig(({ mode }) => {
                 replacement: fileURLToPath(new URL('./src/test/visual/platform.ts', import.meta.url)),
               },
               {
+                find: /^@\/lib\/startup$/,
+                replacement: fileURLToPath(new URL('./src/test/visual/startup.ts', import.meta.url)),
+              },
+              {
                 find: /^@\/features\/usage-display\/core\/storage$/,
                 replacement: fileURLToPath(new URL('./src/test/visual/usage-display-storage.ts', import.meta.url)),
               },

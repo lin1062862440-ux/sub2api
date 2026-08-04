@@ -10,8 +10,10 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:tools": "node --test tools/*.node-test.mjs",
     "brand:sync": "node scripts/sync-brand.mjs",
     "updater:manifest": "node tools/write-updater-manifest.mjs",
+    "release:windows": "node tools/release-windows.mjs",
     "android:init": "tauri android init --ci --skip-targets-install",
     "android:dev": "tauri android dev",
     "android:icons": "node scripts/sync-android-icons.mjs",
@@ -36,7 +38,9 @@
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-store": "^2.4.4",
     "@tauri-apps/plugin-updater": "^2.10.1",
+    "echarts": "^6.1.0",
     "vue": "^3.5.40",
+    "vue-echarts": "^8.0.1",
     "vue-router": "^4.6.4"
   },
   "devDependencies": {

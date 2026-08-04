@@ -71,6 +71,55 @@ Backend release tags can continue to follow upstream, such as `v0.1.3`. Desktop
 release tags are separate, such as `desktop-v0.1.3`, so the two release streams
 do not overwrite or depend on each other.
 
+## Windows updater artifacts
+
+Windows has two different installers:
+
+- `LinAI-<version>-windows-<arch>-setup.exe` is the branded wrapper for first
+  installs and manual repair.
+- `LinAI-<version>-windows-<arch>-updater.exe` plus its `.sig` is the native
+  Tauri NSIS payload used by the in-app updater.
+
+Do not publish the branded wrapper as an updater package. Build signed x64 and
+x86 artifacts with:
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "$HOME\.tauri\linai-updater.key"
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "<private-key-password>"
+pnpm bundle:windows:x64
+pnpm bundle:windows:x86
+```
+
+For an empty private-key password, set the variable explicitly with
+`$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = ""`.
+
+For the complete Windows build, validation, Gitee upload, manifest replacement,
+and public download verification flow, also set `GITEE_TOKEN` and run:
+
+```powershell
+pnpm release:windows -- --notes "release notes"
+```
+
+Use `pnpm release:windows -- --validate-only` to validate the current local and
+public artifacts without rebuilding or uploading.
+
+If macOS has not published the same version yet, use
+`pnpm release:windows -- --assets-only --notes "release notes"`. This still
+builds, signs, uploads, and publicly verifies the Windows assets, but leaves the
+shared `desktop-latest/latest.json` unchanged. Run the normal command after the
+matching macOS release is available to activate automatic updates.
+
+Each command copies the native signed updater package into `dist-windows/` and
+adds its platform to `latest.json`. When `latest.json` already has the same
+version, existing macOS and Windows platform entries are preserved.
+
+The Windows NSIS installer stores the selected install directory under
+`HKLM\Software\lin\LinAI`. Before downloading an update, the app verifies that
+this value resolves to the directory containing the running `LinAI.exe`. The
+NSIS update hook checks the value again and forces `$INSTDIR` to it. If the
+value is absent or mismatched, the update aborts instead of falling back to
+`C:\Program Files\LinAI`; use the branded full installer to repair that case.
+
 ## Notes
 
 - The Gitee repository and release assets must be publicly accessible, otherwise

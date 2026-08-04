@@ -219,6 +219,86 @@ curl -I -L \
 一次新的 dmg。安装到新链路版本后，后续才能自动走
 `linsource/linai-desktop-release`。
 
+## Windows 自动更新发包
+
+Windows 发包会生成两类文件，不能混用：
+
+- `LinAI-<version>-windows-<arch>-setup.exe`：带安装界面的完整安装包，用于首次安装或修复。
+- `LinAI-<version>-windows-<arch>-updater.exe` 和对应 `.sig`：Tauri 原生 NSIS 更新包，用于客户端内自动更新。
+
+先在 PowerShell 中配置私钥路径和私钥密码。私钥及密码不能写进仓库：
+
+```powershell
+$env:TAURI_SIGNING_PRIVATE_KEY_PATH = "$HOME\.tauri\linai-updater.key"
+$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = "你的私钥密码"
+$env:GITEE_TOKEN = "你的 Gitee 私人令牌"
+```
+
+推荐使用一键发布命令：
+
+```powershell
+pnpm release:windows -- --notes "本次桌面端更新说明"
+```
+
+该命令会依次检查五处版本号、下载同版本远端 `latest.json`、保留 macOS
+条目、构建并签名 x64/x86、校验产物和安装目录保护、上传版本资产、最后
+更新 `desktop-latest`，并从公网回下载 updater 做 SHA-256 验证。远端
+`latest.json` 与本地版本不一致时会停止，避免覆盖其他版本的清单。
+
+只验证当前已发布版本和本地产物，不重建、不上传：
+
+```powershell
+pnpm release:windows -- --validate-only
+```
+
+如果 macOS 尚未发布同版本，只发布并验证 Windows 版本资产，不更新共享的
+`desktop-latest/latest.json`：
+
+```powershell
+pnpm release:windows -- --assets-only --notes "本次桌面端更新说明"
+```
+
+该模式用于不同平台无法同步构建的情况。Windows 安装包会出现在
+`desktop-v<version>`，但旧客户端不会自动收到该版本。macOS 同版本资产就绪后，
+再运行不带 `--assets-only` 的普通发布命令，合并所有平台并激活自动更新。
+
+需要单独排查某个架构时，仍可使用底层构建命令：
+
+```powershell
+pnpm bundle:windows:x64
+pnpm bundle:windows:x86
+```
+
+脚本会执行以下检查：
+
+- 没有签名私钥，或加密私钥未设置密码环境变量时直接失败；空密码需要显式设置为空字符串。
+- 原生 NSIS 更新包没有生成 `.sig` 时直接失败。
+- 生成的 NSIS 脚本没有包含安装目录保护时直接失败。
+- 自动把 `windows-x86_64` 或 `windows-i686` 合并到同版本的 `latest.json`。
+
+将 `dist-windows` 中的 `*-updater.exe` 和 `.sig` 上传到
+`desktop-v<version>`。完整的 `*-setup.exe` 可以一并上传供手动安装，但
+`latest.json` 必须指向 `*-updater.exe`，不能指向外层完整安装包。
+
+Windows 首次安装时，内层 NSIS 会把用户选择的目录记录在：
+
+```text
+HKLM\Software\lin\LinAI
+```
+
+自动更新前，客户端会比较该记录与当前 `LinAI.exe` 所在目录。更新安装器还会再次
+读取并锁定该目录。记录缺失或目录不一致时，更新会停止，不会回退安装到
+`C:\Program Files\LinAI`。此时应使用完整的 `*-setup.exe` 修复安装记录。
+
+实机验证时必须从非默认目录测试，例如先把旧版安装到：
+
+```text
+D:\Applications\LinAI
+```
+
+更新完成后确认新版 `LinAI.exe` 仍位于该目录，并确认
+`C:\Program Files\LinAI` 没有被新建。
+
 ## 常见问题
 
 ### 是否需要把源码仓库公开？

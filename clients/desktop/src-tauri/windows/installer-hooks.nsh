@@ -1,3 +1,24 @@
+!macro NSIS_HOOK_PREINSTALL
+  ; LINAI_UPDATE_INSTALL_DIR_GUARD
+  ; Tauri's updater launches this NSIS payload with /UPDATE. Never let an
+  ; update fall back to Program Files when the original custom directory is
+  ; missing from the registry.
+  ${If} $UpdateMode = 1
+    ReadRegStr $R9 SHCTX "${MANUPRODUCTKEY}" ""
+    ${If} $R9 == ""
+      MessageBox MB_ICONSTOP|MB_OK "无法确认当前安装目录，已取消更新。请使用完整安装包修复安装。"
+      SetErrorLevel 1
+      Quit
+    ${EndIf}
+    ${IfNot} ${FileExists} "$R9\${MAINBINARYNAME}.exe"
+      MessageBox MB_ICONSTOP|MB_OK "安装目录记录与当前程序不匹配，已取消更新。请使用完整安装包修复安装。"
+      SetErrorLevel 1
+      Quit
+    ${EndIf}
+    StrCpy $INSTDIR $R9
+  ${EndIf}
+!macroend
+
 !macro NSIS_HOOK_PREUNINSTALL
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "LinAI"
 

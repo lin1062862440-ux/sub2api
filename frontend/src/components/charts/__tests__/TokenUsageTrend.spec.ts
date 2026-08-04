@@ -18,13 +18,6 @@ vi.mock('vue-i18n', async () => {
   }
 })
 
-vi.mock('vue-chartjs', () => ({
-  Line: {
-    props: ['data', 'options'],
-    template: '<div class="chart-data">{{ JSON.stringify(data) }}</div>',
-  },
-}))
-
 describe('TokenUsageTrend', () => {
   it('calculates cache hit rate against all prompt tokens', () => {
     const wrapper = mount(TokenUsageTrend, {
@@ -49,12 +42,16 @@ describe('TokenUsageTrend', () => {
       },
     })
 
-    const chartData = JSON.parse(wrapper.find('.chart-data').text())
-    const hitRateDataset = chartData.datasets.find(
-      (ds: any) => ds.label === 'Cache Hit Rate'
+    const chartOption = JSON.parse(wrapper.find('.vue-echarts-stub').text())
+    const hitRateSeries = chartOption.series.find(
+      (series: any) => series.name === 'Cache Hit Rate'
     )
     // Hit rate = 1500 / (500 + 1500 + 0) * 100 = 75%
-    expect(hitRateDataset.data[0]).toBe(75)
+    expect(hitRateSeries.data[0]).toBe(75)
+    expect(hitRateSeries.areaStyle.color.colorStops).toHaveLength(2)
+
+    const tokenSeries = chartOption.series.filter((series: any) => series.stack === 'tokens')
+    expect(tokenSeries).toHaveLength(4)
   })
 
   it('returns 0 hit rate when all prompt tokens are zero', () => {
@@ -80,11 +77,11 @@ describe('TokenUsageTrend', () => {
       },
     })
 
-    const chartData = JSON.parse(wrapper.find('.chart-data').text())
-    const hitRateDataset = chartData.datasets.find(
-      (ds: any) => ds.label === 'Cache Hit Rate'
+    const chartOption = JSON.parse(wrapper.find('.vue-echarts-stub').text())
+    const hitRateSeries = chartOption.series.find(
+      (series: any) => series.name === 'Cache Hit Rate'
     )
-    expect(hitRateDataset.data[0]).toBe(0)
+    expect(hitRateSeries.data[0]).toBe(0)
   })
 
   it('includes cache_creation_tokens in denominator for Anthropic models', () => {
@@ -110,11 +107,11 @@ describe('TokenUsageTrend', () => {
       },
     })
 
-    const chartData = JSON.parse(wrapper.find('.chart-data').text())
-    const hitRateDataset = chartData.datasets.find(
-      (ds: any) => ds.label === 'Cache Hit Rate'
+    const chartOption = JSON.parse(wrapper.find('.vue-echarts-stub').text())
+    const hitRateSeries = chartOption.series.find(
+      (series: any) => series.name === 'Cache Hit Rate'
     )
     // Hit rate = 500 / (200 + 500 + 300) * 100 = 50%
-    expect(hitRateDataset.data[0]).toBe(50)
+    expect(hitRateSeries.data[0]).toBe(50)
   })
 })

@@ -1,16 +1,33 @@
 import { mount } from '@vue/test-utils'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
 
 import TrendChart from './TrendChart.vue'
 
+const getDataURL = vi.fn(() => 'data:image/png;base64,chart')
+
+vi.mock('vue-echarts', () => ({
+  default: defineComponent({
+    name: 'VChart',
+    props: ['option'],
+    setup(props, { expose }) {
+      expose({ chart: { getDataURL } })
+      return () => h('div', { 'data-testid': 'echarts-mock' }, JSON.stringify(props.option))
+    },
+  }),
+}))
+
 describe('TrendChart', () => {
+  beforeEach(() => getDataURL.mockClear())
+
   it('renders an instructive empty state', () => {
     const wrapper = mount(TrendChart, { props: { points: [] } })
 
     expect(wrapper.get('[data-testid="trend-empty"]').text()).toContain('产生请求后')
+    expect(wrapper.find('[data-testid="trend-echart"]').exists()).toBe(false)
   })
 
-  it('renders request and token lines with one inspectable point per day', () => {
+  it('renders a dual-axis gradient area option with raw totals', () => {
     const wrapper = mount(TrendChart, {
       props: {
         points: [
@@ -20,45 +37,52 @@ describe('TrendChart', () => {
       },
     })
 
-    expect(wrapper.get('[data-testid="trend-line"]').attributes('d')).toContain('L')
-    expect(wrapper.get('[data-testid="token-line"]').attributes('d')).toContain('L')
-    expect(wrapper.findAll('[data-testid="trend-point"]')).toHaveLength(2)
-    expect(wrapper.findAll('[data-testid="token-point"]')).toHaveLength(2)
+    const option = wrapper.getComponent({ name: 'VChart' }).props('option') as Record<string, any>
+    expect(option.series).toHaveLength(2)
+    expect(option.series.every((series: Record<string, unknown>) => series.type === 'line')).toBe(true)
+    expect(option.series.every((series: Record<string, unknown>) => series.stack === undefined)).toBe(true)
+    expect(option.series.map((series: Record<string, unknown>) => series.yAxisIndex)).toEqual([0, 1])
+    expect(option.yAxis).toHaveLength(2)
+    expect(option.series.every((series: Record<string, unknown>) => series.smooth === 0.42)).toBe(true)
+    expect(option.series[0].areaStyle.color.colorStops).toEqual([
+      { offset: 0, color: '#6ee7b7' },
+      { offset: 1, color: '#22d3ee' },
+    ])
+    expect(option.series[1].areaStyle.color.colorStops).toHaveLength(2)
+    expect(option.tooltip.trigger).toBe('axis')
+    expect(option.legend.bottom).toBe(2)
     expect(wrapper.get('[data-testid="range-request-total"]').text()).toContain('40')
     expect(wrapper.get('[data-testid="range-token-total"]').text()).toContain('4,000')
   })
 
-  it('thins dense axis labels while preserving both endpoints', () => {
-    const points = Array.from({ length: 24 }, (_, hour) => ({
-      date: `2026-08-02 ${String(hour).padStart(2, '0')}:00`,
-      requests: hour,
-      total_tokens: hour * 100,
-    }))
-    const wrapper = mount(TrendChart, { props: { points: points as never } })
-    const labels = wrapper.findAll('[data-testid="trend-axis-label"]')
-
-    expect(labels.length).toBeLessThanOrEqual(6)
-    expect(labels[0].text()).toBe('08-02 00:00')
-    expect(labels.at(-1)?.text()).toBe('08-02 23:00')
-  })
-
-  it('shows both series values for the hovered time column and clears on leave', async () => {
+  it('plots and reports raw values without percentage normalization', () => {
     const wrapper = mount(TrendChart, {
       props: {
         points: [
           { date: '2026-08-02 10:00', requests: 12, total_tokens: 1200 },
-          { date: '2026-08-02 11:00', requests: 28, total_tokens: 2800 },
+          { date: '2026-08-02 11:00', requests: 24, total_tokens: 3600 },
         ] as never,
       },
     })
+    const option = wrapper.getComponent({ name: 'VChart' }).props('option') as Record<string, any>
 
-    await wrapper.findAll('[data-testid="trend-hit-target"]')[1].trigger('pointerenter')
-    expect(wrapper.get('[data-testid="trend-tooltip"]').text()).toContain('2026-08-02 11:00')
-    expect(wrapper.get('[data-testid="trend-tooltip"]').text()).toContain('28')
-    expect(wrapper.get('[data-testid="trend-tooltip"]').text()).toContain('2,800')
-    expect(wrapper.find('[data-testid="trend-hover-guide"]').exists()).toBe(true)
+    expect(option.series[0].data).toEqual([12, 24])
+    expect(option.series[1].data).toEqual([1200, 3600])
+    const tooltip = option.tooltip.formatter([{ dataIndex: 1, axisValueLabel: '2026-08-02 11:00' }])
+    expect(tooltip).toContain('2026-08-02 11:00')
+    expect(tooltip).toContain('24')
+    expect(tooltip).toContain('3,600')
+  })
 
-    await wrapper.get('.plot').trigger('pointerleave')
-    expect(wrapper.find('[data-testid="trend-tooltip"]').exists()).toBe(false)
+  it('exports the chart as a high-resolution PNG', async () => {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+    const wrapper = mount(TrendChart, {
+      props: { points: [{ date: '2026-08-02', requests: 1, total_tokens: 100 }] as never },
+    })
+
+    await wrapper.get('[aria-label="下载图表"]').trigger('click')
+    expect(getDataURL).toHaveBeenCalledWith({ type: 'png', pixelRatio: 2, backgroundColor: '#ffffff' })
+    expect(click).toHaveBeenCalledOnce()
+    click.mockRestore()
   })
 })

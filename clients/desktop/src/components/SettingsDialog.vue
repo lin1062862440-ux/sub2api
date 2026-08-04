@@ -7,6 +7,7 @@ import {
   Check,
   Info,
   LoaderCircle,
+  Power,
   RefreshCw,
   Settings2,
   Sparkles,
@@ -20,8 +21,13 @@ import { createUsageDisplayStore } from '@/features/usage-display/core/store'
 import type { UsageDisplayConfig } from '@/features/usage-display/core/storage'
 import UsageDisplaySettingsForm from '@/features/usage-display/internal/settings/UsageDisplaySettingsForm.vue'
 import type { AvailableDesktopUpdate } from '@/lib/desktop-updater'
+import {
+  getLaunchAtStartup,
+  setLaunchAtStartup,
+  startupSettingsErrorMessage,
+} from '@/lib/startup'
 
-type SettingsSection = 'usage' | 'about' | 'updates'
+type SettingsSection = 'general' | 'usage' | 'about' | 'updates'
 
 const props = defineProps<{
   modelValue: boolean
@@ -29,6 +35,7 @@ const props = defineProps<{
   productName: string
   canUseUsageDisplay: boolean
   canUseUpdater: boolean
+  canManageLaunchAtStartup: boolean
   updateChecking: boolean
   updateInstalling: boolean
   updateProgress: number | null
@@ -54,10 +61,15 @@ const dialog = ref<HTMLElement | null>(null)
 const activeSection = ref<SettingsSection>('usage')
 const usageError = ref('')
 const usageSaving = ref(false)
+const startupLoading = ref(false)
+const startupSaving = ref(false)
+const startupError = ref('')
+const launchAtStartup = ref(false)
 const appName = ref('')
 const appVersion = ref('')
 
 const visibleSections = computed(() => [
+  ...(props.canManageLaunchAtStartup ? [{ id: 'general' as const, label: '常规设置', icon: Power }] : []),
   ...(props.canUseUsageDisplay ? [{ id: 'usage' as const, label: '用量显示', icon: ChartNoAxesCombined }] : []),
   { id: 'about' as const, label: '关于信息', icon: Info },
   ...(props.canUseUpdater ? [{ id: 'updates' as const, label: '检查更新', icon: BadgeCheck }] : []),
@@ -77,7 +89,7 @@ const orbValue = computed(() => {
 })
 
 function closeDialog() {
-  if (usageSaving.value || props.updateInstalling) return
+  if (usageSaving.value || startupSaving.value || props.updateInstalling) return
   settingsStore.stop(false)
   emit('update:modelValue', false)
 }
@@ -108,13 +120,41 @@ async function loadUsageSettings() {
   await settingsStore.loadSubscriptions()
 }
 
+async function loadStartupSettings() {
+  if (!props.modelValue || !props.canManageLaunchAtStartup) return
+  startupError.value = ''
+  startupLoading.value = true
+  try {
+    launchAtStartup.value = await getLaunchAtStartup()
+  } catch (error) {
+    startupError.value = startupSettingsErrorMessage(error)
+  } finally {
+    startupLoading.value = false
+  }
+}
+
+async function updateLaunchAtStartup(enabled: boolean) {
+  const previous = launchAtStartup.value
+  launchAtStartup.value = enabled
+  startupError.value = ''
+  startupSaving.value = true
+  try {
+    launchAtStartup.value = await setLaunchAtStartup(enabled)
+  } catch (error) {
+    launchAtStartup.value = previous
+    startupError.value = startupSettingsErrorMessage(error)
+  } finally {
+    startupSaving.value = false
+  }
+}
+
 async function openDialog() {
   if (!props.modelValue) return
   const firstSection = visibleSections.value[0]?.id ?? 'about'
   if (!visibleSections.value.some((item) => item.id === activeSection.value)) {
     activeSection.value = firstSection
   }
-  await Promise.all([loadAppInfo(), loadUsageSettings()])
+  await Promise.all([loadAppInfo(), loadUsageSettings(), loadStartupSettings()])
   await nextTick()
   dialog.value?.focus()
 }
@@ -170,7 +210,7 @@ onBeforeUnmount(() => {
               title="关闭"
               aria-label="关闭"
               data-testid="close-settings-dialog"
-              :disabled="usageSaving || updateInstalling"
+              :disabled="usageSaving || startupSaving || updateInstalling"
               @click="closeDialog"
             ><X :size="17" /></button>
           </header>
@@ -191,7 +231,33 @@ onBeforeUnmount(() => {
             </nav>
 
             <main class="settings-panel">
-              <section v-if="activeSection === 'usage' && canUseUsageDisplay" class="settings-section">
+              <section
+                v-if="activeSection === 'general' && canManageLaunchAtStartup"
+                class="settings-section general-section"
+              >
+                <p v-if="startupError" class="settings-error" role="alert">
+                  {{ startupError }}
+                </p>
+                <div class="settings-row">
+                  <div>
+                    <strong>开机时启动 LinAI</strong>
+                    <span>登录 Windows 后自动启动，可随时在这里关闭</span>
+                  </div>
+                  <label class="settings-check">
+                    <input
+                      type="checkbox"
+                      aria-label="开机时启动 LinAI"
+                      data-testid="launch-at-startup"
+                      :checked="launchAtStartup"
+                      :disabled="startupLoading || startupSaving"
+                      @change="updateLaunchAtStartup(($event.target as HTMLInputElement).checked)"
+                    />
+                    <span>{{ startupLoading ? '读取中' : launchAtStartup ? '已开启' : '已关闭' }}</span>
+                  </label>
+                </div>
+              </section>
+
+              <section v-else-if="activeSection === 'usage' && canUseUsageDisplay" class="settings-section">
                 <p v-if="usageError || state.error" class="settings-error" role="alert">
                   {{ usageError || state.error }}
                 </p>
@@ -413,6 +479,7 @@ onBeforeUnmount(() => {
 }
 
 .about-section,
+.general-section,
 .update-section {
   display: grid;
   align-content: start;
