@@ -782,37 +782,37 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 		return nil
 	}
 	return &AdminUserSubscription{
-		UserSubscription:      userSubscriptionFromServiceBase(sub),
-		AssignedBy:            sub.AssignedBy,
-		OwnerUserGroupID:      sub.OwnerUserGroupID,
-		AssignedAt:            sub.AssignedAt,
-		Notes:                 sub.Notes,
-		TeamWeeklyLimitUSD:    sub.TeamWeeklyLimitUSD,
-		TeamWeeklyUsageUSD:    sub.TeamWeeklyUsageUSD,
-		TeamWeeklyWindowStart: sub.TeamWeeklyWindowStart,
-		AssignedByUser:        UserFromServiceShallow(sub.AssignedByUser),
+		UserSubscription: userSubscriptionFromServiceBase(sub),
+		AssignedBy:       sub.AssignedBy,
+		OwnerUserGroupID: sub.OwnerUserGroupID,
+		AssignedAt:       sub.AssignedAt,
+		Notes:            sub.Notes,
+		AssignedByUser:   UserFromServiceShallow(sub.AssignedByUser),
 	}
 }
 
 func userSubscriptionFromServiceBase(sub *service.UserSubscription) UserSubscription {
 	return UserSubscription{
-		ID:                 sub.ID,
-		UserID:             sub.UserID,
-		GroupID:            sub.GroupID,
-		StartsAt:           sub.StartsAt,
-		ExpiresAt:          sub.ExpiresAt,
-		Status:             sub.Status,
-		DailyWindowStart:   sub.DailyWindowStart,
-		WeeklyWindowStart:  sub.WeeklyWindowStart,
-		MonthlyWindowStart: sub.MonthlyWindowStart,
-		DailyUsageUSD:      sub.DailyUsageUSD,
-		WeeklyUsageUSD:     sub.WeeklyUsageUSD,
-		MonthlyUsageUSD:    sub.MonthlyUsageUSD,
-		CreatedAt:          sub.CreatedAt,
-		UpdatedAt:          sub.UpdatedAt,
-		RevokedAt:          sub.DeletedAt,
-		User:               UserFromServiceShallow(sub.User),
-		Group:              GroupFromServiceShallow(sub.Group),
+		ID:                    sub.ID,
+		UserID:                sub.UserID,
+		GroupID:               sub.GroupID,
+		StartsAt:              sub.StartsAt,
+		ExpiresAt:             sub.ExpiresAt,
+		Status:                sub.Status,
+		DailyWindowStart:      sub.DailyWindowStart,
+		WeeklyWindowStart:     sub.WeeklyWindowStart,
+		MonthlyWindowStart:    sub.MonthlyWindowStart,
+		DailyUsageUSD:         sub.DailyUsageUSD,
+		WeeklyUsageUSD:        sub.WeeklyUsageUSD,
+		MonthlyUsageUSD:       sub.MonthlyUsageUSD,
+		TeamWeeklyLimitUSD:    sub.TeamWeeklyLimitUSD,
+		TeamWeeklyUsageUSD:    sub.TeamWeeklyUsageUSD,
+		TeamWeeklyWindowStart: sub.TeamWeeklyWindowStart,
+		CreatedAt:             sub.CreatedAt,
+		UpdatedAt:             sub.UpdatedAt,
+		RevokedAt:             sub.DeletedAt,
+		User:                  UserFromServiceShallow(sub.User),
+		Group:                 GroupFromServiceShallow(sub.Group),
 	}
 }
 

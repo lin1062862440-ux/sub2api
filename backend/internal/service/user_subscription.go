@@ -26,8 +26,7 @@ type UserSubscription struct {
 	AssignedAt       time.Time
 	Notes            string
 
-	// Team quota fields are populated for admin list views when this
-	// subscription is owned by a business user group.
+	// Team quota fields contain the subscribed user's own allocation and usage.
 	TeamWeeklyLimitUSD    *float64
 	TeamWeeklyUsageUSD    *float64
 	TeamWeeklyWindowStart *time.Time

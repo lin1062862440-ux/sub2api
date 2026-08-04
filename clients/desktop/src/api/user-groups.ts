@@ -158,6 +158,20 @@ export interface UserGroupUsageItem {
   actual_cost: number
   billing_type?: 0 | 1
   created_at: string
+  prompt_available?: boolean
+}
+
+export interface UserGroupPromptDetail {
+  id: number
+  request_id: string
+  protocol: string
+  model: string
+  stage: string
+  redacted_prompt: string
+  prompt_length: number
+  truncated: boolean
+  captured_at: string
+  expires_at: string
 }
 
 export interface UserGroupUsageResult {
@@ -222,12 +236,30 @@ export function replaceUserGroupViewers(id: number, userIds: number[]) {
   return http.put<void>(`/user-groups/${id}/viewers`, { user_ids: userIds })
 }
 
+export function setUserGroupPromptCapture(id: number, enabled: boolean) {
+  return http.put<void>(`/user-groups/${id}/prompt-capture`, { enabled })
+}
+
+export function getUserGroupPromptViewers(id: number) {
+  return http.get<UserGroupViewer[]>(`/user-groups/${id}/prompt-viewers`)
+}
+
+export function replaceUserGroupPromptViewers(id: number, userIds: number[]) {
+  return http.put<void>(`/user-groups/${id}/prompt-viewers`, { user_ids: userIds })
+}
+
 export function getUserGroupSubscriptions(id: number, params: UserGroupSubscriptionParams = {}) {
   return http.get<UserGroupSubscriptionResult>(`/user-groups/${id}/subscriptions`, { query: { ...params } })
 }
 
 export function getUserGroupUsage(id: number, params: UserGroupUsageParams = {}) {
   return http.get<UserGroupUsageResult>(`/user-groups/${id}/usage`, { query: { ...params } })
+}
+
+export function getUserGroupUsagePrompts(id: number, usageLogId: number) {
+  return http.get<UserGroupPromptDetail[]>(`/user-groups/${id}/usage/${usageLogId}/prompts`, {
+    suppressUserGroupAccessDenied: true,
+  })
 }
 
 export function getUserGroupQuotaOverview(id: number) {

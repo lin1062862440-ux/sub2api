@@ -635,6 +635,10 @@ type UserSubscription struct {
 	WeeklyUsageUSD  float64 `json:"weekly_usage_usd"`
 	MonthlyUsageUSD float64 `json:"monthly_usage_usd"`
 
+	TeamWeeklyLimitUSD    *float64   `json:"team_weekly_limit_usd,omitempty"`
+	TeamWeeklyUsageUSD    *float64   `json:"team_weekly_usage_usd,omitempty"`
+	TeamWeeklyWindowStart *time.Time `json:"team_weekly_window_start,omitempty"`
+
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
@@ -652,10 +656,6 @@ type AdminUserSubscription struct {
 	OwnerUserGroupID *int64    `json:"owner_user_group_id,omitempty"`
 	AssignedAt       time.Time `json:"assigned_at"`
 	Notes            string    `json:"notes"`
-
-	TeamWeeklyLimitUSD    *float64   `json:"team_weekly_limit_usd,omitempty"`
-	TeamWeeklyUsageUSD    *float64   `json:"team_weekly_usage_usd,omitempty"`
-	TeamWeeklyWindowStart *time.Time `json:"team_weekly_window_start,omitempty"`
 
 	AssignedByUser *User `json:"assigned_by_user,omitempty"`
 }

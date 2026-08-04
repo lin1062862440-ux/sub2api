@@ -26,6 +26,7 @@ const availableTeamGroups = [
 
 let quotaPolicy = { enabled: true, weekly_limit_usd: 300, weekly_usage_usd: 128.6, weekly_window_start: '2026-08-03T00:00:00Z', weekly_reset_at: '2026-08-10T00:00:00Z' }
 let quotaManagers = [{ user_id: 10, username: 'Viewer', email: 'viewer@example.com', status: 'active', granted_at: now }]
+let promptViewers = [{ user_id: 10, username: 'Viewer', email: 'viewer@example.com', status: 'active', granted_at: now }]
 let selectedTeamGroupIds = [12, 18]
 let memberQuotas = members.map((member, index) => ({ ...member, weekly_limit_usd: [120, 100, 60][index]!, weekly_usage_usd: [58.4, 42.2, 28][index]!, weekly_window_start: quotaPolicy.weekly_window_start }))
 
@@ -41,6 +42,9 @@ export async function getUserGroupMembers() { return members }
 export async function replaceUserGroupMembers() {}
 export async function getUserGroupViewers() { return [{ user_id: 10, username: 'Viewer', email: 'viewer@example.com', status: 'active', granted_at: now }] }
 export async function replaceUserGroupViewers() {}
+export async function getUserGroupPromptViewers() { return promptViewers }
+export async function setUserGroupPromptCapture(id: number, enabled: boolean) { groups = groups.map(group => group.id === id ? { ...group, prompt_capture_enabled: enabled } : group) }
+export async function replaceUserGroupPromptViewers(_id: number, userIds: number[]) { promptViewers = userIds.map(userId => ({ user_id: userId, username: `User ${userId}`, email: `user${userId}@example.com`, status: 'active', granted_at: now })) }
 export async function getUserGroupQuotaOverview(id: number) {
   return {
     group_id: id,
@@ -68,7 +72,10 @@ export async function getUserGroupUsage() {
   return {
     summary: { total_requests: 18240, total_input_tokens: 5200000, total_output_tokens: 1400000, total_cache_tokens: 800000, total_tokens: 7400000, total_actual_cost: 128.6, balance_consumption: 42.2, subscription_consumption: 86.4 },
     by_user: members.map((member, index) => ({ user_id: member.user_id, email: member.email, username: member.username, total_requests: 8200 - index * 1800, total_tokens: 3200000 - index * 700000, total_actual_cost: 58 - index * 14, balance_consumption: 18 - index * 5, subscription_consumption: 40 - index * 9 })),
-    items: members.map((member, index) => ({ id: index + 1, user_id: member.user_id, email: member.email, username: member.username, request_id: `req-preview-${index + 1}`, model: index === 1 ? 'gpt-5' : 'claude-sonnet-4', input_tokens: 1200, output_tokens: 420, cache_creation_tokens: 100, cache_read_tokens: 300, total_tokens: 2020, actual_cost: 1.8 + index, billing_type: index === 2 ? 0 as const : 1 as const, created_at: now })),
+    items: members.map((member, index) => ({ id: index + 1, user_id: member.user_id, email: member.email, username: member.username, request_id: `req-preview-${index + 1}`, model: index === 1 ? 'gpt-5' : 'claude-sonnet-4', input_tokens: 1200, output_tokens: 420, cache_creation_tokens: 100, cache_read_tokens: 300, total_tokens: 2020, actual_cost: 1.8 + index, billing_type: index === 2 ? 0 as const : 1 as const, created_at: now, prompt_available: index !== 2 })),
     total: 3, page: 1, page_size: 20, pages: 1,
   }
+}
+export async function getUserGroupUsagePrompts(_id: number, usageLogId: number) {
+  return [{ id: usageLogId, request_id: `req-preview-${usageLogId}`, protocol: 'responses', model: 'gpt-5', stage: 'request', redacted_prompt: '请分析 [REDACTED] 模块，并给出安全的重构方案。', prompt_length: 34, truncated: false, captured_at: now, expires_at: '2026-08-09T08:00:00Z' }]
 }

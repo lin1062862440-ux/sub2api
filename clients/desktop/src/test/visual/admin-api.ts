@@ -205,7 +205,9 @@ const subscriptions = Array.from({ length: 22 }, (_, index) => ({
     ...subscription.group,
     name: index === 0 ? longChineseLabel : `Claude Code ${String(index + 1).padStart(2, '0')}`,
     platform: 'anthropic',
+    ...(index === 1 ? { name: 'OpenAI Team 成员套餐', platform: 'openai', subscription_type: 'team_subscription' as const } : {}),
   },
+  ...(index === 1 ? { owner_user_group_id: 1, team_weekly_limit_usd: 160, team_weekly_usage_usd: 68.4, team_weekly_window_start: '2026-07-29T00:00:00Z' } : {}),
 }))
 
 const redeemCode = {

@@ -63,10 +63,10 @@ const action = reactive({
 
 const active = computed(() => items.value.filter(item => item.status === 'active').length)
 const exhausted = computed(() => items.value.filter((item) => {
-  const windows = progress.value[item.id]
-  return [windows?.daily, windows?.weekly, windows?.monthly].some(window => window && window.limit_usd > 0 && window.percentage >= 100)
+  return quotaWindows(item).some(window => window.value.limit_usd > 0 && window.value.percentage >= 100)
 }).length)
 const pageCount = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)))
+const assignableGroups = computed(() => groups.value.filter(group => group.subscription_type !== 'team_subscription'))
 const visiblePages = computed(() => {
   if (pageCount.value <= 7) return Array.from({ length: pageCount.value }, (_, index) => index + 1)
   const pages = new Set([1, pageCount.value])
@@ -105,9 +105,10 @@ async function load(background = false) {
     items.value = subscriptions.value.items
     total.value = subscriptions.value.total
     progress.value = {}
-    const details = await Promise.allSettled(items.value.map(item => getAdminSubscriptionProgress(item.id)))
+    const ordinaryItems = items.value.filter(item => !isTeamSubscription(item))
+    const details = await Promise.allSettled(ordinaryItems.map(item => getAdminSubscriptionProgress(item.id)))
     details.forEach((detail, index) => {
-      const item = items.value[index]
+      const item = ordinaryItems[index]
       if (detail.status === 'fulfilled' && item) progress.value[item.id] = detail.value
     })
   } else {
@@ -236,8 +237,36 @@ function formatPercentage(value: number | undefined) {
   return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 1 }).format(normalized)
 }
 
-function quotaWindows(subscriptionId: number): Array<{ key: QuotaWindowKey; label: string; value: AdminSubscriptionQuotaWindow }> {
-  const detail = progress.value[subscriptionId]
+function isTeamSubscription(item: AdminSubscription) {
+  return item.group?.subscription_type === 'team_subscription'
+}
+
+function teamQuotaWindow(item: AdminSubscription): AdminSubscriptionQuotaWindow | null {
+  const limit = item.team_weekly_limit_usd
+  if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) return null
+  const used = typeof item.team_weekly_usage_usd === 'number' && Number.isFinite(item.team_weekly_usage_usd)
+    ? Math.max(0, item.team_weekly_usage_usd)
+    : 0
+  const startedAt = item.team_weekly_window_start ? Date.parse(item.team_weekly_window_start) : Number.NaN
+  const resetsInSeconds = Number.isFinite(startedAt)
+    ? Math.max(0, Math.ceil((startedAt + 7 * 86_400_000 - Date.now()) / 1000))
+    : null
+  return {
+    limit_usd: limit,
+    used_usd: used,
+    remaining_usd: Math.max(0, limit - used),
+    percentage: Math.min(100, Math.max(0, used / limit * 100)),
+    window_start: item.team_weekly_window_start ?? undefined,
+    resets_in_seconds: resetsInSeconds,
+  }
+}
+
+function quotaWindows(item: AdminSubscription): Array<{ key: QuotaWindowKey | 'team-weekly'; label: string; value: AdminSubscriptionQuotaWindow }> {
+  if (isTeamSubscription(item)) {
+    const value = teamQuotaWindow(item)
+    return value ? [{ key: 'team-weekly', label: '本周已用 / 成员分配额度', value }] : []
+  }
+  const detail = progress.value[item.id]
   if (!detail) return []
   return quotaWindowDefinitions.flatMap(({ key, label }) => {
     const value = detail[key]
@@ -290,22 +319,22 @@ onMounted(() => void load())
       <article v-for="item in items" :key="item.id">
         <header><div><strong>{{ item.user?.email || `用户 #${item.user_id}` }}</strong><span>{{ item.user?.username || '未设置用户名' }} · {{ item.group?.name || `分组 #${item.group_id}` }}</span></div><em :class="item.status">{{ item.status === 'active' ? '有效' : item.status === 'revoked' ? '已撤销' : item.status === 'expired' ? '已过期' : '已暂停' }}</em></header>
         <div class="windows">
-          <div v-for="window in quotaWindows(item.id)" :key="window.key" class="quota-window" :data-testid="`subscription-quota-${window.key}-${item.id}`">
+          <div v-for="window in quotaWindows(item)" :key="window.key" class="quota-window" :data-testid="`subscription-quota-${window.key}-${item.id}`">
             <div class="quota-heading"><span>{{ window.label }}</span><strong>{{ formatPercentage(window.value.percentage) }}%</strong></div>
             <div class="quota-amount"><strong>{{ formatCost(window.value.used_usd) }}</strong><span>/ {{ formatCost(window.value.limit_usd) }}</span></div>
             <i><b :class="{ full: window.value.percentage >= 100 }" :style="{ width: `${percentage(window.value.percentage)}%` }" /></i>
             <small v-if="formatResetCountdown(window.value.resets_in_seconds)"><Clock3 :size="11" />{{ formatResetCountdown(window.value.resets_in_seconds) }}</small>
           </div>
-          <div v-if="!quotaWindows(item.id).length" class="quota-unlimited"><strong>∞</strong><span>当前分组未设置周期额度</span></div>
+          <div v-if="!quotaWindows(item).length" class="quota-unlimited" :class="{ 'team-unallocated': isTeamSubscription(item) }"><strong v-if="!isTeamSubscription(item)">∞</strong><span>{{ isTeamSubscription(item) ? '该成员暂未分配团队额度' : '当前分组未设置周期额度' }}</span></div>
         </div>
-        <footer><span>到期 {{ formatDateTime(item.expires_at) }}</span><div><button :disabled="Boolean(pending)" :data-testid="`extend-subscription-${item.id}`" @click="openAction('extend', item)"><CalendarPlus :size="15" />延期</button><button :disabled="Boolean(pending)" :data-testid="`reset-subscription-${item.id}`" @click="openAction('reset', item)"><RotateCcw :size="15" />重置用量</button><button :disabled="Boolean(pending)" :data-testid="`toggle-subscription-${item.id}`" @click="openAction(item.status === 'revoked' ? 'restore' : 'revoke', item)"><ShieldCheck v-if="item.status === 'revoked'" :size="15" /><ShieldOff v-else :size="15" />{{ item.status === 'revoked' ? '恢复' : '撤销' }}</button></div></footer>
+        <footer><span>{{ isTeamSubscription(item) ? '团队额度请在“套餐与额度”中管理' : `到期 ${formatDateTime(item.expires_at)}` }}</span><div><button :disabled="Boolean(pending)" :data-testid="`extend-subscription-${item.id}`" @click="openAction('extend', item)"><CalendarPlus :size="15" />延期</button><button v-if="!isTeamSubscription(item)" :disabled="Boolean(pending)" :data-testid="`reset-subscription-${item.id}`" @click="openAction('reset', item)"><RotateCcw :size="15" />重置用量</button><button :disabled="Boolean(pending)" :data-testid="`toggle-subscription-${item.id}`" @click="openAction(item.status === 'revoked' ? 'restore' : 'revoke', item)"><ShieldCheck v-if="item.status === 'revoked'" :size="15" /><ShieldOff v-else :size="15" />{{ item.status === 'revoked' ? '恢复' : '撤销' }}</button></div></footer>
       </article>
     </section>
 
     <footer v-if="total > pageSize" class="pagination"><div><span>每页</span><select :value="pageSize" data-testid="subscription-page-size" @change="changePageSize"><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select><span>条，共 {{ total }} 条</span></div><nav aria-label="订阅分页"><button type="button" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button><template v-for="(value, index) in visiblePages" :key="value"><span v-if="index > 0 && value - visiblePages[index - 1]! > 1">...</span><button type="button" :class="{ current: value === page }" :data-testid="`subscription-page-${value}`" @click="changePage(value)">{{ value }}</button></template><button type="button" :disabled="page >= pageCount" @click="changePage(page + 1)">下一页</button></nav></footer>
 
     <Transition name="fade">
-      <div v-if="editorOpen" class="backdrop" @mousedown.self="editorOpen = false"><section class="editor"><header><div><h2>分配订阅</h2><p>为一个或多个用户开通分组订阅</p></div><button aria-label="关闭" @click="editorOpen = false"><X :size="18" /></button></header><form data-testid="subscription-editor" @submit.prevent="submitAssignment"><div class="mode-switch wide" aria-label="分配方式"><button type="button" :aria-pressed="form.mode === 'single'" @click="form.mode = 'single'">单个用户</button><button type="button" data-testid="subscription-mode-bulk" :aria-pressed="form.mode === 'bulk'" @click="form.mode = 'bulk'"><UsersRound :size="14" />批量用户</button></div><label v-if="form.mode === 'single'" class="wide"><span>用户 ID</span><input v-model="form.userId" data-testid="subscription-user-id" inputmode="numeric" /></label><label v-else class="wide"><span>用户 ID 列表</span><textarea v-model="form.userIds" data-testid="subscription-user-ids" rows="4" placeholder="例如：7, 8, 9；支持逗号、空格或换行" /></label><label><span>订阅分组</span><select v-model="form.groupId" data-testid="subscription-group-id"><option value="">请选择</option><option v-for="group in groups" :key="group.id" :value="String(group.id)">{{ group.name }}</option></select></label><label><span>有效天数</span><input v-model.number="form.days" type="number" min="1" /></label><footer class="wide"><button type="button" @click="editorOpen = false">取消</button><button class="save" type="submit" :disabled="pending === 'assign'">{{ pending === 'assign' ? '正在分配' : '确认分配' }}</button></footer></form></section></div>
+      <div v-if="editorOpen" class="backdrop" @mousedown.self="editorOpen = false"><section class="editor"><header><div><h2>分配订阅</h2><p>为一个或多个用户开通分组订阅</p></div><button aria-label="关闭" @click="editorOpen = false"><X :size="18" /></button></header><form data-testid="subscription-editor" @submit.prevent="submitAssignment"><div class="mode-switch wide" aria-label="分配方式"><button type="button" :aria-pressed="form.mode === 'single'" @click="form.mode = 'single'">单个用户</button><button type="button" data-testid="subscription-mode-bulk" :aria-pressed="form.mode === 'bulk'" @click="form.mode = 'bulk'"><UsersRound :size="14" />批量用户</button></div><label v-if="form.mode === 'single'" class="wide"><span>用户 ID</span><input v-model="form.userId" data-testid="subscription-user-id" inputmode="numeric" /></label><label v-else class="wide"><span>用户 ID 列表</span><textarea v-model="form.userIds" data-testid="subscription-user-ids" rows="4" placeholder="例如：7, 8, 9；支持逗号、空格或换行" /></label><label><span>订阅分组</span><select v-model="form.groupId" data-testid="subscription-group-id"><option value="">请选择</option><option v-for="group in assignableGroups" :key="group.id" :value="String(group.id)">{{ group.name }}</option></select></label><label><span>有效天数</span><input v-model.number="form.days" type="number" min="1" /></label><footer class="wide"><button type="button" @click="editorOpen = false">取消</button><button class="save" type="submit" :disabled="pending === 'assign'">{{ pending === 'assign' ? '正在分配' : '确认分配' }}</button></footer></form></section></div>
     </Transition>
 
     <Transition name="fade">

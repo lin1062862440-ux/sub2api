@@ -17,16 +17,20 @@ import {
   getUserGroupCapabilities,
   getUserGroupMembers,
   getUserGroupQuotaOverview,
+  getUserGroupPromptViewers,
   getUserGroupSubscriptions,
   getUserGroupUsage,
+  getUserGroupUsagePrompts,
   getUserGroupViewers,
   listUserGroups,
   replaceUserGroupMembers,
   replaceUserGroupQuotaManagers,
+  replaceUserGroupPromptViewers,
   replaceUserGroupTeamSubscriptions,
   replaceUserGroupViewers,
   resetUserGroupQuotaUsage,
   setUserGroupQuotaPolicy,
+  setUserGroupPromptCapture,
   updateUserGroupMemberQuotas,
   updateUserGroup,
 } from './user-groups'
@@ -66,6 +70,23 @@ describe('desktop user groups API', () => {
     expect(mocks.put).toHaveBeenNthCalledWith(1, '/user-groups/7/members', { user_ids: [3, 5] })
     expect(mocks.get).toHaveBeenNthCalledWith(2, '/user-groups/7/viewers')
     expect(mocks.put).toHaveBeenNthCalledWith(2, '/user-groups/7/viewers', { user_ids: [9] })
+  })
+
+  it('binds Prompt capture, viewers, and scoped detail access', async () => {
+    mocks.get.mockResolvedValue([])
+    mocks.put.mockResolvedValue(undefined)
+
+    await setUserGroupPromptCapture(7, true)
+    await getUserGroupPromptViewers(7)
+    await replaceUserGroupPromptViewers(7, [3, 9])
+    await getUserGroupUsagePrompts(7, 42)
+
+    expect(mocks.put).toHaveBeenNthCalledWith(1, '/user-groups/7/prompt-capture', { enabled: true })
+    expect(mocks.get).toHaveBeenNthCalledWith(1, '/user-groups/7/prompt-viewers')
+    expect(mocks.put).toHaveBeenNthCalledWith(2, '/user-groups/7/prompt-viewers', { user_ids: [3, 9] })
+    expect(mocks.get).toHaveBeenNthCalledWith(2, '/user-groups/7/usage/42/prompts', {
+      suppressUserGroupAccessDenied: true,
+    })
   })
 
   it('serializes subscription and usage filters', async () => {

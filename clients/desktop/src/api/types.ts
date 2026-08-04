@@ -191,6 +191,7 @@ export interface SubscriptionGroup {
   name: string
   description?: string | null
   platform?: string
+  subscription_type?: 'standard' | 'subscription' | 'team_subscription'
   rate_multiplier?: number
   daily_limit_usd?: number | null
   weekly_limit_usd?: number | null
@@ -216,6 +217,9 @@ export interface UserSubscription {
   daily_window_start: string | null
   weekly_window_start: string | null
   monthly_window_start: string | null
+  team_weekly_limit_usd?: number | null
+  team_weekly_usage_usd?: number | null
+  team_weekly_window_start?: string | null
   created_at: string
   updated_at: string
   revoked_at?: string | null

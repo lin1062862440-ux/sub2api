@@ -1,7 +1,7 @@
 import type { SubscriptionStatus, UserSubscription } from '@/api'
 
 export interface SubscriptionQuotaWindow {
-  key: 'daily' | 'weekly' | 'monthly'
+  key: 'daily' | 'weekly' | 'monthly' | 'team-weekly'
   label: string
   used: number
   limit: number
@@ -45,6 +45,17 @@ export function subscriptionQuotaWindows(item: UserSubscription): SubscriptionQu
   const group = item.group
   if (!group) return []
 
+  if (isTeamSubscription(item)) {
+    if (!isFiniteLimit(item.team_weekly_limit_usd)) return []
+    return [{
+      key: 'team-weekly',
+      label: '本周已用 / 成员分配额度',
+      used: normalizedUsage(item.team_weekly_usage_usd, item.team_weekly_limit_usd),
+      limit: item.team_weekly_limit_usd,
+      resetLabel: resetTime(item.team_weekly_window_start, 168),
+    }]
+  }
+
   const windows: SubscriptionQuotaWindow[] = []
   if (isFiniteLimit(group.daily_limit_usd)) {
     windows.push({
@@ -74,6 +85,10 @@ export function subscriptionQuotaWindows(item: UserSubscription): SubscriptionQu
     })
   }
   return windows
+}
+
+export function isTeamSubscription(item: UserSubscription): boolean {
+  return item.group?.subscription_type === 'team_subscription'
 }
 
 export function isSubscriptionExhausted(item: UserSubscription): boolean {

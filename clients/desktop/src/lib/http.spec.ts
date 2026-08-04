@@ -78,6 +78,18 @@ describe('user group authorization failure', () => {
     expect(listener).not.toHaveBeenCalled()
     unsubscribe()
   })
+
+  it('keeps a scoped Prompt denial from revoking user group access', async () => {
+    const listener = vi.fn()
+    const unsubscribe = onUserGroupAccessDenied(listener)
+
+    await expect(http.get('/user-groups/7/usage/42/prompts', {
+      suppressUserGroupAccessDenied: true,
+    })).rejects.toMatchObject({ status: 403 })
+
+    expect(listener).not.toHaveBeenCalled()
+    unsubscribe()
+  })
 })
 
 describe('text responses', () => {

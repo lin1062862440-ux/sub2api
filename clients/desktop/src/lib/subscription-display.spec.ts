@@ -90,6 +90,37 @@ describe('subscription display rules', () => {
     ])
   })
 
+  it('uses the member allocation for team subscriptions and ignores ordinary group limits', () => {
+    const windows = subscriptionQuotaWindows(subscription({
+      team_weekly_limit_usd: 300,
+      team_weekly_usage_usd: 120.5,
+      team_weekly_window_start: '2026-07-28T12:00:00Z',
+      group: {
+        id: 3,
+        name: 'OpenAI Team',
+        subscription_type: 'team_subscription',
+        daily_limit_usd: 10,
+        weekly_limit_usd: 50,
+        monthly_limit_usd: 100,
+      },
+    }))
+
+    expect(windows).toEqual([{
+      key: 'team-weekly',
+      label: '本周已用 / 成员分配额度',
+      used: 120.5,
+      limit: 300,
+      resetLabel: '3 天后重置',
+    }])
+  })
+
+  it('does not describe an unallocated team subscription as unlimited', () => {
+    expect(subscriptionQuotaWindows(subscription({
+      team_weekly_limit_usd: null,
+      group: { id: 3, name: 'OpenAI Team', subscription_type: 'team_subscription' },
+    }))).toEqual([])
+  })
+
   it('omits invalid limits and normalizes malformed usage and reset dates', () => {
     const windows = subscriptionQuotaWindows(subscription({
       daily_usage_usd: Number.NaN,

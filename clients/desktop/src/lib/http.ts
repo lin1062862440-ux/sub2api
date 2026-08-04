@@ -74,6 +74,8 @@ export interface RequestOptions {
   query?: Record<string, string | number | boolean | undefined | null>
   /** Skips the Authorization header and the refresh cycle (login, public settings). */
   anonymous?: boolean
+  /** Keeps a scoped 403 from revoking the whole user-group workspace in the UI. */
+  suppressUserGroupAccessDenied?: boolean
   signal?: AbortSignal
 }
 
@@ -195,7 +197,7 @@ async function request(path: string, options: RequestOptions, retrying = false):
     emitAdminAccessDenied()
   }
 
-  if (response.status === 403 && (path === '/user-groups' || path.startsWith('/user-groups/'))) {
+  if (response.status === 403 && !options.suppressUserGroupAccessDenied && (path === '/user-groups' || path.startsWith('/user-groups/'))) {
     emitUserGroupAccessDenied()
   }
 

@@ -312,10 +312,11 @@ export interface AdminGroupOption {
   platform?: string
   is_exclusive?: boolean
   status?: string
+  subscription_type?: 'standard' | 'subscription' | 'team_subscription'
 }
 
 export type AdminGroupPlatform = 'anthropic' | 'openai' | 'gemini' | 'antigravity' | 'grok' | 'composite'
-export type AdminGroupSubscriptionType = 'standard' | 'subscription'
+export type AdminGroupSubscriptionType = 'standard' | 'subscription' | 'team_subscription'
 
 export interface AdminGroup {
   id: number
@@ -582,7 +583,8 @@ export interface AdminAuditLog {
 
 export interface AdminSubscription {
   id:number;user_id:number;group_id:number;status:'active'|'expired'|'revoked'|'suspended';starts_at:string;expires_at:string|null;daily_usage_usd:number;weekly_usage_usd:number;monthly_usage_usd:number;created_at:string;updated_at:string;revoked_at?:string|null
-  user?:{id:number;email:string;username:string};group?:{id:number;name:string;platform?:string;daily_limit_usd?:number|null;weekly_limit_usd?:number|null;monthly_limit_usd?:number|null}
+  owner_user_group_id?:number|null;team_weekly_limit_usd?:number|null;team_weekly_usage_usd?:number|null;team_weekly_window_start?:string|null
+  user?:{id:number;email:string;username:string};group?:{id:number;name:string;platform?:string;subscription_type?:'standard'|'subscription'|'team_subscription';daily_limit_usd?:number|null;weekly_limit_usd?:number|null;monthly_limit_usd?:number|null}
 }
 export interface AdminSubscriptionQuotaWindow {
   limit_usd: number

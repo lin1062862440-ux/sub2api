@@ -8,6 +8,7 @@ import ProviderIcon from '@/components/ProviderIcon.vue'
 import {
   formatSubscriptionDate,
   isSubscriptionExhausted,
+  isTeamSubscription,
   subscriptionProgress,
   subscriptionQuotaWindows,
   subscriptionStatusLabel,
@@ -224,6 +225,10 @@ onUnmounted(() => {
               />
             </div>
           </div>
+        </div>
+
+        <div v-else-if="isTeamSubscription(item)" class="unlimited team-unallocated" data-testid="subscription-team-unallocated">
+          <div><strong>暂未分配团队额度</strong><p>请联系团队配额管理员分配本周额度</p></div>
         </div>
 
         <div v-else class="unlimited" data-testid="subscription-unlimited">

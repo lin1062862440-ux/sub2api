@@ -45,7 +45,7 @@ type AssignMode = 'single' | 'bulk'
 type LifecycleAction = 'extend' | 'reset' | 'revoke' | 'restore'
 type QuotaKey = 'daily' | 'weekly' | 'monthly'
 type GroupStatus = 'active' | 'inactive'
-type GroupSubscriptionType = 'standard' | 'subscription'
+type GroupSubscriptionType = 'standard' | 'subscription' | 'team_subscription'
 
 interface SubscriptionGroupOption extends AdminGroupOption {
   platform: string
@@ -248,6 +248,10 @@ function groupLabel(item: AdminSubscription) {
   return safeText(item.group?.name, `分组 #${item.group_id}`)
 }
 
+function isTeamSubscription(item: AdminSubscription) {
+  return item.group?.subscription_type === 'team_subscription'
+}
+
 function decodeSubscription(value: unknown): AdminSubscription | null {
   const item = plainRecord(value)
   if (!item) return null
@@ -322,11 +326,19 @@ function decodeSubscription(value: unknown): AdminSubscription | null {
       typeof candidate.platform !== 'string'
     )
       return null
+    if (
+      candidate.subscription_type !== undefined &&
+      !['standard', 'subscription', 'team_subscription'].includes(String(candidate.subscription_type))
+    )
+      return null
     group = {
       id: itemGroupId,
       name: candidate.name,
       ...(typeof candidate.platform === 'string'
         ? { platform: candidate.platform }
+        : {}),
+      ...(typeof candidate.subscription_type === 'string'
+        ? { subscription_type: candidate.subscription_type as GroupSubscriptionType }
         : {}),
       ...(candidate.daily_limit_usd !== undefined
         ? { daily_limit_usd: candidate.daily_limit_usd as number | null }
@@ -339,6 +351,12 @@ function decodeSubscription(value: unknown): AdminSubscription | null {
         : {}),
     }
   }
+
+  for (const key of ['team_weekly_limit_usd', 'team_weekly_usage_usd'] as const) {
+    const entry = item[key]
+    if (entry !== undefined && entry !== null && (typeof entry !== 'number' || !Number.isFinite(entry) || entry < 0)) return null
+  }
+  if (item.team_weekly_window_start !== undefined && item.team_weekly_window_start !== null && !validDate(item.team_weekly_window_start)) return null
 
   return {
     id,
@@ -354,6 +372,18 @@ function decodeSubscription(value: unknown): AdminSubscription | null {
     updated_at: item.updated_at,
     ...(item.revoked_at !== undefined
       ? { revoked_at: item.revoked_at as string | null }
+      : {}),
+    ...(item.owner_user_group_id !== undefined
+      ? { owner_user_group_id: item.owner_user_group_id as number | null }
+      : {}),
+    ...(item.team_weekly_limit_usd !== undefined
+      ? { team_weekly_limit_usd: item.team_weekly_limit_usd as number | null }
+      : {}),
+    ...(item.team_weekly_usage_usd !== undefined
+      ? { team_weekly_usage_usd: item.team_weekly_usage_usd as number | null }
+      : {}),
+    ...(item.team_weekly_window_start !== undefined
+      ? { team_weekly_window_start: item.team_weekly_window_start as string | null }
       : {}),
     ...(user ? { user } : {}),
     ...(group ? { group } : {}),
@@ -391,7 +421,8 @@ function decodeGroups(value: unknown): SubscriptionGroupOption[] | null {
       typeof option.is_exclusive !== 'boolean' ||
       (option.status !== 'active' && option.status !== 'inactive') ||
       (option.subscription_type !== 'standard' &&
-        option.subscription_type !== 'subscription')
+        option.subscription_type !== 'subscription' &&
+        option.subscription_type !== 'team_subscription')
     )
       return null
     seen.add(id)
@@ -584,6 +615,11 @@ async function loadProgressItem(
   token = claimProgressToken(item.id),
 ) {
   if (!ownsProgress(item.id, generation, token)) return
+  if (isTeamSubscription(item)) {
+    progressLoadedById.value = { ...progressLoadedById.value, [item.id]: true }
+    progressErrors.value = { ...progressErrors.value, [item.id]: false }
+    return
+  }
   const { [item.id]: _previousProgress, ...remainingProgress } =
     progressById.value
   progressById.value = remainingProgress
@@ -626,9 +662,10 @@ async function loadProgress(items: AdminSubscription[]) {
   progressById.value = {}
   progressLoadedById.value = {}
   progressErrors.value = {}
-  const tasks = [...new Map(items.map((item) => [item.id, item])).values()].map(
+  const tasks = [...new Map(items.filter(item => !isTeamSubscription(item)).map((item) => [item.id, item])).values()].map(
     (item) => ({ item, token: claimProgressToken(item.id) }),
   )
+  progressLoadedById.value = Object.fromEntries(items.filter(isTeamSubscription).map(item => [item.id, true]))
   let nextIndex = 0
 
   async function worker() {
@@ -651,7 +688,7 @@ async function loadProgress(items: AdminSubscription[]) {
 
 async function reloadProgress(items: AdminSubscription[]) {
   const generation = progressGeneration
-  const tasks = [...new Map(items.map((item) => [item.id, item])).values()].map(
+  const tasks = [...new Map(items.filter(item => !isTeamSubscription(item)).map((item) => [item.id, item])).values()].map(
     (item) => ({ item, token: claimProgressToken(item.id) }),
   )
   let nextIndex = 0
@@ -1307,12 +1344,34 @@ async function confirmLifecycle() {
   }
 }
 
-function quotaWindows(id: number): Array<{
-  key: QuotaKey
+function quotaWindows(item: AdminSubscription): Array<{
+  key: QuotaKey | 'team-weekly'
   label: string
   value: AdminSubscriptionQuotaWindow
 }> {
-  const detail = progressById.value[id]
+  if (isTeamSubscription(item)) {
+    const limit = item.team_weekly_limit_usd
+    if (typeof limit !== 'number' || !Number.isFinite(limit) || limit <= 0) return []
+    const used = typeof item.team_weekly_usage_usd === 'number' && Number.isFinite(item.team_weekly_usage_usd)
+      ? Math.max(0, item.team_weekly_usage_usd)
+      : 0
+    const startedAt = item.team_weekly_window_start ? Date.parse(item.team_weekly_window_start) : Number.NaN
+    return [{
+      key: 'team-weekly',
+      label: '本周已用 / 成员分配额度',
+      value: {
+        limit_usd: limit,
+        used_usd: used,
+        remaining_usd: Math.max(0, limit - used),
+        percentage: Math.min(100, Math.max(0, used / limit * 100)),
+        window_start: item.team_weekly_window_start ?? undefined,
+        resets_in_seconds: Number.isFinite(startedAt)
+          ? Math.max(0, Math.ceil((startedAt + 7 * 86_400_000 - Date.now()) / 1000))
+          : null,
+      },
+    }]
+  }
+  const detail = progressById.value[item.id]
   if (!detail) return []
   return quotaDefinitions.flatMap(({ key, label }) => {
     const value = detail[key]
@@ -1543,6 +1602,7 @@ onUnmounted(() => {
                   <CalendarPlus :size="17" />延长期限
                 </button>
                 <button
+                  v-if="!isTeamSubscription(item)"
                   type="button"
                   role="menuitem"
                   :data-testid="`reset-subscription-${item.id}`"
@@ -1587,9 +1647,9 @@ onUnmounted(() => {
               重试
             </button>
           </div>
-          <div v-else-if="quotaWindows(item.id).length" class="quota-list">
+          <div v-else-if="quotaWindows(item).length" class="quota-list">
             <div
-              v-for="window in quotaWindows(item.id)"
+              v-for="window in quotaWindows(item)"
               :key="window.key"
               class="quota-window"
               :data-testid="`subscription-quota-${window.key}-${item.id}`"
@@ -1623,12 +1683,12 @@ onUnmounted(() => {
             class="progress-empty"
             :data-testid="`subscription-progress-empty-${item.id}`"
           >
-            未设置周期额度
+            {{ isTeamSubscription(item) ? '该成员暂未分配团队额度' : '未设置周期额度' }}
           </div>
           <div v-else class="progress-loading" role="status">正在加载额度</div>
 
           <footer>
-            <span>开始 {{ safeDate(item.starts_at) }}</span
+            <span>{{ isTeamSubscription(item) ? '团队额度在“套餐与额度”中管理' : `开始 ${safeDate(item.starts_at)}` }}</span
             ><span>到期 {{ safeDate(item.expires_at) }}</span>
           </footer>
         </article>

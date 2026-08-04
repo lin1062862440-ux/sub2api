@@ -174,4 +174,31 @@ describe('AdminSubscriptionsView', () => {
     await flushPromises()
     expect(wrapper.text()).toContain('暂无订阅')
   })
+
+  it('renders team member quota without calling the ordinary progress endpoint', async () => {
+    mocks.list.mockResolvedValue({
+      items: [{
+        ...subscription,
+        id: 9,
+        owner_user_group_id: 3,
+        team_weekly_limit_usd: 300,
+        team_weekly_usage_usd: 120.5,
+        team_weekly_window_start: '2026-08-01T00:00:00Z',
+        group: { id: 8, name: 'OpenAI Team', subscription_type: 'team_subscription' },
+      }],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    })
+    const wrapper = mount(View)
+    await flushPromises()
+
+    expect(mocks.progress).not.toHaveBeenCalled()
+    const quota = wrapper.get('[data-testid="subscription-quota-team-weekly-9"]')
+    expect(quota.text()).toContain('本周已用 / 成员分配额度')
+    expect(quota.text()).toContain('$120.50')
+    expect(quota.text()).toContain('/ $300.00')
+    expect(wrapper.find('[data-testid="reset-subscription-9"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('团队额度请在“套餐与额度”中管理')
+  })
 })

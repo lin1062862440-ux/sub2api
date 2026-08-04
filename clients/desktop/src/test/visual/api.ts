@@ -500,7 +500,8 @@ export async function getSubscriptions() {
       id: 12, user_id: 1, group_id: 2, status: 'active', starts_at: day(-12) + 'T00:00:00Z', expires_at: day(48) + 'T00:00:00Z',
       daily_usage_usd: 5, weekly_usage_usd: 100, monthly_usage_usd: 138,
       daily_window_start: day(0) + 'T00:00:00Z', weekly_window_start: day(-3) + 'T00:00:00Z', monthly_window_start: day(-1) + 'T00:00:00Z', created_at: day(-12) + 'T00:00:00Z', updated_at: new Date().toISOString(),
-      group: { id: 2, name: 'OpenAI 团队版', description: '面向高频编码与自动化工作流', platform: 'openai', rate_multiplier: 1, daily_limit_usd: 20, weekly_limit_usd: 100, monthly_limit_usd: 300 },
+      team_weekly_limit_usd: 160, team_weekly_usage_usd: 68.4, team_weekly_window_start: day(-3) + 'T00:00:00Z',
+      group: { id: 2, name: 'OpenAI 团队版', description: '面向高频编码与自动化工作流', platform: 'openai', subscription_type: 'team_subscription', rate_multiplier: 1 },
     },
     {
       id: 13, user_id: 1, group_id: 3, status: 'expired', starts_at: day(-90) + 'T00:00:00Z', expires_at: day(-60) + 'T00:00:00Z',

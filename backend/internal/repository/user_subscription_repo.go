@@ -185,7 +185,11 @@ func (r *userSubscriptionRepository) ListByUserID(ctx context.Context, userID in
 	if err != nil {
 		return nil, err
 	}
-	return userSubscriptionEntitiesToService(subs), nil
+	result := userSubscriptionEntitiesToService(subs)
+	if err := r.attachTeamQuotaAllocations(ctx, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, userID int64) ([]service.UserSubscription, error) {
@@ -202,7 +206,11 @@ func (r *userSubscriptionRepository) ListActiveByUserID(ctx context.Context, use
 	if err != nil {
 		return nil, err
 	}
-	return userSubscriptionEntitiesToService(subs), nil
+	result := userSubscriptionEntitiesToService(subs)
+	if err := r.attachTeamQuotaAllocations(ctx, result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *userSubscriptionRepository) ListByGroupID(ctx context.Context, groupID int64, params pagination.PaginationParams) ([]service.UserSubscription, *pagination.PaginationResult, error) {

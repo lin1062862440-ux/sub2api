@@ -206,6 +206,30 @@ describe('MobileSubscriptionsView', () => {
     expect(wrapper.html()).not.toContain('#/redeem')
   })
 
+  it('uses team member allocation and never labels an unallocated team subscription unlimited', async () => {
+    mocks.getSubscriptions.mockResolvedValue([
+      subscription({
+        id: 21,
+        team_weekly_limit_usd: 300,
+        team_weekly_usage_usd: 120.5,
+        team_weekly_window_start: '2026-07-28T00:00:00Z',
+        group: { id: 9, name: 'OpenAI Team', platform: 'openai', subscription_type: 'team_subscription' },
+      }),
+      subscription({
+        id: 22,
+        team_weekly_limit_usd: null,
+        group: { id: 10, name: 'OpenAI Team 2', platform: 'openai', subscription_type: 'team_subscription' },
+      }),
+    ])
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="subscription-quota-team-weekly"]').text()).toContain('$120.50 / $300.00')
+    const unallocated = wrapper.get('[data-testid="subscription-team-unallocated"]')
+    expect(unallocated.text()).toContain('暂未分配团队额度')
+    expect(unallocated.text()).not.toContain('无限')
+  })
+
   it('disables the empty refresh action while pending and restores it afterward', async () => {
     mocks.getSubscriptions.mockResolvedValueOnce([])
     const wrapper = mountView()

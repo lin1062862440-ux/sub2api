@@ -16,6 +16,7 @@ import ProviderIcon from '@/components/ProviderIcon.vue'
 import {
   formatSubscriptionDate as formatDate,
   isSubscriptionExhausted as isExhausted,
+  isTeamSubscription,
   subscriptionProgress as progress,
   subscriptionQuotaWindows as quotaWindows,
   subscriptionStatusLabel as statusLabel,
@@ -149,6 +150,9 @@ onMounted(() => void load())
                 <div class="progress-track"><span :style="{ width: `${progress(window.used, window.limit)}%`, '--bar-delay': `${index * 80}ms` }" /></div>
               </div>
             </template>
+            <div v-else-if="isTeamSubscription(item)" class="unlimited-quota team-unallocated" data-testid="subscription-team-unallocated">
+              <div><strong>暂未分配团队额度</strong><p>请联系团队配额管理员分配本周额度。</p></div>
+            </div>
             <div v-else class="unlimited-quota">
               <span>∞</span>
               <div><strong>无周期额度上限</strong><p>按订阅规则持续使用，不受日、周、月额度限制。</p></div>

@@ -127,6 +127,8 @@ export default {
     daily: '每日',
     weekly: '每周',
     monthly: '每月',
+    teamWeeklyUsage: '本周已用 / 成员分配额度',
+    teamQuotaUnassigned: '暂未分配团队额度',
     daysRemaining: '剩余 {days} 天',
     expiresOn: '{date} 到期',
     resetIn: '{time} 后重置',

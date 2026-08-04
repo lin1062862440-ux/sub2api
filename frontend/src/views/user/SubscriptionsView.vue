@@ -108,7 +108,57 @@
               </span>
             </div>
 
-            <div v-if="subscription.group?.daily_limit_usd" class="subscription-quota-row">
+            <template v-if="isTeamSubscription(subscription)">
+              <div
+                v-if="subscription.team_weekly_limit_usd != null"
+                class="subscription-quota-row"
+                data-test="team-weekly-quota"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <span>{{ t('userSubscriptions.teamWeeklyUsage') }}</span>
+                  <strong class="whitespace-nowrap">
+                    ${{ (subscription.team_weekly_usage_usd || 0).toFixed(2) }} / ${{
+                      subscription.team_weekly_limit_usd.toFixed(2)
+                    }}
+                  </strong>
+                </div>
+                <div class="subscription-progress-track">
+                  <div
+                    class="subscription-progress-bar"
+                    :class="
+                      getProgressBarClass(
+                        subscription.team_weekly_usage_usd,
+                        subscription.team_weekly_limit_usd
+                      )
+                    "
+                    :style="{
+                      width: getProgressWidth(
+                        subscription.team_weekly_usage_usd,
+                        subscription.team_weekly_limit_usd
+                      )
+                    }"
+                  ></div>
+                </div>
+                <p
+                  v-if="subscription.team_weekly_window_start"
+                  class="text-xs text-gray-500 dark:text-dark-400"
+                >
+                  {{
+                    t('userSubscriptions.resetIn', {
+                      time: formatResetTime(subscription.team_weekly_window_start, 168)
+                    })
+                  }}
+                </p>
+              </div>
+              <div v-else class="subscription-team-unassigned" data-test="team-quota-unassigned">
+                {{ t('userSubscriptions.teamQuotaUnassigned') }}
+              </div>
+            </template>
+
+            <div
+              v-if="!isTeamSubscription(subscription) && subscription.group?.daily_limit_usd"
+              class="subscription-quota-row"
+            >
               <div class="flex items-center justify-between">
                 <span>
                   {{ t('userSubscriptions.daily') }}
@@ -145,7 +195,10 @@
             </div>
 
             <!-- Weekly Usage -->
-            <div v-if="subscription.group?.weekly_limit_usd" class="subscription-quota-row">
+            <div
+              v-if="!isTeamSubscription(subscription) && subscription.group?.weekly_limit_usd"
+              class="subscription-quota-row"
+            >
               <div class="flex items-center justify-between">
                 <span>
                   {{ t('userSubscriptions.weekly') }}
@@ -186,7 +239,10 @@
             </div>
 
             <!-- Monthly Usage -->
-            <div v-if="subscription.group?.monthly_limit_usd" class="subscription-quota-row">
+            <div
+              v-if="!isTeamSubscription(subscription) && subscription.group?.monthly_limit_usd"
+              class="subscription-quota-row"
+            >
               <div class="flex items-center justify-between">
                 <span>
                   {{ t('userSubscriptions.monthly') }}
@@ -228,6 +284,7 @@
 
             <div
               v-if="
+                !isTeamSubscription(subscription) &&
                 !subscription.group?.daily_limit_usd &&
                 !subscription.group?.weekly_limit_usd &&
                 !subscription.group?.monthly_limit_usd
@@ -305,6 +362,10 @@ function subscriptionHasPeakRate(subscription: UserSubscription): boolean {
   return hasPeakRate(subscription.group)
 }
 
+function isTeamSubscription(subscription: UserSubscription): boolean {
+  return subscription.group?.subscription_type === 'team_subscription'
+}
+
 function subscriptionPeakRateLabel(subscription: UserSubscription): string {
   return formatPeakRateWindow(
     subscription.group,
@@ -324,13 +385,13 @@ async function loadSubscriptions() {
   }
 }
 
-function getProgressWidth(used: number | undefined, limit: number | null | undefined): string {
+function getProgressWidth(used: number | null | undefined, limit: number | null | undefined): string {
   if (!limit || limit === 0) return '0%'
   const percentage = Math.min(((used || 0) / limit) * 100, 100)
   return `${percentage}%`
 }
 
-function getProgressBarClass(used: number | undefined, limit: number | null | undefined): string {
+function getProgressBarClass(used: number | null | undefined, limit: number | null | undefined): string {
   if (!limit || limit === 0) return 'bg-gray-400'
   const percentage = ((used || 0) / limit) * 100
   if (percentage >= 90) return 'bg-red-500'
@@ -639,6 +700,17 @@ onMounted(() => {
   font-weight: 650;
 }
 
+.subscription-team-unassigned {
+  border: 1px solid rgb(226 232 240);
+  border-radius: 0.5rem;
+  background: rgb(248 250 252);
+  padding: 0.75rem;
+  color: rgb(100 116 139);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: center;
+}
+
 .subscription-progress-track {
   position: relative;
   height: 0.375rem;
@@ -723,6 +795,12 @@ onMounted(() => {
 
 :global(.dark) .subscription-quota-row strong {
   color: rgb(203 213 225);
+}
+
+:global(.dark) .subscription-team-unassigned {
+  border-color: rgb(55 65 81);
+  background: rgb(31 41 55);
+  color: rgb(156 163 175);
 }
 
 :global(.dark) .subscription-progress-track {

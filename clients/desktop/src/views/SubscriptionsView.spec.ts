@@ -87,4 +87,29 @@ describe('SubscriptionsView', () => {
     expect(wrapper.get('[data-testid="subscriptions-empty"]').text()).toContain('暂无订阅')
     expect(wrapper.get('[data-testid="subscriptions-empty"]').text()).toContain('兑换码')
   })
+
+  it('shows a team member allocation and a clear unallocated state', async () => {
+    mocks.getSubscriptions.mockResolvedValue([
+      {
+        ...subscriptions[0],
+        id: 21,
+        team_weekly_limit_usd: 300,
+        team_weekly_usage_usd: 120.5,
+        team_weekly_window_start: '2026-07-28T00:00:00Z',
+        group: { id: 9, name: 'OpenAI Team', platform: 'openai', subscription_type: 'team_subscription' },
+      },
+      {
+        ...subscriptions[0],
+        id: 22,
+        team_weekly_limit_usd: null,
+        group: { id: 10, name: 'OpenAI Team 2', platform: 'openai', subscription_type: 'team_subscription' },
+      },
+    ])
+    const wrapper = mount(SubscriptionsView)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('本周已用 / 成员分配额度')
+    expect(wrapper.text()).toContain('$120.50 / $300.00')
+    expect(wrapper.get('[data-testid="subscription-team-unallocated"]').text()).toContain('暂未分配团队额度')
+  })
 })

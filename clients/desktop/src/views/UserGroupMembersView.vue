@@ -1,16 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { Eye, Pencil, RefreshCw, Trash2, UsersRound } from '@lucide/vue'
+import { Eye, Pencil, RefreshCw, ShieldCheck, Trash2, UsersRound } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
-  archiveUserGroup, getUserGroupMembers, getUserGroupViewers, listUserGroups,
-  replaceUserGroupMembers, replaceUserGroupViewers, updateUserGroup,
+  archiveUserGroup, getUserGroupMembers, getUserGroupPromptViewers, getUserGroupViewers, listUserGroups,
+  replaceUserGroupMembers, replaceUserGroupPromptViewers, replaceUserGroupViewers, setUserGroupPromptCapture, updateUserGroup,
   type UserGroup, type UserGroupMember, type UserGroupMutation, type UserGroupViewer,
 } from '@/api/user-groups'
 import UserAvatar from '@/components/UserAvatar.vue'
 import UserGroupDetailHeader from '@/components/user-groups/UserGroupDetailHeader.vue'
 import UserGroupEditorDialog from '@/components/user-groups/UserGroupEditorDialog.vue'
 import UserGroupPeopleDialog from '@/components/user-groups/UserGroupPeopleDialog.vue'
+import UserGroupPromptSettingsDialog from '@/components/user-groups/UserGroupPromptSettingsDialog.vue'
 import { formatDateTime } from '@/lib/format'
 import { session } from '@/stores/session'
 
@@ -19,6 +20,7 @@ const router = useRouter()
 const group = ref<UserGroup | null>(null)
 const members = ref<UserGroupMember[]>([])
 const viewers = ref<UserGroupViewer[]>([])
+const promptViewers = ref<UserGroupViewer[]>([])
 const loading = ref(true)
 const error = ref('')
 const message = ref('')
@@ -29,7 +31,11 @@ const peopleError = ref('')
 const editorOpen = ref(false)
 const editorSaving = ref(false)
 const editorError = ref('')
+const promptSettingsOpen = ref(false)
+const promptSettingsSaving = ref(false)
+const promptSettingsError = ref('')
 const groupId = computed(() => Number(route.params.id))
+const isSystemAdmin = computed(() => session.user?.role === 'admin')
 const canManage = computed(() => session.user?.role === 'admin' || session.userGroupCapabilities?.can_manage === true)
 const selectedPeople = computed(() => peopleMode.value === 'members' ? members.value : viewers.value)
 
@@ -74,6 +80,34 @@ async function savePeople(ids: number[]) {
   finally { peopleSaving.value = false }
 }
 
+async function openPromptSettings() {
+  promptSettingsError.value = ''
+  try {
+    promptViewers.value = await getUserGroupPromptViewers(groupId.value)
+    promptSettingsOpen.value = true
+  } catch (caught) {
+    message.value = errorMessage(caught, 'Prompt 查看者加载失败')
+  }
+}
+
+async function savePromptSettings(payload: { enabled: boolean; userIds: number[] }) {
+  promptSettingsSaving.value = true
+  promptSettingsError.value = ''
+  try {
+    await Promise.all([
+      setUserGroupPromptCapture(groupId.value, payload.enabled),
+      replaceUserGroupPromptViewers(groupId.value, payload.userIds),
+    ])
+    promptSettingsOpen.value = false
+    message.value = 'Prompt 设置已更新'
+    await load()
+  } catch (caught) {
+    promptSettingsError.value = errorMessage(caught, 'Prompt 设置保存失败')
+  } finally {
+    promptSettingsSaving.value = false
+  }
+}
+
 async function saveGroup(payload: UserGroupMutation) {
   editorSaving.value = true
   editorError.value = ''
@@ -105,6 +139,7 @@ onMounted(() => void load())
       <section class="team-summary"><div><span>团队成员</span><strong>{{ group.member_count }}</strong></div><div><span>查看者</span><strong>{{ group.viewer_count }}</strong></div><div><span>提示词留存</span><strong>{{ group.prompt_capture_enabled ? '已启用' : '未启用' }}</strong></div></section>
       <div v-if="canManage" class="team-toolbar">
         <button data-testid="manage-team-viewers" @click="openPeople('viewers')"><Eye :size="15" />管理查看者</button>
+        <button v-if="isSystemAdmin" data-testid="manage-team-prompts" @click="openPromptSettings"><ShieldCheck :size="15" />Prompt 设置</button>
         <button @click="editorOpen = true"><Pencil :size="15" />编辑团队</button>
         <button class="danger" @click="archive"><Trash2 :size="15" />归档</button>
       </div>
@@ -117,6 +152,7 @@ onMounted(() => void load())
     </template>
     <UserGroupEditorDialog v-model="editorOpen" :group="group" :saving="editorSaving" :error="editorError" @save="saveGroup" />
     <UserGroupPeopleDialog v-model="peopleOpen" :mode="peopleMode" :group-name="group?.name || ''" :selected-people="selectedPeople" :saving="peopleSaving" :error="peopleError" @save="savePeople" />
+    <UserGroupPromptSettingsDialog v-model="promptSettingsOpen" :group-name="group?.name || ''" :capture-enabled="Boolean(group?.prompt_capture_enabled)" :selected-people="promptViewers" :saving="promptSettingsSaving" :error="promptSettingsError" @save="savePromptSettings" />
   </div>
 </template>
 

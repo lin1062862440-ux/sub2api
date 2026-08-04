@@ -130,6 +130,8 @@ export default {
     daily: 'Daily',
     weekly: 'Weekly',
     monthly: 'Monthly',
+    teamWeeklyUsage: 'Used this week / Member allocation',
+    teamQuotaUnassigned: 'No team quota allocated',
     daysRemaining: '{days} days remaining',
     expiresOn: 'Expires on {date}',
     resetIn: 'Resets in {time}',

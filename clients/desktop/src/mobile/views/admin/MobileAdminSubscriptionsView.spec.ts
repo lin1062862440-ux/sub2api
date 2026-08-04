@@ -201,6 +201,26 @@ describe('MobileAdminSubscriptionsView', () => {
     expect(wrapper.text()).not.toContain('正在加载额度')
   })
 
+  it('renders team member allocation directly and omits the ordinary reset action', async () => {
+    mocks.list.mockResolvedValueOnce(response([subscription({
+      id: 9,
+      group_id: 8,
+      owner_user_group_id: 3,
+      team_weekly_limit_usd: 300,
+      team_weekly_usage_usd: 120.5,
+      team_weekly_window_start: '2026-08-01T00:00:00Z',
+      group: { id: 8, name: 'OpenAI Team', subscription_type: 'team_subscription' },
+    })]))
+    const wrapper = mount(MobileAdminSubscriptionsView)
+    await flushPromises()
+
+    expect(mocks.progress).not.toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="subscription-quota-team-weekly-9"]').text()).toContain('$120.50 / $300.00')
+    await openMenu(wrapper, 9)
+    expect(wrapper.find('[data-testid="reset-subscription-9"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('团队额度在“套餐与额度”中管理')
+  })
+
   it.each([
     ['wrong id type', { id: '3' }],
     ['invalid expiry', { expires_at: 'not-a-date' }],
