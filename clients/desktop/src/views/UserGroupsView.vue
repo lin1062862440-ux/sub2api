@@ -1,24 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { CirclePlus, Eye, Pencil, RefreshCw, Search, Trash2, UsersRound } from '@lucide/vue'
+import { CirclePlus, Pencil, RefreshCw, Search, Trash2 } from '@lucide/vue'
 
 import {
   archiveUserGroup,
   createUserGroup,
-  getUserGroupMembers,
-  getUserGroupViewers,
   listUserGroups,
-  replaceUserGroupMembers,
-  replaceUserGroupViewers,
   updateUserGroup,
   type UserGroup,
-  type UserGroupMember,
   type UserGroupMutation,
-  type UserGroupViewer,
 } from '@/api/user-groups'
 import UserGroupEditorDialog from '@/components/user-groups/UserGroupEditorDialog.vue'
-import UserGroupPeopleDialog from '@/components/user-groups/UserGroupPeopleDialog.vue'
-import UserGroupWorkspaceTabs from '@/components/user-groups/UserGroupWorkspaceTabs.vue'
 import { formatDateTime } from '@/lib/format'
 import { session } from '@/stores/session'
 
@@ -32,12 +24,6 @@ const editorOpen = ref(false)
 const editingGroup = ref<UserGroup | null>(null)
 const saving = ref(false)
 const editorError = ref('')
-const peopleOpen = ref(false)
-const peopleMode = ref<'members' | 'viewers'>('members')
-const peopleGroup = ref<UserGroup | null>(null)
-const selectedPeople = ref<Array<UserGroupMember | UserGroupViewer>>([])
-const peopleSaving = ref(false)
-const peopleError = ref('')
 
 const canManage = computed(() => session.user?.role === 'admin' || session.userGroupCapabilities?.can_manage === true)
 const filtered = computed(() => {
@@ -92,37 +78,6 @@ async function saveGroup(payload: UserGroupMutation) {
   }
 }
 
-async function openPeople(group: UserGroup, mode: 'members' | 'viewers') {
-  peopleGroup.value = group
-  peopleMode.value = mode
-  peopleError.value = ''
-  try {
-    selectedPeople.value = mode === 'members'
-      ? await getUserGroupMembers(group.id)
-      : await getUserGroupViewers(group.id)
-    peopleOpen.value = true
-  } catch (caught) {
-    message.value = errorMessage(caught, `${mode === 'members' ? '成员' : '查看者'}加载失败`)
-  }
-}
-
-async function savePeople(ids: number[]) {
-  if (!peopleGroup.value) return
-  peopleSaving.value = true
-  peopleError.value = ''
-  try {
-    if (peopleMode.value === 'members') await replaceUserGroupMembers(peopleGroup.value.id, ids)
-    else await replaceUserGroupViewers(peopleGroup.value.id, ids)
-    peopleOpen.value = false
-    message.value = `${peopleMode.value === 'members' ? '成员' : '查看者'}已更新`
-    await load(true)
-  } catch (caught) {
-    peopleError.value = errorMessage(caught, '人员保存失败')
-  } finally {
-    peopleSaving.value = false
-  }
-}
-
 async function archive(group: UserGroup) {
   if (!window.confirm(`确认归档用户组“${group.name}”？历史数据会保留。`)) return
   try {
@@ -140,14 +95,13 @@ onMounted(() => void load())
 <template>
   <div class="user-group-page">
     <header class="ug-page-header drag-region">
-      <div><span>USER GROUP WORKSPACE</span><h1>用户组</h1><p>组织成员并集中查看组内订阅与使用情况。</p></div>
-      <button v-if="canManage" class="ug-primary no-drag" data-testid="create-user-group" type="button" @click="openCreate"><CirclePlus :size="17" />新建用户组</button>
+      <div><span>TEAM MANAGEMENT</span><h1>团队管理</h1><p>管理团队成员、套餐配额与使用情况。</p></div>
+      <button v-if="canManage" class="ug-primary no-drag" data-testid="create-user-group" type="button" @click="openCreate"><CirclePlus :size="17" />新建团队</button>
     </header>
-    <UserGroupWorkspaceTabs />
 
     <section class="ug-access-band">
-      <div><strong>{{ canManage ? '管理员权限' : '只读访问' }}</strong><span>{{ canManage ? '可创建用户组、维护成员与查看者，并归档不再使用的组。' : '可以查看获授权用户组的订阅和用量。' }}</span></div>
-      <dl><div><dt>可访问用户组</dt><dd>{{ groups.length }}</dd></div><div><dt>访问模式</dt><dd>{{ canManage ? '管理' : '只读' }}</dd></div></dl>
+      <div><strong>{{ canManage ? '管理员权限' : '只读访问' }}</strong><span>{{ canManage ? '可创建团队，并在详情中维护成员、查看者与配额。' : '可以查看获授权团队的配额和用量。' }}</span></div>
+      <dl><div><dt>可访问团队</dt><dd>{{ groups.length }}</dd></div><div><dt>访问模式</dt><dd>{{ canManage ? '管理' : '只读' }}</dd></div></dl>
     </section>
 
     <div class="ug-directory-toolbar"><label><Search :size="16" /><input v-model="search" data-testid="user-group-search" placeholder="搜索用户组名称或描述" /></label><span>共 {{ filtered.length }} 个用户组</span><button type="button" title="刷新" :disabled="refreshing" @click="load(true)"><RefreshCw :size="16" :class="{ spinning: refreshing }" /></button></div>
@@ -165,10 +119,9 @@ onMounted(() => void load())
           <strong class="ug-number">{{ group.viewer_count }}</strong>
           <span class="ug-date">{{ formatDateTime(group.updated_at) }}</span>
           <div class="ug-row-actions">
-            <RouterLink :to="{ name: 'user-group-subscriptions', query: { group_id: String(group.id) } }">订阅</RouterLink>
-            <RouterLink :to="{ name: 'user-group-usage', query: { group_id: String(group.id) } }">用量</RouterLink>
-            <button v-if="canManage" type="button" title="管理成员" :data-testid="`group-members-${group.id}`" @click="openPeople(group, 'members')"><UsersRound :size="15" /></button>
-            <button v-if="canManage" type="button" title="管理查看者" :data-testid="`group-viewers-${group.id}`" @click="openPeople(group, 'viewers')"><Eye :size="15" /></button>
+            <RouterLink :to="{ name: 'user-group-members', params: { id: group.id } }" :data-testid="`open-team-${group.id}`">打开团队</RouterLink>
+            <RouterLink :to="{ name: 'user-group-quota', params: { id: group.id } }">配额</RouterLink>
+            <RouterLink :to="{ name: 'user-group-usage', params: { id: group.id } }">用量</RouterLink>
             <button v-if="canManage" type="button" title="编辑用户组" :data-testid="`edit-user-group-${group.id}`" @click="openEdit(group)"><Pencil :size="15" /></button>
             <button v-if="canManage" class="danger" type="button" title="归档用户组" :data-testid="`archive-user-group-${group.id}`" @click="archive(group)"><Trash2 :size="15" /></button>
           </div>
@@ -177,7 +130,6 @@ onMounted(() => void load())
     </section>
 
     <UserGroupEditorDialog v-model="editorOpen" :group="editingGroup" :saving="saving" :error="editorError" @save="saveGroup" />
-    <UserGroupPeopleDialog v-model="peopleOpen" :mode="peopleMode" :group-name="peopleGroup?.name || ''" :selected-people="selectedPeople" :saving="peopleSaving" :error="peopleError" @save="savePeople" />
   </div>
 </template>
 

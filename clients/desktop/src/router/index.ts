@@ -136,16 +136,34 @@ const routes: RouteRecordRaw[] = [
         meta: { requiresUserGroupAccess: true, userGroupWorkspace: true, title: '用户组' },
       },
       {
+        path: 'user-groups/:id/members',
+        name: 'user-group-members',
+        component: () => import('@/views/UserGroupMembersView.vue'),
+        meta: { requiresUserGroupAccess: true, userGroupWorkspace: true, title: '团队成员' },
+      },
+      {
+        path: 'user-groups/:id/plan-quota',
+        name: 'user-group-quota',
+        component: () => import('@/views/UserGroupQuotasView.vue'),
+        meta: { requiresUserGroupAccess: true, userGroupWorkspace: true, title: '团队套餐与配额' },
+      },
+      {
+        path: 'user-groups/:id/usage',
+        name: 'user-group-usage',
+        component: () => import('@/views/UserGroupUsageView.vue'),
+        meta: { requiresUserGroupAccess: true, userGroupWorkspace: true, title: '团队用量' },
+      },
+      {
         path: 'user-group-subscriptions',
-        name: 'user-group-subscriptions',
-        component: () => import('@/views/UserGroupSubscriptionsView.vue'),
-        meta: { requiresUserGroupAccess: true, userGroupWorkspace: true, title: '用户组订阅' },
+        redirect: (to) => /^\d+$/.test(String(to.query.group_id ?? ''))
+          ? { name: 'user-group-quota', params: { id: String(to.query.group_id) } }
+          : { name: 'user-groups' },
       },
       {
         path: 'user-group-usage',
-        name: 'user-group-usage',
-        component: () => import('@/views/UserGroupUsageView.vue'),
-        meta: { requiresUserGroupAccess: true, userGroupWorkspace: true, title: '用户组用量' },
+        redirect: (to) => /^\d+$/.test(String(to.query.group_id ?? ''))
+          ? { name: 'user-group-usage', params: { id: String(to.query.group_id) } }
+          : { name: 'user-groups' },
       },
       {
         path: 'profile',

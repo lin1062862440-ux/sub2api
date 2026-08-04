@@ -8,7 +8,7 @@ function previewFlag(name: 'empty' | 'error') {
 }
 
 let groups = [
-  { id: 1, name: '跨区域模型推理与超长上下文联合调度', description: '核心研发成员、跨区域模型推理与超长上下文联合调度项目用量统一查看', status: 'active' as const, member_count: 4, viewer_count: 2, created_at: '2026-07-01T00:00:00Z', updated_at: now },
+  { id: 1, name: '跨区域模型推理与超长上下文联合调度', description: '核心研发成员、跨区域模型推理与超长上下文联合调度项目用量统一查看', status: 'active' as const, member_count: 3, viewer_count: 2, prompt_capture_enabled: true, can_view_prompt: true, created_at: '2026-07-01T00:00:00Z', updated_at: now },
   { id: 2, name: '运营团队', description: '运营、客服与内容协作成员', status: 'active' as const, member_count: 3, viewer_count: 1, created_at: '2026-07-05T00:00:00Z', updated_at: '2026-07-30T08:00:00Z' },
   { id: 3, name: '重点客户', description: '客户成功团队的服务对象与额度跟踪', status: 'active' as const, member_count: 2, viewer_count: 3, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-28T08:00:00Z' },
 ]
@@ -19,7 +19,17 @@ const members = [
   { user_id: 9, username: 'Chen', email: 'chen@example.com', status: 'active', balance: 64, joined_at: '2026-07-08T00:00:00Z' },
 ]
 
-export async function getUserGroupCapabilities() { return { can_access: true, can_manage: true, group_count: groups.length } }
+const availableTeamGroups = [
+  { billing_group_id: 12, name: 'OpenAI Team 主账号', platform: 'openai', status: 'active' },
+  { billing_group_id: 18, name: 'Claude Team 企业席位', platform: 'anthropic', status: 'active' },
+]
+
+let quotaPolicy = { enabled: true, weekly_limit_usd: 300, weekly_usage_usd: 128.6, weekly_window_start: '2026-08-03T00:00:00Z', weekly_reset_at: '2026-08-10T00:00:00Z' }
+let quotaManagers = [{ user_id: 10, username: 'Viewer', email: 'viewer@example.com', status: 'active', granted_at: now }]
+let selectedTeamGroupIds = [12, 18]
+let memberQuotas = members.map((member, index) => ({ ...member, weekly_limit_usd: [120, 100, 60][index]!, weekly_usage_usd: [58.4, 42.2, 28][index]!, weekly_window_start: quotaPolicy.weekly_window_start }))
+
+export async function getUserGroupCapabilities() { return { can_access: true, can_manage: true, can_manage_quota: true, group_count: groups.length } }
 export async function listUserGroups() {
   if (previewFlag('error')) throw new Error('visual preview user-groups error')
   return previewFlag('empty') ? [] : groups
@@ -31,6 +41,24 @@ export async function getUserGroupMembers() { return members }
 export async function replaceUserGroupMembers() {}
 export async function getUserGroupViewers() { return [{ user_id: 10, username: 'Viewer', email: 'viewer@example.com', status: 'active', granted_at: now }] }
 export async function replaceUserGroupViewers() {}
+export async function getUserGroupQuotaOverview(id: number) {
+  return {
+    group_id: id,
+    policy: quotaPolicy,
+    managers: quotaManagers,
+    members: memberQuotas,
+    allocated_usd: memberQuotas.reduce((sum, member) => sum + member.weekly_limit_usd, 0),
+    can_manage: true,
+    can_configure: true,
+    team_subscription_groups: availableTeamGroups.filter((group) => selectedTeamGroupIds.includes(group.billing_group_id)),
+    available_team_subscription_groups: availableTeamGroups,
+  }
+}
+export async function setUserGroupQuotaPolicy(_id: number, payload: { enabled: boolean; weekly_limit_usd: number }) { quotaPolicy = { ...quotaPolicy, ...payload } }
+export async function replaceUserGroupQuotaManagers(_id: number, userIds: number[]) { quotaManagers = userIds.map((userId) => ({ user_id: userId, username: `User ${userId}`, email: `user${userId}@example.com`, status: 'active', granted_at: now })) }
+export async function updateUserGroupMemberQuotas(_id: number, rows: Array<{ user_id: number; weekly_limit_usd: number }>) { memberQuotas = memberQuotas.map((member) => ({ ...member, weekly_limit_usd: rows.find((row) => row.user_id === member.user_id)?.weekly_limit_usd ?? member.weekly_limit_usd })) }
+export async function replaceUserGroupTeamSubscriptions(_id: number, billingGroupIds: number[]) { selectedTeamGroupIds = billingGroupIds }
+export async function resetUserGroupQuotaUsage() { quotaPolicy = { ...quotaPolicy, weekly_usage_usd: 0 }; memberQuotas = memberQuotas.map((member) => ({ ...member, weekly_usage_usd: 0 })) }
 export async function getUserGroupSubscriptions(_id: number, params: { status?: string; page?: number; page_size?: number } = {}) {
   const rows = members.map((member, index) => ({ member, subscription_id: index === 2 ? null : index + 1, billing_group_id: index === 2 ? null : 1, billing_group: index === 2 ? '' : 'Claude Pro', platform: index === 2 ? '' : 'anthropic', status: index === 2 ? 'none' : 'active', starts_at: '2026-08-01T00:00:00Z', expires_at: index === 2 ? null : '2026-09-01T00:00:00Z', daily_used: 4 + index, daily_limit: index === 2 ? null : 10, weekly_used: 12 + index * 3, weekly_limit: index === 2 ? null : 50, monthly_used: 20 + index * 5, monthly_limit: index === 2 ? null : 100 }))
   const filtered = params.status ? rows.filter((item) => item.status === params.status) : rows

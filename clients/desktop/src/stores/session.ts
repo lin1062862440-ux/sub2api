@@ -41,17 +41,17 @@ export const canManageUserGroups = () =>
   state.user?.role === 'admin' || state.userGroupCapabilities?.can_manage === true
 
 export function revokeUserGroupAccess(): void {
-  state.userGroupCapabilities = { can_access: false, can_manage: false, group_count: 0 }
+  state.userGroupCapabilities = { can_access: false, can_manage: false, can_manage_quota: false, group_count: 0 }
 }
 
 export async function loadUserGroupCapabilities(force = false): Promise<UserGroupCapabilities> {
   if (state.user?.role === 'admin') {
-    const capabilities = { can_access: true, can_manage: true, group_count: 0 }
+    const capabilities = { can_access: true, can_manage: true, can_manage_quota: true, group_count: 0 }
     state.userGroupCapabilities = capabilities
     return capabilities
   }
   if (!state.user) {
-    const unavailable = { can_access: false, can_manage: false, group_count: 0 }
+    const unavailable = { can_access: false, can_manage: false, can_manage_quota: false, group_count: 0 }
     state.userGroupCapabilities = null
     return unavailable
   }
@@ -61,7 +61,7 @@ export async function loadUserGroupCapabilities(force = false): Promise<UserGrou
     state.userGroupCapabilities = capabilities
     return capabilities
   } catch {
-    const unavailable = { can_access: false, can_manage: false, group_count: 0 }
+    const unavailable = { can_access: false, can_manage: false, can_manage_quota: false, group_count: 0 }
     state.userGroupCapabilities = unavailable
     return unavailable
   }
@@ -146,7 +146,7 @@ export async function refreshUser(): Promise<void> {
 export function setCurrentUser(user: User): void {
   state.user = user
   if (user.role === 'admin') {
-    state.userGroupCapabilities = { can_access: true, can_manage: true, group_count: 0 }
+    state.userGroupCapabilities = { can_access: true, can_manage: true, can_manage_quota: true, group_count: 0 }
   }
 }
 

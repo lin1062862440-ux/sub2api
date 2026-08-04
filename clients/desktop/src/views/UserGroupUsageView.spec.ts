@@ -2,11 +2,11 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  groups: vi.fn(), members: vi.fn(), usage: vi.fn(), replace: vi.fn(),
-  route: { name: 'user-group-usage', query: { group_id: '3' } },
+  groups: vi.fn(), members: vi.fn(), quota: vi.fn(), usage: vi.fn(), replace: vi.fn(),
+  route: { name: 'user-group-usage', params: { id: '3' }, query: {} },
   session: { user: { role: 'admin' }, userGroupCapabilities: { can_access: true, can_manage: true, group_count: 1 } },
 }))
-vi.mock('@/api/user-groups', () => ({ listUserGroups: mocks.groups, getUserGroupMembers: mocks.members, getUserGroupUsage: mocks.usage }))
+vi.mock('@/api/user-groups', () => ({ listUserGroups: mocks.groups, getUserGroupMembers: mocks.members, getUserGroupQuotaOverview: mocks.quota, getUserGroupUsage: mocks.usage }))
 vi.mock('@/stores/session', () => ({ session: mocks.session }))
 vi.mock('vue-router', () => ({ useRoute: () => mocks.route, useRouter: () => ({ replace: mocks.replace }) }))
 
@@ -17,6 +17,7 @@ describe('UserGroupUsageView', () => {
     vi.clearAllMocks()
     mocks.groups.mockResolvedValue([{ id: 3, name: '研发团队', description: '', status: 'active', member_count: 1, viewer_count: 0, created_at: '', updated_at: '' }])
     mocks.members.mockResolvedValue([{ user_id: 7, username: 'Lin', email: 'lin@example.com', status: 'active', balance: 28, joined_at: '' }])
+    mocks.quota.mockResolvedValue({ group_id: 3, policy: { enabled: true, weekly_limit_usd: 100, weekly_usage_usd: 35 }, managers: [], members: [{ user_id: 7, username: 'Lin', email: 'lin@example.com', status: 'active', weekly_limit_usd: 50, weekly_usage_usd: 20 }], allocated_usd: 50, can_manage: true, can_configure: true, team_subscription_groups: [] })
     mocks.usage.mockResolvedValue({
       summary: { total_requests: 120, total_input_tokens: 1000, total_output_tokens: 500, total_cache_tokens: 200, total_tokens: 1700, total_actual_cost: 8.5, balance_consumption: 3.5, subscription_consumption: 5 },
       by_user: [{ user_id: 7, username: 'Lin', email: 'lin@example.com', total_requests: 120, total_tokens: 1700, total_actual_cost: 8.5, balance_consumption: 3.5, subscription_consumption: 5 }],
@@ -31,14 +32,14 @@ describe('UserGroupUsageView', () => {
     expect(mocks.usage).toHaveBeenCalledWith(3, expect.objectContaining({ page: 1, page_size: 20 }))
     const firstParams = mocks.usage.mock.calls[0][1]
     expect(Math.round((new Date(firstParams.end_date).getTime() - new Date(firstParams.start_date).getTime()) / 86_400_000)).toBe(6)
-    expect(wrapper.text()).toContain('余额消费')
-    expect(wrapper.text()).toContain('$3.50')
+    expect(wrapper.text()).toContain('团队周配额')
+    expect(wrapper.text()).toContain('$100.00')
     expect(wrapper.text()).toContain('成员汇总')
 
     const modeButtons = wrapper.findAll('.ug-result-switch button')
     await modeButtons[1]!.trigger('click')
     expect(wrapper.text()).toContain('req-1')
-    expect(wrapper.text()).toContain('订阅计费')
+    expect(wrapper.text()).toContain('$8.50')
   })
 
   it('submits advanced filters and paginates request details', async () => {
@@ -56,14 +57,12 @@ describe('UserGroupUsageView', () => {
     const controls = advanced.findAll('select')
     await controls[0]!.setValue('7')
     await advanced.get('input').setValue('claude-sonnet-4')
-    await controls[1]!.setValue('1')
     await wrapper.get('[data-testid="group-usage-filters"]').trigger('submit')
     await flushPromises()
 
     expect(mocks.usage).toHaveBeenLastCalledWith(3, expect.objectContaining({
       user_id: 7,
       model: 'claude-sonnet-4',
-      billing_type: 1,
       page: 1,
     }))
 

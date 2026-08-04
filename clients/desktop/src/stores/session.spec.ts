@@ -91,7 +91,7 @@ describe('desktop user group capability state', () => {
 
     mocks.userGroupDenied?.()
     expect(hasUserGroupAccess()).toBe(false)
-    expect(session.userGroupCapabilities).toEqual({ can_access: false, can_manage: false, group_count: 0 })
+    expect(session.userGroupCapabilities).toEqual({ can_access: false, can_manage: false, can_manage_quota: false, group_count: 0 })
 
     await signOut()
     expect(session.userGroupCapabilities).toBeNull()

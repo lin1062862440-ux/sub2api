@@ -9,10 +9,11 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import { formatCost } from '@/lib/format'
 
 type SelectedPerson = UserGroupMember | UserGroupViewer
+type PeopleMode = 'members' | 'viewers' | 'quota-managers'
 
 const props = defineProps<{
   modelValue: boolean
-  mode: 'members' | 'viewers'
+  mode: PeopleMode
   groupName: string
   selectedPeople: SelectedPerson[]
   saving?: boolean
@@ -28,6 +29,7 @@ const selected = ref<number[]>([])
 const search = ref('')
 const loading = ref(false)
 const loadError = ref('')
+const modeLabel = computed(() => props.mode === 'members' ? '成员' : props.mode === 'viewers' ? '查看者' : '配额管理员')
 
 const candidates = computed(() => {
   const existing = new Map<number, AdminUser>()
@@ -37,7 +39,7 @@ const candidates = computed(() => {
     email: person.email,
     avatar_url: person.avatar_url,
     role: 'user',
-    balance: 'balance' in person ? person.balance : 0,
+    balance: 'balance' in person ? person.balance ?? 0 : 0,
     concurrency: 0,
     status: person.status === 'disabled' ? 'disabled' : 'active',
     allowed_groups: [],
@@ -94,7 +96,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', keydown))
         <section class="ug-dialog ug-dialog-wide" role="dialog" aria-modal="true">
           <header class="ug-dialog-head">
             <span><UserRoundCheck :size="20" /></span>
-            <div><h2>管理{{ mode === 'members' ? '成员' : '查看者' }}</h2><p>{{ groupName }} · 已选择 {{ selected.length }} 人</p></div>
+            <div><h2>管理{{ modeLabel }}</h2><p>{{ groupName }} · 已选择 {{ selected.length }} 人</p></div>
             <button type="button" aria-label="关闭" :disabled="saving" @click="close"><X :size="18" /></button>
           </header>
           <div class="ug-people-body">
@@ -109,9 +111,9 @@ onBeforeUnmount(() => document.removeEventListener('keydown', keydown))
               </button>
               <p v-if="!candidates.length" class="ug-people-empty">没有符合条件的用户</p>
             </div>
-            <p class="ug-info">{{ mode === 'members' ? '成员会进入该用户组的订阅与用量统计。' : '查看者仅获得只读访问权限，不计入成员订阅和用量统计。' }}</p>
+            <p class="ug-info">{{ mode === 'members' ? '成员会进入该团队的配额与用量统计。' : mode === 'viewers' ? '查看者仅获得只读访问权限，不计入成员配额和用量统计。' : '配额管理员可以配置团队总额和成员额度。' }}</p>
           </div>
-          <footer class="ug-dialog-actions"><button type="button" class="secondary" @click="close">取消</button><button type="button" :disabled="saving" data-testid="save-people" @click="emit('save', selected)"><LoaderCircle v-if="saving" :size="16" class="spinning" /><Check v-else :size="16" />{{ saving ? '保存中' : `保存${mode === 'members' ? '成员' : '查看者'}` }}</button></footer>
+          <footer class="ug-dialog-actions"><button type="button" class="secondary" @click="close">取消</button><button type="button" :disabled="saving" data-testid="save-people" @click="emit('save', selected)"><LoaderCircle v-if="saving" :size="16" class="spinning" /><Check v-else :size="16" />{{ saving ? '保存中' : `保存${modeLabel}` }}</button></footer>
         </section>
       </div>
     </Transition>

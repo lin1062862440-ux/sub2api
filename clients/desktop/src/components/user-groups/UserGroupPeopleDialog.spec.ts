@@ -36,7 +36,7 @@ describe('UserGroupPeopleDialog', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain('研发团队')
-    expect(wrapper.text()).toContain('成员会进入该用户组的订阅与用量统计')
+    expect(wrapper.text()).toContain('成员会进入该团队的配额与用量统计')
     const people = wrapper.findAll('.ug-person')
     expect(people).toHaveLength(2)
     await people[1]!.trigger('click')

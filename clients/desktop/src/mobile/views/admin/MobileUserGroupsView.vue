@@ -431,7 +431,7 @@ function selectedPersonAsUser(person: GroupPerson): AdminUser {
     email: person.email,
     avatar_url: person.avatar_url,
     role: 'user',
-    balance: 'balance' in person && Number.isFinite(person.balance) ? person.balance : 0,
+    balance: 'balance' in person && Number.isFinite(person.balance) ? Number(person.balance) : 0,
     concurrency: 0,
     status: person.status === 'disabled' ? 'disabled' : 'active',
     allowed_groups: [],

@@ -9,8 +9,9 @@
  * `src/config.ts`.
  */
 import { LazyStore } from '@tauri-apps/plugin-store'
+import { isTauri } from '@tauri-apps/api/core'
 
-const store = new LazyStore('linai.json', { autoSave: 100 })
+const store = isTauri() ? new LazyStore('linai.json', { autoSave: 100 }) : null
 
 export const StorageKey = {
   accessToken: 'access_token',
@@ -19,16 +20,28 @@ export const StorageKey = {
 } as const
 
 async function get<T>(key: string): Promise<T | null> {
+  if (!store) {
+    const raw = sessionStorage.getItem(key)
+    if (raw === null) return null
+    try { return JSON.parse(raw) as T }
+    catch { return null }
+  }
   const value = await store.get<T>(key)
   return value ?? null
 }
 
 async function set(key: string, value: unknown): Promise<void> {
-  await store.set(key, value)
+  if (store) await store.set(key, value)
+  else sessionStorage.setItem(key, JSON.stringify(value))
 }
 
 async function remove(key: string): Promise<void> {
-  await store.delete(key)
+  if (store) await store.delete(key)
+  else sessionStorage.removeItem(key)
+}
+
+async function save(): Promise<void> {
+  await store?.save()
 }
 
 // ==================== Tokens ====================
@@ -61,12 +74,12 @@ export async function saveSession(session: {
   if (session.expiresIn) {
     await set(StorageKey.tokenExpiresAt, Date.now() + session.expiresIn * 1000)
   }
-  await store.save()
+  await save()
 }
 
 export async function clearSession(): Promise<void> {
   await remove(StorageKey.accessToken)
   await remove(StorageKey.refreshToken)
   await remove(StorageKey.tokenExpiresAt)
-  await store.save()
+  await save()
 }

@@ -63,7 +63,7 @@ describe('UserGroupsView', () => {
     expect(wrapper.text()).not.toContain('平台类型')
   })
 
-  it('creates a group and opens member management in centered dialogs', async () => {
+  it('creates a group and links to the team detail workspace', async () => {
     const wrapper = mountView()
     await flushPromises()
     await wrapper.get('[data-testid="create-user-group"]').trigger('click')
@@ -73,10 +73,7 @@ describe('UserGroupsView', () => {
     await flushPromises()
     expect(mocks.create).toHaveBeenCalledWith({ name: '运营团队', description: '运营成员' })
 
-    await wrapper.get('[data-testid="group-members-3"]').trigger('click')
-    await flushPromises()
-    expect(mocks.members).toHaveBeenCalledWith(3)
-    expect(wrapper.get('[data-testid="user-group-people-dialog"]').text()).toContain('管理成员')
+    expect(wrapper.get('[data-testid="open-team-3"]').text()).toContain('打开团队')
   })
 
   it('removes all mutation controls for a delegated read-only user', async () => {
@@ -87,6 +84,6 @@ describe('UserGroupsView', () => {
     expect(wrapper.text()).toContain('只读访问')
     expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="edit-user-group-3"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="group-members-3"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="edit-user-group-3"]').exists()).toBe(false)
   })
 })
