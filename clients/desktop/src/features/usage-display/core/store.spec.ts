@@ -154,6 +154,44 @@ describe('usage display store', () => {
     expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('20%')
   })
 
+  it('uses the member weekly allocation for a team subscription', async () => {
+    const teamSubscription = subscription({
+      team_weekly_limit_usd: 2,
+      team_weekly_usage_usd: 0,
+      team_weekly_window_start: '2026-08-04T00:00:00Z',
+      group: {
+        id: 3,
+        name: '金卡研发部',
+        subscription_type: 'team_subscription',
+        daily_limit_usd: null,
+        weekly_limit_usd: null,
+        monthly_limit_usd: null,
+      },
+    })
+    const deps = dependencies({
+      loadConfig: vi.fn().mockResolvedValue(config({ enabled: true, source: 'subscription', subscriptionId: 9 })),
+      getSubscriptions: vi.fn().mockResolvedValue([teamSubscription]),
+    })
+    const store = createUsageDisplayStore(deps)
+
+    await store.attachUser(user())
+
+    expect(store.state.quotaSummary).toMatchObject({
+      unlimited: false,
+      remainingPercent: 100,
+      constrainedKey: 'weekly',
+      quotas: [{
+        key: 'weekly',
+        label: '成员周额度',
+        used: 0,
+        limit: 2,
+        windowStart: '2026-08-04T00:00:00Z',
+      }],
+    })
+    expect(store.state.trayTitle).toBe('0%')
+    expect(deps.setDisplayTitle).toHaveBeenLastCalledWith('0%')
+  })
+
   it('does not switch when the fixed subscription becomes unavailable', async () => {
     const deps = dependencies({
       loadConfig: vi.fn().mockResolvedValue(config({ enabled: true, source: 'subscription', subscriptionId: 9 })),

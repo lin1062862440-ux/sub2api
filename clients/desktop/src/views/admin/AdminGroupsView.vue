@@ -25,11 +25,12 @@ import type {
   CreateAdminGroupRequest,
 } from '@/api/admin/types'
 import GroupEditorDialog from '@/components/admin/GroupEditorDialog.vue'
+import { toast } from '@/stores/toast'
 
 const groups = ref<AdminGroup[]>([])
 const loading = ref(true)
 const error = ref('')
-const message = ref('')
+const editorError = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -101,11 +102,13 @@ function changePageSize() {
 
 function openCreate() {
   editingGroup.value = null
+  editorError.value = ''
   editorOpen.value = true
 }
 
 function openEdit(group: AdminGroup) {
   editingGroup.value = group
+  editorError.value = ''
   editorOpen.value = true
 }
 
@@ -117,20 +120,20 @@ function closeEditor() {
 
 async function saveGroup(payload: CreateAdminGroupRequest) {
   saving.value = true
-  message.value = ''
+  editorError.value = ''
   try {
     if (editingGroup.value) {
       await updateAdminGroup(editingGroup.value.id, payload)
-      message.value = `已更新分组“${payload.name}”`
+      toast.success(`已更新分组“${payload.name}”`)
     } else {
       await createAdminGroup(payload)
-      message.value = `已创建分组“${payload.name}”`
+      toast.success(`已创建分组“${payload.name}”`)
     }
     editorOpen.value = false
     editingGroup.value = null
     await loadGroups()
   } catch (cause) {
-    message.value = cause instanceof Error ? cause.message : '保存分组失败'
+    editorError.value = cause instanceof Error ? cause.message : '保存分组失败'
   } finally {
     saving.value = false
   }
@@ -147,11 +150,11 @@ async function confirmStatusChange() {
   statusPending.value = true
   try {
     await updateAdminGroupStatus(group.id, nextStatus)
-    message.value = nextStatus === 'active' ? `已启用分组“${group.name}”` : `已停用分组“${group.name}”`
+    toast.success(nextStatus === 'active' ? `已启用分组“${group.name}”` : `已停用分组“${group.name}”`)
     statusTarget.value = null
     await loadGroups()
   } catch (cause) {
-    message.value = cause instanceof Error ? cause.message : '更新分组状态失败'
+    toast.error('更新分组状态失败', { detail: cause instanceof Error ? cause.message : undefined })
   } finally {
     statusPending.value = false
   }
@@ -194,7 +197,6 @@ onMounted(loadGroups)
       <button class="refresh" type="button" data-testid="refresh-groups" title="刷新" aria-label="刷新" @click="loadGroups"><RefreshCw :size="15" :class="{ spinning: loading }" /></button>
     </form>
 
-    <p v-if="message" class="message">{{ message }}</p>
 
     <div v-if="loading" class="loading" aria-label="正在加载"><i v-for="index in 4" :key="index" /></div>
     <section v-else-if="error" class="empty error-state">
@@ -249,7 +251,7 @@ onMounted(loadGroups)
       </nav>
     </footer>
 
-    <GroupEditorDialog :model-value="editorOpen" :group="editingGroup" :pending="saving" @close="closeEditor" @save="saveGroup" />
+    <GroupEditorDialog :model-value="editorOpen" :group="editingGroup" :pending="saving" :error="editorError" @close="closeEditor" @save="saveGroup" />
 
     <Transition name="fade">
       <div v-if="statusTarget" class="dialog-backdrop" @mousedown.self="statusTarget = null">

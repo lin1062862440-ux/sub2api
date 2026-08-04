@@ -61,6 +61,9 @@ describe('UserGroupsView', () => {
     expect(wrapper.text()).toContain('查看者')
     expect(wrapper.text()).not.toContain('计费倍率')
     expect(wrapper.text()).not.toContain('平台类型')
+    expect(wrapper.text()).toContain('团队管理')
+    expect(wrapper.text()).not.toContain('用户组')
+    expect(wrapper.get('[data-testid="open-team-3"]').element.parentElement?.textContent).not.toContain('配额')
   })
 
   it('creates a group and links to the team detail workspace', async () => {

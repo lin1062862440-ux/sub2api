@@ -13,6 +13,8 @@ function mountDialog() {
 describe('UserGroupEditorDialog', () => {
   it('trims and emits the organizational fields', async () => {
     const wrapper = mountDialog()
+    expect(wrapper.text()).toContain('新建团队')
+    expect(wrapper.text()).not.toContain('用户组')
     await wrapper.get('[data-testid="user-group-name"]').setValue('  研发团队  ')
     await wrapper.get('[data-testid="user-group-description"]').setValue('  核心研发成员  ')
     await wrapper.get('[data-testid="user-group-editor-form"]').trigger('submit')

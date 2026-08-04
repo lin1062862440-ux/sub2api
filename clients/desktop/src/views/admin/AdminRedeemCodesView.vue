@@ -31,6 +31,7 @@ import type {
 import { saveTextExport } from '@/lib/export-file'
 import { formatCost, formatDateTime } from '@/lib/format'
 import { appCapabilities } from '@/lib/platform-capabilities'
+import { toast } from '@/stores/toast'
 
 const items = ref<AdminRedeemCode[]>([])
 const stats = ref<AdminRedeemStats | null>(null)
@@ -38,8 +39,7 @@ const groups = ref<AdminGroupOption[]>([])
 const loading = ref(true)
 const loadError = ref('')
 const editorOpen = ref(false)
-const message = ref('')
-const actionError = ref('')
+const editorError = ref('')
 const search = ref('')
 const status = ref('')
 const type = ref<AdminRedeemCodeType | ''>('')
@@ -91,7 +91,7 @@ async function load() {
 
 async function generate() {
   pending.value = 'generate'
-  actionError.value = ''
+  editorError.value = ''
   try {
     const payload = {
       count: Math.max(1, Number(form.count) || 1),
@@ -107,10 +107,10 @@ async function generate() {
     }
     const codes = await generateAdminRedeemCodes(payload)
     editorOpen.value = false
-    message.value = `已生成 ${codes.length} 个兑换码`
+    toast.success(`已生成 ${codes.length} 个兑换码`)
     await load()
   } catch (caught) {
-    actionError.value = errorMessage(caught, '兑换码生成失败')
+    editorError.value = errorMessage(caught, '兑换码生成失败')
   } finally {
     pending.value = ''
   }
@@ -126,14 +126,13 @@ async function disableSelected() {
   if (!selected.value.length) return
   if (!window.confirm(`确认禁用选中的 ${selected.value.length} 个兑换码？`)) return
   pending.value = 'disable'
-  actionError.value = ''
   try {
     const result = await batchUpdateAdminRedeemCodes(selected.value, { status: 'disabled' })
-    message.value = `已禁用 ${result.updated} 个兑换码`
+    toast.success(`已禁用 ${result.updated} 个兑换码`)
     selected.value = []
     await load()
   } catch (caught) {
-    actionError.value = errorMessage(caught, '批量禁用失败')
+    toast.error('批量禁用失败', { detail: errorMessage(caught, '请稍后重试。') })
   } finally {
     pending.value = ''
   }
@@ -143,14 +142,13 @@ async function deleteSelected() {
   if (!selected.value.length) return
   if (!window.confirm(`确认永久删除选中的 ${selected.value.length} 个兑换码？此操作无法撤销。`)) return
   pending.value = 'batch-delete'
-  actionError.value = ''
   try {
     const result = await batchDeleteAdminRedeemCodes(selected.value)
-    message.value = `已删除 ${result.deleted} 个兑换码`
+    toast.success(`已删除 ${result.deleted} 个兑换码`)
     selected.value = []
     await load()
   } catch (caught) {
-    actionError.value = errorMessage(caught, '批量删除失败')
+    toast.error('批量删除失败', { detail: errorMessage(caught, '请稍后重试。') })
   } finally {
     pending.value = ''
   }
@@ -159,13 +157,12 @@ async function deleteSelected() {
 async function expire(item: AdminRedeemCode) {
   if (!window.confirm(`确认让兑换码 ${item.code} 立即过期？`)) return
   pending.value = `expire-${item.id}`
-  actionError.value = ''
   try {
     await expireAdminRedeemCode(item.id)
-    message.value = '兑换码已过期'
+    toast.success('兑换码已过期')
     await load()
   } catch (caught) {
-    actionError.value = errorMessage(caught, '兑换码过期操作失败')
+    toast.error('兑换码过期操作失败', { detail: errorMessage(caught, '请稍后重试。') })
   } finally {
     pending.value = ''
   }
@@ -174,13 +171,12 @@ async function expire(item: AdminRedeemCode) {
 async function remove(item: AdminRedeemCode) {
   if (!window.confirm(`确认永久删除兑换码 ${item.code}？此操作无法撤销。`)) return
   pending.value = `delete-${item.id}`
-  actionError.value = ''
   try {
     await deleteAdminRedeemCode(item.id)
-    message.value = '兑换码已删除'
+    toast.success('兑换码已删除')
     await load()
   } catch (caught) {
-    actionError.value = errorMessage(caught, '兑换码删除失败')
+    toast.error('兑换码删除失败', { detail: errorMessage(caught, '请稍后重试。') })
   } finally {
     pending.value = ''
   }
@@ -199,21 +195,24 @@ function exportFilename() {
 
 async function exportCodes() {
   pending.value = 'export'
-  actionError.value = ''
   try {
     const csv = await exportAdminRedeemCodes(currentFilters())
     const path = await saveTextExport(csv, exportFilename())
-    message.value = `已导出到 ${path}`
+    toast.success('兑换码已导出', { detail: path })
   } catch (caught) {
-    actionError.value = errorMessage(caught, '兑换码导出失败')
+    toast.error('兑换码导出失败', { detail: errorMessage(caught, '请稍后重试。') })
   } finally {
     pending.value = ''
   }
 }
 
 async function copy(code: string) {
-  await navigator.clipboard?.writeText(code)
-  message.value = '兑换码已复制'
+  try {
+    await navigator.clipboard?.writeText(code)
+    toast.success('兑换码已复制')
+  } catch (caught) {
+    toast.error('复制失败', { detail: errorMessage(caught, '请检查剪贴板权限。') })
+  }
 }
 
 function typeLabel(value: string) {
@@ -302,8 +301,6 @@ onMounted(() => void load())
       </div>
     </form>
 
-    <p v-if="message" class="message">{{ message }}</p>
-    <p v-if="actionError" class="message error-message">{{ actionError }}</p>
 
     <section class="table-wrap">
       <div v-if="loading" class="loading"><i v-for="n in 6" :key="n" /></div>
@@ -374,7 +371,7 @@ onMounted(() => void load())
               <label><span>订阅有效天数</span><input v-model.number="form.validityDays" type="number" min="1" /></label>
             </template>
             <label><span>兑换码有效天数</span><input v-model.number="form.expiresDays" type="number" min="1" /></label>
-            <p v-if="actionError" class="editor-error">{{ actionError }}</p>
+            <p v-if="editorError" class="editor-error" role="alert">{{ editorError }}</p>
             <footer>
               <button type="button" @click="editorOpen = false">取消</button>
               <button class="save" type="submit" :disabled="pending === 'generate'">

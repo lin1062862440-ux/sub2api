@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AlertCircle, Check, Filter, Pencil, Plus, Power, Search } from '@lucide/vue'
+import { AlertCircle, Filter, Pencil, Plus, Power, Search } from '@lucide/vue'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import {
@@ -19,6 +19,7 @@ import GroupEditorDialog from '@/components/admin/GroupEditorDialog.vue'
 import MobileBottomSheet from '@/mobile/components/MobileBottomSheet.vue'
 import MobilePage from '@/mobile/components/MobilePage.vue'
 import MobilePagination from '@/mobile/components/MobilePagination.vue'
+import { toast } from '@/stores/toast'
 
 const PAGE_SIZE = 20
 const groupPlatforms: AdminGroupPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok', 'composite']
@@ -37,7 +38,6 @@ const initialLoading = ref(true)
 const listLoading = ref(false)
 const fatalError = ref('')
 const actionError = ref('')
-const actionMessage = ref('')
 const searchDraft = ref('')
 const search = ref('')
 const platform = ref<'' | AdminGroupPlatform>('')
@@ -165,7 +165,6 @@ function listParams(page: number): AdminGroupListParams {
 function claimFeedback() {
   const token = ++feedbackGeneration
   actionError.value = ''
-  actionMessage.value = ''
   return token
 }
 
@@ -209,7 +208,6 @@ async function loadGroups(
     if (!mounted || generation !== loadGeneration) return
     if (!loaded.value) fatalError.value = '分组列表加载失败，请检查网络后重试。'
     else if (reportFailure && (feedbackToken === undefined || ownsFeedback(feedbackToken))) {
-      actionMessage.value = ''
       actionError.value = '分组列表刷新失败，已保留当前数据。'
     }
   } finally {
@@ -286,10 +284,10 @@ async function saveGroup(payload: CreateAdminGroupRequest) {
   try {
     if (target) {
       await updateAdminGroup(target.id, payload)
-      if (ownsFeedback(feedbackToken)) actionMessage.value = `已更新分组“${safeName(payload.name)}”`
+      if (ownsFeedback(feedbackToken)) toast.success(`已更新分组“${safeName(payload.name)}”`)
     } else {
       await createAdminGroup(payload)
-      if (ownsFeedback(feedbackToken)) actionMessage.value = `已创建分组“${safeName(payload.name)}”`
+      if (ownsFeedback(feedbackToken)) toast.success(`已创建分组“${safeName(payload.name)}”`)
     }
     if (!mounted) return
     editorOpen.value = false
@@ -378,11 +376,10 @@ async function confirmStatusChange() {
       ...result.value,
       items: result.value.items.map((item) => item.id === group.id ? { ...item, status: nextStatus } : item),
     }
-    if (ownsFeedback(feedbackToken)) actionMessage.value = `已${nextStatus === 'active' ? '启用' : '停用'}分组“${safeName(group.name)}”`
+    if (ownsFeedback(feedbackToken)) toast.success(`已${nextStatus === 'active' ? '启用' : '停用'}分组“${safeName(group.name)}”`)
     await loadGroups(result.value.page, true, feedbackToken, false)
   } catch {
     if (ownsFeedback(feedbackToken)) {
-      actionMessage.value = ''
       actionError.value = '操作失败，请稍后重试。当前分组列表未更改。'
     }
   } finally {
@@ -437,7 +434,6 @@ onUnmounted(() => {
         <button class="filter-button" type="button" data-testid="group-filter-trigger" @click="openFilters"><Filter :size="17" /><span v-if="activeFilterCount">{{ activeFilterCount }}</span></button>
       </form>
 
-      <p v-if="actionMessage" class="action-message" data-testid="group-action-message" role="status"><Check :size="17" />{{ actionMessage }}</p>
       <p v-if="actionError" class="action-error" data-testid="group-action-error" role="alert"><AlertCircle :size="17" />{{ actionError }}</p>
       <div v-if="listLoading" class="list-busy" role="status">正在刷新分组</div>
 
@@ -484,5 +480,5 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.create-button{display:flex;min-height:44px;align-items:center;justify-content:center;gap:6px;padding:0 13px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.groups-content{display:grid;min-width:0;gap:14px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.search-row label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.search-row input{min-width:0;width:100%;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.search-row>button[type=submit]{min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.filter-button{position:relative;display:grid;width:44px;min-height:44px;padding:0;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);place-items:center}.filter-button span{position:absolute;top:-5px;right:-5px;display:grid;min-width:18px;height:18px;border-radius:9px;background:#bd4d40;color:#fff;font-size:10px;place-items:center}.action-message,.action-error{display:flex;min-width:0;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border-radius:6px;font-size:13px;line-height:1.45}.action-message{border:1px solid #cce6d8;background:#eef9f3;color:#287154}.action-error{border:1px solid #eccfc9;background:#fff5f2;color:#9e493c}.list-busy{padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.group-list{display:grid;gap:10px}.group-card{display:grid;min-width:0;gap:13px;padding:14px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.group-card>header{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:10px}.identity{display:grid;min-width:0;gap:4px}.identity strong,.identity span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.identity strong{font-size:15px}.identity span{color:var(--text-tertiary);font-size:11px}.status{padding:4px 7px;border-radius:5px;background:#f0f2f5;color:#687282;font-size:11px}.status.active{background:#eaf7f0;color:#287755}.metric-strip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:hidden;border:1px solid var(--border-subtle);border-radius:6px}.metric-strip>div{display:grid;min-width:0;gap:4px;padding:10px 11px}.metric-strip>div+div{border-left:1px solid var(--border-subtle)}.metric-strip span,.quota-summary span,.health-summary span{color:var(--text-tertiary);font-size:10px}.metric-strip strong{overflow:hidden;font-family:var(--font-data);font-size:15px;text-overflow:ellipsis;white-space:nowrap}.quota-summary,.health-summary{display:grid;min-width:0;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:5px 10px}.quota-summary strong,.health-summary strong{overflow:hidden;font-family:var(--font-data);font-size:12px;text-align:right;text-overflow:ellipsis;white-space:nowrap}.health-summary em{grid-column:1/-1;color:#a0632f;font-size:10px;font-style:normal;text-align:right}.group-card>footer{display:grid;grid-template-columns:minmax(0,1fr) minmax(92px,.45fr);gap:8px}.group-card>footer button{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;font-size:13px}.group-card>footer button:disabled{opacity:.5}.edit-button{border-color:var(--accent)!important;color:var(--accent)!important}.status-button{color:var(--text-secondary)!important}.filter-fields{display:grid;gap:14px}.filter-fields label{display:grid;gap:6px}.filter-fields span{color:var(--text-secondary);font-size:12px}.filter-fields select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-secondary,.sheet-primary{min-height:44px;padding:0 16px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-primary{border-color:var(--accent);background:var(--accent);color:#fff}.confirm-backdrop{position:fixed;z-index:170;inset:0;display:grid;padding:16px;background:rgba(24,35,50,.28);backdrop-filter:blur(8px);place-items:center}.status-dialog{width:min(100%,420px);padding:18px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 24px 60px rgba(28,43,63,.24)}.status-dialog h2{margin:0;font-size:17px}.status-dialog p{margin:8px 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.status-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.status-dialog footer button{min-height:44px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.status-dialog footer .primary{border-color:var(--accent);background:var(--accent);color:#fff}.mobile-pagination{margin-top:2px}@media(max-width:360px){.search-row{grid-template-columns:minmax(0,1fr) 44px}.search-row>button[type=submit]{grid-column:1/-1;grid-row:2}.quota-summary,.health-summary{grid-template-columns:1fr}.quota-summary strong,.health-summary strong{text-align:left}.health-summary em{text-align:left}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+.create-button{display:flex;min-height:44px;align-items:center;justify-content:center;gap:6px;padding:0 13px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.groups-content{display:grid;min-width:0;gap:14px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.search-row label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.search-row input{min-width:0;width:100%;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.search-row>button[type=submit]{min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.filter-button{position:relative;display:grid;width:44px;min-height:44px;padding:0;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);place-items:center}.filter-button span{position:absolute;top:-5px;right:-5px;display:grid;min-width:18px;height:18px;border-radius:9px;background:#bd4d40;color:#fff;font-size:10px;place-items:center}.action-error{display:flex;min-width:0;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border:1px solid #eccfc9;border-radius:6px;background:#fff5f2;color:#9e493c;font-size:13px;line-height:1.45}.list-busy{padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.group-list{display:grid;gap:10px}.group-card{display:grid;min-width:0;gap:13px;padding:14px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.group-card>header{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:start;gap:10px}.identity{display:grid;min-width:0;gap:4px}.identity strong,.identity span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.identity strong{font-size:15px}.identity span{color:var(--text-tertiary);font-size:11px}.status{padding:4px 7px;border-radius:5px;background:#f0f2f5;color:#687282;font-size:11px}.status.active{background:#eaf7f0;color:#287755}.metric-strip{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));overflow:hidden;border:1px solid var(--border-subtle);border-radius:6px}.metric-strip>div{display:grid;min-width:0;gap:4px;padding:10px 11px}.metric-strip>div+div{border-left:1px solid var(--border-subtle)}.metric-strip span,.quota-summary span,.health-summary span{color:var(--text-tertiary);font-size:10px}.metric-strip strong{overflow:hidden;font-family:var(--font-data);font-size:15px;text-overflow:ellipsis;white-space:nowrap}.quota-summary,.health-summary{display:grid;min-width:0;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:5px 10px}.quota-summary strong,.health-summary strong{overflow:hidden;font-family:var(--font-data);font-size:12px;text-align:right;text-overflow:ellipsis;white-space:nowrap}.health-summary em{grid-column:1/-1;color:#a0632f;font-size:10px;font-style:normal;text-align:right}.group-card>footer{display:grid;grid-template-columns:minmax(0,1fr) minmax(92px,.45fr);gap:8px}.group-card>footer button{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;gap:7px;padding:0 9px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;font-size:13px}.group-card>footer button:disabled{opacity:.5}.edit-button{border-color:var(--accent)!important;color:var(--accent)!important}.status-button{color:var(--text-secondary)!important}.filter-fields{display:grid;gap:14px}.filter-fields label{display:grid;gap:6px}.filter-fields span{color:var(--text-secondary);font-size:12px}.filter-fields select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-secondary,.sheet-primary{min-height:44px;padding:0 16px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-primary{border-color:var(--accent);background:var(--accent);color:#fff}.confirm-backdrop{position:fixed;z-index:170;inset:0;display:grid;padding:16px;background:rgba(24,35,50,.28);backdrop-filter:blur(8px);place-items:center}.status-dialog{width:min(100%,420px);padding:18px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 24px 60px rgba(28,43,63,.24)}.status-dialog h2{margin:0;font-size:17px}.status-dialog p{margin:8px 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.status-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.status-dialog footer button{min-height:44px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.status-dialog footer .primary{border-color:var(--accent);background:var(--accent);color:#fff}.mobile-pagination{margin-top:2px}@media(max-width:360px){.search-row{grid-template-columns:minmax(0,1fr) 44px}.search-row>button[type=submit]{grid-column:1/-1;grid-row:2}.quota-summary,.health-summary{grid-template-columns:1fr}.quota-summary strong,.health-summary strong{text-align:left}.health-summary em{text-align:left}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   AlertCircle,
-  Check,
   CircleEllipsis,
   Coins,
   Eye,
@@ -27,6 +26,7 @@ import UserGroupsDialog from '@/components/admin/UserGroupsDialog.vue'
 import MobileBottomSheet from '@/mobile/components/MobileBottomSheet.vue'
 import MobilePage from '@/mobile/components/MobilePage.vue'
 import MobilePagination from '@/mobile/components/MobilePagination.vue'
+import { toast } from '@/stores/toast'
 
 const PAGE_SIZE = 20
 
@@ -39,7 +39,6 @@ const initialLoading = ref(true)
 const listLoading = ref(false)
 const fatalError = ref('')
 const actionError = ref('')
-const actionMessage = ref('')
 const syncRetryPage = ref<number | null>(null)
 const searchDraft = ref('')
 const search = ref('')
@@ -175,7 +174,6 @@ function listParams(page: number): AdminUserListParams {
 function claimFeedback() {
   const token = ++feedbackGeneration
   actionError.value = ''
-  actionMessage.value = ''
   syncRetryPage.value = null
   return token
 }
@@ -218,7 +216,6 @@ async function loadUsers(
     if (!mounted || generation !== loadGeneration) return
     if (!loaded.value) fatalError.value = '用户列表加载失败，请检查网络后重试。'
     else if (reportFailure && (feedbackToken === undefined || ownsFeedback(feedbackToken))) {
-      actionMessage.value = ''
       actionError.value = '用户列表刷新失败，已保留当前数据。'
     }
     return false
@@ -339,7 +336,7 @@ function openEdit(user: AdminUser) {
 function handleSaved(user: AdminUser) {
   replaceUser(user)
   const token = claimFeedback()
-  actionMessage.value = `已保存用户“${safeText(user.username, safeText(user.email, '未命名用户'))}”`
+  if (ownsFeedback(token)) toast.success(`已保存用户“${safeText(user.username, safeText(user.email, '未命名用户'))}”`)
   void loadUsers(result.value.page, true, token, false)
 }
 
@@ -386,14 +383,14 @@ function openDelete(user: AdminUser) {
 function handleBalanceUpdated(user: AdminUser) {
   replaceUser(user)
   const token = claimFeedback()
-  actionMessage.value = `已更新“${safeText(user.username, '未命名用户')}”的余额`
+  if (ownsFeedback(token)) toast.success(`已更新“${safeText(user.username, '未命名用户')}”的余额`)
   void loadUsers(result.value.page, true, token, false)
 }
 
 function handleGroupsUpdated(user: AdminUser) {
   replaceUser(user)
   const token = claimFeedback()
-  actionMessage.value = `已更新“${safeText(user.username, '未命名用户')}”的分组`
+  if (ownsFeedback(token)) toast.success(`已更新“${safeText(user.username, '未命名用户')}”的分组`)
   void loadUsers(result.value.page, true, token, false)
 }
 
@@ -410,7 +407,7 @@ function handleDeleted(id: number) {
     total,
     page: targetPage,
   }
-  actionMessage.value = '用户已删除'
+  if (ownsFeedback(token)) toast.success('用户已删除')
   void nextTick(() => {
     const target = focusTarget
       ? document.querySelector<HTMLElement>(`[data-testid="user-menu-trigger-${focusTarget.id}"]`)
@@ -484,11 +481,10 @@ async function confirmStatusChange() {
     await updateAdminUser(user.id, { status: nextStatus })
     if (!mounted) return
     replaceUser({ ...user, status: nextStatus })
-    if (ownsFeedback(token)) actionMessage.value = `已${nextStatus === 'active' ? '启用' : '停用'}用户“${safeText(user.username, '未命名用户')}”`
+    if (ownsFeedback(token)) toast.success(`已${nextStatus === 'active' ? '启用' : '停用'}用户“${safeText(user.username, '未命名用户')}”`)
     await loadUsers(result.value.page, true, token, false)
   } catch {
     if (ownsFeedback(token)) {
-      actionMessage.value = ''
       actionError.value = '操作失败，请稍后重试。当前用户列表未更改。'
     }
   } finally {
@@ -571,7 +567,6 @@ onUnmounted(() => {
         <button class="filter-button icon-button" type="button" data-testid="user-filter-trigger" aria-label="筛选用户" @click="openFilters"><Filter :size="17" /><span v-if="activeFilterCount">{{ activeFilterCount }}</span></button>
       </form>
 
-      <p v-if="actionMessage" class="action-message" data-testid="user-action-message" role="status"><Check :size="17" />{{ actionMessage }}</p>
       <div v-if="actionError" class="action-error" data-testid="user-action-error" role="alert"><AlertCircle :size="17" /><span>{{ actionError }}</span><button v-if="syncRetryPage !== null" type="button" data-testid="user-sync-retry" :disabled="listLoading" @click="retryDeletedSync">重试</button></div>
       <div v-if="listLoading" class="list-busy" role="status">正在刷新用户</div>
 
@@ -633,6 +628,6 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.create-button{display:flex;min-height:44px;align-items:center;gap:6px;padding:0 12px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.icon-button,.menu-trigger{display:grid;width:44px;min-height:44px;padding:0;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);place-items:center}.icon-button:disabled{opacity:.5}.spinning{animation:user-spin 700ms linear infinite}.users-content{display:grid;min-width:0;gap:12px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.search-row label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.search-row input{min-width:0;width:100%;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.search-row>button[type=submit]{min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.filter-button{position:relative}.filter-button span{position:absolute;top:-5px;right:-5px;display:grid;min-width:18px;height:18px;border-radius:9px;background:#bd4d40;color:#fff;font-size:10px;place-items:center}.action-message,.action-error{display:flex;min-width:0;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border-radius:6px;font-size:13px;line-height:1.45}.action-message{border:1px solid #cce6d8;background:#eef9f3;color:#287154}.action-error{border:1px solid #eccfc9;background:#fff5f2;color:#9e493c}.list-busy{padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.user-list{display:grid;gap:9px}.user-card{position:relative;display:grid;min-width:0;gap:9px;padding:12px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.user-card>header{display:grid;grid-template-columns:40px minmax(0,1fr) 44px;align-items:center;gap:9px}.user-card>header :deep(.user-avatar){width:40px!important;height:40px!important}.identity{display:grid;min-width:0;gap:2px}.identity>strong,.identity>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.identity>strong{font-size:15px}.identity>span{color:var(--text-tertiary);font-size:11px}.identity-meta{display:flex;min-width:0;align-items:center;gap:5px;overflow:hidden}.identity-meta span{flex:0 0 auto;padding:2px 5px;border-radius:4px;background:var(--bg-base);color:var(--text-secondary);font-size:10px}.identity-meta .role.admin{background:#edf2fb;color:#42659b}.identity-meta .status.active{background:#eaf7f0;color:#287755}.identity-meta .status.disabled{background:#fff0ed;color:#a14639}.identity-meta small{min-width:0;overflow:hidden;color:var(--text-tertiary);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.menu-owner{position:relative}.menu-trigger{border:0}.user-menu{position:absolute;z-index:25;top:46px;right:0;display:grid;width:180px;padding:5px;border:1px solid var(--border-strong);border-radius:7px;background:var(--bg-surface);box-shadow:0 12px 32px rgba(26,40,60,.18)}.user-menu button{display:flex;min-height:44px;align-items:center;gap:9px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text-primary);font:inherit;text-align:left}.user-menu button:focus,.user-menu button:hover{background:var(--bg-base);outline:0}.user-menu .danger{color:#a14639}.user-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;border:0}.user-summary>div{display:grid;min-width:0;gap:2px;padding:3px 0}.user-summary dt{color:var(--text-tertiary);font-size:10px}.user-summary dd{overflow:hidden;margin:0;color:var(--text-primary);font-family:var(--font-data);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.user-card>footer{display:grid}.user-card>footer button{display:flex;min-height:44px;align-items:center;justify-content:center;gap:6px;padding:0 10px;border:1px solid var(--accent);border-radius:6px;background:var(--bg-surface);color:var(--accent);font:inherit}.filter-fields{display:grid;gap:14px}.filter-fields label{display:grid;gap:6px}.filter-fields span{color:var(--text-secondary);font-size:12px}.filter-fields select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-secondary,.sheet-primary{min-height:44px;padding:0 16px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-primary{border-color:var(--accent);background:var(--accent);color:#fff}.confirm-backdrop{position:fixed;z-index:170;inset:0;display:grid;padding:16px;background:rgba(24,35,50,.28);backdrop-filter:blur(8px);place-items:center}.status-dialog{width:min(100%,420px);padding:18px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 24px 60px rgba(28,43,63,.24)}.status-dialog h2{margin:0;font-size:17px}.status-dialog p{margin:8px 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.status-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.status-dialog footer button{min-height:44px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.status-dialog footer .primary{border-color:var(--accent);background:var(--accent);color:#fff}.mobile-pagination{margin-top:2px}@keyframes user-spin{to{transform:rotate(360deg)}}@media(max-width:360px){.search-row{grid-template-columns:minmax(0,1fr) 44px}.search-row>button[type=submit]{grid-column:1/-1;grid-row:2}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+.create-button{display:flex;min-height:44px;align-items:center;gap:6px;padding:0 12px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.icon-button,.menu-trigger{display:grid;width:44px;min-height:44px;padding:0;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);place-items:center}.icon-button:disabled{opacity:.5}.spinning{animation:user-spin 700ms linear infinite}.users-content{display:grid;min-width:0;gap:12px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.search-row label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.search-row input{min-width:0;width:100%;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.search-row>button[type=submit]{min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.filter-button{position:relative}.filter-button span{position:absolute;top:-5px;right:-5px;display:grid;min-width:18px;height:18px;border-radius:9px;background:#bd4d40;color:#fff;font-size:10px;place-items:center}.action-error{display:flex;min-width:0;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border:1px solid #eccfc9;border-radius:6px;background:#fff5f2;color:#9e493c;font-size:13px;line-height:1.45}.list-busy{padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.user-list{display:grid;gap:9px}.user-card{position:relative;display:grid;min-width:0;gap:9px;padding:12px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.user-card>header{display:grid;grid-template-columns:40px minmax(0,1fr) 44px;align-items:center;gap:9px}.user-card>header :deep(.user-avatar){width:40px!important;height:40px!important}.identity{display:grid;min-width:0;gap:2px}.identity>strong,.identity>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.identity>strong{font-size:15px}.identity>span{color:var(--text-tertiary);font-size:11px}.identity-meta{display:flex;min-width:0;align-items:center;gap:5px;overflow:hidden}.identity-meta span{flex:0 0 auto;padding:2px 5px;border-radius:4px;background:var(--bg-base);color:var(--text-secondary);font-size:10px}.identity-meta .role.admin{background:#edf2fb;color:#42659b}.identity-meta .status.active{background:#eaf7f0;color:#287755}.identity-meta .status.disabled{background:#fff0ed;color:#a14639}.identity-meta small{min-width:0;overflow:hidden;color:var(--text-tertiary);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.menu-owner{position:relative}.menu-trigger{border:0}.user-menu{position:absolute;z-index:25;top:46px;right:0;display:grid;width:180px;padding:5px;border:1px solid var(--border-strong);border-radius:7px;background:var(--bg-surface);box-shadow:0 12px 32px rgba(26,40,60,.18)}.user-menu button{display:flex;min-height:44px;align-items:center;gap:9px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text-primary);font:inherit;text-align:left}.user-menu button:focus,.user-menu button:hover{background:var(--bg-base);outline:0}.user-menu .danger{color:#a14639}.user-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;border:0}.user-summary>div{display:grid;min-width:0;gap:2px;padding:3px 0}.user-summary dt{color:var(--text-tertiary);font-size:10px}.user-summary dd{overflow:hidden;margin:0;color:var(--text-primary);font-family:var(--font-data);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.user-card>footer{display:grid}.user-card>footer button{display:flex;min-height:44px;align-items:center;justify-content:center;gap:6px;padding:0 10px;border:1px solid var(--accent);border-radius:6px;background:var(--bg-surface);color:var(--accent);font:inherit}.filter-fields{display:grid;gap:14px}.filter-fields label{display:grid;gap:6px}.filter-fields span{color:var(--text-secondary);font-size:12px}.filter-fields select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-secondary,.sheet-primary{min-height:44px;padding:0 16px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-primary{border-color:var(--accent);background:var(--accent);color:#fff}.confirm-backdrop{position:fixed;z-index:170;inset:0;display:grid;padding:16px;background:rgba(24,35,50,.28);backdrop-filter:blur(8px);place-items:center}.status-dialog{width:min(100%,420px);padding:18px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 24px 60px rgba(28,43,63,.24)}.status-dialog h2{margin:0;font-size:17px}.status-dialog p{margin:8px 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.status-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.status-dialog footer button{min-height:44px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.status-dialog footer .primary{border-color:var(--accent);background:var(--accent);color:#fff}.mobile-pagination{margin-top:2px}@keyframes user-spin{to{transform:rotate(360deg)}}@media(max-width:360px){.search-row{grid-template-columns:minmax(0,1fr) 44px}.search-row>button[type=submit]{grid-column:1/-1;grid-row:2}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
 .action-error span{min-width:0;flex:1}.action-error button,.list-state button{display:flex;min-height:44px;align-items:center;gap:6px;padding:0 11px;border:1px solid currentColor;border-radius:6px;background:transparent;color:inherit;font:inherit}.list-state{display:grid;justify-items:center;gap:8px;padding:28px 16px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);color:var(--text-secondary);text-align:center}.list-state p{margin:0;color:var(--text-tertiary);font-size:12px}.error-state{color:#9e493c}
 </style>

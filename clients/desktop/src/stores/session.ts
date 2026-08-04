@@ -10,6 +10,7 @@ import type { PublicSettings, User } from '@/api'
 import { getUserGroupCapabilities, type UserGroupCapabilities } from '@/api/user-groups'
 import { clearSession, getSession, saveSession } from '@/lib/storage'
 import { onUnauthorized, onUserGroupAccessDenied } from '@/lib/http'
+import { clearToasts } from '@/stores/toast'
 
 interface SessionState {
   ready: boolean
@@ -125,6 +126,7 @@ export async function completeLogin(auth: {
   expires_in?: number
   user: User & { run_mode?: 'standard' | 'simple' }
 }): Promise<void> {
+  if (state.user?.id !== auth.user.id) clearToasts()
   await saveSession({
     accessToken: auth.access_token,
     refreshToken: auth.refresh_token ?? null,
@@ -158,12 +160,14 @@ export async function signOut(): Promise<void> {
     // Logging out locally matters more than the server acknowledging it.
   }
   await clearSession()
+  clearToasts()
   state.user = null
   state.userGroupCapabilities = null
 }
 
 // A refresh failure anywhere in the app drops us back to the login screen.
 onUnauthorized(() => {
+  clearToasts()
   state.user = null
   state.userGroupCapabilities = null
 })

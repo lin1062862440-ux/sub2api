@@ -13,12 +13,12 @@ import {
 import UserGroupEditorDialog from '@/components/user-groups/UserGroupEditorDialog.vue'
 import { formatDateTime } from '@/lib/format'
 import { session } from '@/stores/session'
+import { toast } from '@/stores/toast'
 
 const groups = ref<UserGroup[]>([])
 const loading = ref(true)
 const refreshing = ref(false)
 const loadError = ref('')
-const message = ref('')
 const search = ref('')
 const editorOpen = ref(false)
 const editingGroup = ref<UserGroup | null>(null)
@@ -43,7 +43,7 @@ async function load(background = false) {
   try {
     groups.value = await listUserGroups()
   } catch (caught) {
-    loadError.value = errorMessage(caught, '用户组加载失败')
+    loadError.value = errorMessage(caught, '团队加载失败')
   } finally {
     loading.value = false
     refreshing.value = false
@@ -69,23 +69,23 @@ async function saveGroup(payload: UserGroupMutation) {
     if (editingGroup.value) await updateUserGroup(editingGroup.value.id, payload)
     else await createUserGroup(payload)
     editorOpen.value = false
-    message.value = editingGroup.value ? '用户组已更新' : '用户组已创建'
+    toast.success(editingGroup.value ? '团队已更新' : '团队已创建')
     await load(true)
   } catch (caught) {
-    editorError.value = errorMessage(caught, '用户组保存失败')
+    editorError.value = errorMessage(caught, '团队保存失败')
   } finally {
     saving.value = false
   }
 }
 
 async function archive(group: UserGroup) {
-  if (!window.confirm(`确认归档用户组“${group.name}”？历史数据会保留。`)) return
+  if (!window.confirm(`确认归档团队“${group.name}”？历史数据会保留。`)) return
   try {
     await archiveUserGroup(group.id)
-    message.value = '用户组已归档'
+    toast.success('团队已归档')
     await load(true)
   } catch (caught) {
-    message.value = errorMessage(caught, '用户组归档失败')
+    toast.error('团队归档失败', { detail: errorMessage(caught, '请稍后重试。') })
   }
 }
 
@@ -104,15 +104,14 @@ onMounted(() => void load())
       <dl><div><dt>可访问团队</dt><dd>{{ groups.length }}</dd></div><div><dt>访问模式</dt><dd>{{ canManage ? '管理' : '只读' }}</dd></div></dl>
     </section>
 
-    <div class="ug-directory-toolbar"><label><Search :size="16" /><input v-model="search" data-testid="user-group-search" placeholder="搜索用户组名称或描述" /></label><span>共 {{ filtered.length }} 个用户组</span><button type="button" title="刷新" :disabled="refreshing" @click="load(true)"><RefreshCw :size="16" :class="{ spinning: refreshing }" /></button></div>
-    <p v-if="message" class="ug-message" role="status">{{ message }}</p>
+    <div class="ug-directory-toolbar"><label><Search :size="16" /><input v-model="search" data-testid="user-group-search" placeholder="搜索团队名称或描述" /></label><span>共 {{ filtered.length }} 个团队</span><button type="button" title="刷新" :disabled="refreshing" @click="load(true)"><RefreshCw :size="16" :class="{ spinning: refreshing }" /></button></div>
 
     <section class="ug-directory">
       <div v-if="loading" class="ug-loading"><i v-for="n in 5" :key="n" /></div>
-      <div v-else-if="loadError" class="ug-empty"><strong>用户组加载失败</strong><span>{{ loadError }}</span><button type="button" @click="load()">重新加载</button></div>
-      <div v-else-if="!filtered.length" class="ug-empty"><strong>{{ groups.length ? '没有匹配的用户组' : '暂无可访问的用户组' }}</strong><span>{{ groups.length ? '调整搜索条件后重试。' : canManage ? '创建第一个用户组并添加成员。' : '请联系管理员授予查看权限。' }}</span></div>
+      <div v-else-if="loadError" class="ug-empty"><strong>团队加载失败</strong><span>{{ loadError }}</span><button type="button" @click="load()">重新加载</button></div>
+      <div v-else-if="!filtered.length" class="ug-empty"><strong>{{ groups.length ? '没有匹配的团队' : '暂无可访问的团队' }}</strong><span>{{ groups.length ? '调整搜索条件后重试。' : canManage ? '创建第一个团队并添加成员。' : '请联系管理员授予查看权限。' }}</span></div>
       <template v-else>
-        <div class="ug-directory-row head"><span>用户组</span><span>成员</span><span>查看者</span><span>最近更新</span><span>操作</span></div>
+        <div class="ug-directory-row head"><span>团队</span><span>成员</span><span>查看者</span><span>最近更新</span><span>操作</span></div>
         <article v-for="group in filtered" :key="group.id" class="ug-directory-row">
           <div class="ug-group-identity"><i>{{ group.name.trim().slice(0, 1) || '#' }}</i><div><strong>{{ group.name }}</strong><span>{{ group.description || '暂无说明' }}</span></div></div>
           <strong class="ug-number">{{ group.member_count }}</strong>
@@ -120,10 +119,9 @@ onMounted(() => void load())
           <span class="ug-date">{{ formatDateTime(group.updated_at) }}</span>
           <div class="ug-row-actions">
             <RouterLink :to="{ name: 'user-group-members', params: { id: group.id } }" :data-testid="`open-team-${group.id}`">打开团队</RouterLink>
-            <RouterLink :to="{ name: 'user-group-quota', params: { id: group.id } }">配额</RouterLink>
             <RouterLink :to="{ name: 'user-group-usage', params: { id: group.id } }">用量</RouterLink>
-            <button v-if="canManage" type="button" title="编辑用户组" :data-testid="`edit-user-group-${group.id}`" @click="openEdit(group)"><Pencil :size="15" /></button>
-            <button v-if="canManage" class="danger" type="button" title="归档用户组" :data-testid="`archive-user-group-${group.id}`" @click="archive(group)"><Trash2 :size="15" /></button>
+            <button v-if="canManage" type="button" title="编辑团队" :data-testid="`edit-user-group-${group.id}`" @click="openEdit(group)"><Pencil :size="15" /></button>
+            <button v-if="canManage" class="danger" type="button" title="归档团队" :data-testid="`archive-user-group-${group.id}`" @click="archive(group)"><Trash2 :size="15" /></button>
           </div>
         </article>
       </template>

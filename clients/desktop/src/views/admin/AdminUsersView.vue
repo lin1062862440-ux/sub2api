@@ -23,6 +23,7 @@ import UserDetailDrawer from '@/components/admin/UserDetailDrawer.vue'
 import UserEditorDialog from '@/components/admin/UserEditorDialog.vue'
 import UserGroupsDialog from '@/components/admin/UserGroupsDialog.vue'
 import { formatCost, formatDateTime } from '@/lib/format'
+import { toast } from '@/stores/toast'
 
 const result = ref<AdminUserListResponse>({ items: [], total: 0, page: 1, page_size: 20 })
 const groups = ref<AdminGroupOption[]>([])
@@ -30,7 +31,6 @@ const loading = ref(true)
 const refreshing = ref(false)
 const loadError = ref('')
 const pending = ref(0)
-const message = ref('')
 const filters = reactive({ search: '', status: '' as '' | 'active' | 'disabled', role: '' as '' | 'admin' | 'user' })
 const editorOpen = ref(false)
 const editingUser = ref<AdminUser | null>(null)
@@ -90,9 +90,9 @@ async function toggleStatus(user: AdminUser) {
   pending.value = user.id
   try {
     replaceUser(await updateAdminUser(user.id, { status: user.status === 'active' ? 'disabled' : 'active' }))
-    message.value = `${user.username} 状态已更新`
+    toast.success(`${user.username} 状态已更新`)
   } catch (caught) {
-    message.value = caught instanceof Error && caught.message ? caught.message : '状态更新失败'
+    toast.error('状态更新失败', { detail: caught instanceof Error ? caught.message : undefined })
   } finally {
     pending.value = 0
   }
@@ -103,7 +103,7 @@ async function openDetail(user: AdminUser) {
   try {
     selectedUser.value = await getAdminUser(user.id)
   } catch {
-    message.value = '用户详情暂时无法更新，已展示列表数据。'
+    toast.warning('用户详情暂时无法更新', { detail: '已展示列表中的缓存数据。' })
   }
 }
 
@@ -124,12 +124,12 @@ function handleSaved(user: AdminUser) {
 
 function handleBalanceUpdated(user: AdminUser) {
   replaceUser(user)
-  message.value = `${user.username} 的余额已更新`
+  toast.success(`${user.username} 的余额已更新`)
 }
 
 function handleGroupsUpdated(user: AdminUser) {
   replaceUser(user)
-  message.value = `${user.username} 的分组已更新`
+  toast.success(`${user.username} 的分组已更新`)
 }
 
 function handleDeleted(id: number) {
@@ -164,7 +164,6 @@ onMounted(() => void load())
     <header class="page-header drag-region"><div><span>USER OPERATIONS</span><h1>用户管理</h1><p>身份资料、余额与分组权限分别管理，操作边界更清晰。</p></div><button class="primary no-drag" type="button" data-testid="create-user" @click="openCreate"><CirclePlus :size="17" />新增用户</button></header>
     <section class="summary"><div data-testid="user-total"><UsersRound :size="18" /><span>用户总数</span><strong>{{ result.total }}</strong></div><div data-testid="user-active"><UserCheck :size="18" /><span>当前页启用</span><strong>{{ activeCount }}</strong></div><div><ShieldCheck :size="18" /><span>管理员</span><strong>{{ adminCount }}</strong></div><div><UserRound :size="18" /><span>有效订阅</span><strong>{{ subscribedCount }}</strong></div></section>
     <form class="filters" data-testid="user-filters" @submit.prevent="submitFilters"><label class="search"><Search :size="16" /><input v-model="filters.search" data-testid="user-search" placeholder="搜索用户名或邮箱" /></label><select v-model="filters.status" data-testid="user-status-filter"><option value="">全部状态</option><option value="active">启用</option><option value="disabled">停用</option></select><select v-model="filters.role"><option value="">全部角色</option><option value="user">普通用户</option><option value="admin">管理员</option></select><button type="submit">应用筛选</button><button class="refresh" type="button" title="刷新用户" :disabled="refreshing" @click="load(true)"><RefreshCw :size="16" :class="{ spinning: refreshing }" /></button></form>
-    <p v-if="message" class="message" role="status">{{ message }}</p>
     <section class="table-wrap">
       <div v-if="loading" class="loading"><i v-for="n in 7" :key="n" /></div>
       <div v-else-if="loadError" class="empty"><strong>用户列表加载失败</strong><span>{{ loadError }}</span><button type="button" @click="load()">重试</button></div>

@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   revoke: vi.fn(),
   restore: vi.fn(),
   groups: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastWarning: vi.fn(),
+  toastError: vi.fn(),
 }))
 
 vi.mock('@/api/admin/subscriptions', () => ({
@@ -26,6 +29,9 @@ vi.mock('@/api/admin/subscriptions', () => ({
   restoreAdminSubscription: mocks.restore,
 }))
 vi.mock('@/api/admin/users', () => ({ getAdminGroups: mocks.groups }))
+vi.mock('@/stores/toast', () => ({
+  toast: { success: mocks.toastSuccess, warning: mocks.toastWarning, error: mocks.toastError },
+}))
 
 import MobileAdminSubscriptionsView from './MobileAdminSubscriptionsView.vue'
 
@@ -371,7 +377,7 @@ describe('MobileAdminSubscriptionsView', () => {
     await setBodyValue('subscription-assignment-group-id', '5')
     await clickBody('confirm-subscription-assignment')
     expect(mocks.bulkAssign).toHaveBeenCalledWith({ user_ids: [7, 8, 9], group_id: 5, validity_days: 30 })
-    expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('成功 3 个')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('批量分配完成：成功 3 个，失败 0 个')
   })
 
   it.each([
@@ -440,7 +446,7 @@ describe('MobileAdminSubscriptionsView', () => {
       subscriptions: [subscription({ id: 40 })],
       errors: ['user 8: token=partial-secret'],
       statuses: { 7: 'created', 8: 'failed' },
-    }, '部分用户分配失败'],
+    }, '部分用户分配失败', 'warning'],
     ['all', {
       success_count: 0,
       created_count: 0,
@@ -449,8 +455,8 @@ describe('MobileAdminSubscriptionsView', () => {
       subscriptions: [],
       errors: ['user 7: token=all-secret', 'user 8: raw failure'],
       statuses: { 7: 'failed', 8: 'failed' },
-    }, '批量分配失败'],
-  ])('shows fixed failed user ids for a %s failure without raw errors', async (_caseName, bulkResponse, expected) => {
+    }, '批量分配失败', 'error'],
+  ])('shows fixed failed user ids for a %s failure without raw errors', async (_caseName, bulkResponse, expected, toastType) => {
     mocks.bulkAssign.mockResolvedValueOnce(bulkResponse)
     const wrapper = mount(MobileAdminSubscriptionsView)
     await flushPromises()
@@ -460,10 +466,15 @@ describe('MobileAdminSubscriptionsView', () => {
     await setBodyValue('subscription-assignment-group-id', '2')
     await clickBody('confirm-subscription-assignment')
 
-    expect(wrapper.find('[data-testid="subscription-action-message"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="subscription-bulk-warning"]').text()).toContain(expected)
-    expect(wrapper.get('[data-testid="subscription-bulk-warning"]').text()).toContain('#8')
-    if (_caseName === 'all') expect(wrapper.get('[data-testid="subscription-bulk-warning"]').text()).toContain('#7')
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
+    const feedback = toastType === 'error' ? mocks.toastError : mocks.toastWarning
+    const otherFeedback = toastType === 'error' ? mocks.toastWarning : mocks.toastError
+    expect(feedback).toHaveBeenCalledTimes(1)
+    expect(otherFeedback).not.toHaveBeenCalled()
+    const message = feedback.mock.calls[0]?.[0]
+    expect(message).toContain(expected)
+    expect(message).toContain('#8')
+    if (_caseName === 'all') expect(message).toContain('#7')
     expect(wrapper.text()).not.toContain('partial-secret')
     expect(wrapper.text()).not.toContain('all-secret')
     expect(wrapper.text()).not.toContain('raw failure')
@@ -562,7 +573,7 @@ describe('MobileAdminSubscriptionsView', () => {
     await clickBody('confirm-subscription-assignment')
 
     expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([3])
-    expect(wrapper.get('[data-testid="subscription-bulk-warning"]').text()).toContain('#8')
+    expect(mocks.toastWarning).toHaveBeenCalledWith('部分用户分配失败：#8')
   })
 
   it('shows a fixed retryable progress failure for a newly created subscription', async () => {
@@ -632,7 +643,7 @@ describe('MobileAdminSubscriptionsView', () => {
     expect(wrapper.findAll('[data-testid="mobile-subscription-card"]')).toHaveLength(1)
     expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
     expect(mocks.progress.mock.calls.map(([id]) => id)).toEqual([3])
-    expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('已为用户 #10 分配订阅')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已为用户 #10 分配订阅')
     expect(wrapper.get('[data-testid="subscription-sync-warning"]').text()).toContain('同步失败')
     expect(wrapper.text()).not.toContain('assignment-refresh-secret')
   })
@@ -784,7 +795,7 @@ describe('MobileAdminSubscriptionsView', () => {
     await clickBody('confirm-subscription-action')
 
     expect(wrapper.get('[data-testid="subscription-status-3"]').text()).toContain('已撤销')
-    expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('已撤销')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('订阅已撤销')
     expect(wrapper.get('[data-testid="subscription-sync-warning"]').text()).toContain('同步失败')
     expect(wrapper.text()).not.toContain('refresh-secret')
   })
@@ -803,7 +814,7 @@ describe('MobileAdminSubscriptionsView', () => {
 
     expect(document.body.querySelector('[data-testid="subscription-action-sheet"]')).toBeNull()
     expect(wrapper.get('[data-testid="subscription-status-3"]').text()).toBe('有效')
-    expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('已延长 30 天')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('订阅已延长 30 天')
     expect(wrapper.get('[data-testid="subscription-sync-warning"]').text()).toContain('同步失败')
     expect(wrapper.text()).not.toContain('expired-sync-secret')
   })
@@ -921,7 +932,7 @@ describe('MobileAdminSubscriptionsView', () => {
 
     expect(wrapper.find('[data-testid="subscription-status-3"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('已撤销')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('订阅已撤销')
   })
 
   it.each(['active', 'expired'] as const)('removes a restored %s card from the revoked filter and decrements total', async (restoredStatus) => {
@@ -942,7 +953,7 @@ describe('MobileAdminSubscriptionsView', () => {
 
     expect(wrapper.find('[data-testid="subscription-status-4"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="subscription-action-message"]').text()).toContain('已恢复')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('订阅已恢复')
   })
 
   it.each([
@@ -963,7 +974,7 @@ describe('MobileAdminSubscriptionsView', () => {
 
     expect(mocks.list).toHaveBeenCalledTimes(1)
     expect(wrapper.get('[data-testid="subscription-status-4"]').text()).toBe('已撤销')
-    expect(wrapper.find('[data-testid="subscription-action-message"]').exists()).toBe(false)
+    expect(mocks.toastSuccess).not.toHaveBeenCalled()
     expect(wrapper.get('[data-testid="subscription-sync-warning"]').text()).toContain('结果无法确认')
   })
 

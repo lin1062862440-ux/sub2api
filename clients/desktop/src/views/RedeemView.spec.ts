@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   redeemCode: vi.fn(),
   getRedeemHistory: vi.fn(),
   refreshUser: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
   session: {
     user: { balance: 18.2, concurrency: 5 },
   },
@@ -19,6 +21,10 @@ vi.mock('@/stores/session', () => ({
   session: mocks.session,
   refreshUser: mocks.refreshUser,
 }))
+vi.mock('@/stores/toast', () => ({ toast: {
+  success: mocks.toastSuccess,
+  error: mocks.toastError,
+} }))
 
 import RedeemView from './RedeemView.vue'
 import redeemViewSource from './RedeemView.vue?raw'
@@ -65,10 +71,11 @@ describe('RedeemView', () => {
     expect(mocks.refreshUser).toHaveBeenCalledOnce()
     expect(mocks.getRedeemHistory).toHaveBeenCalledTimes(2)
     expect(wrapper.get('[data-testid="redeem-result"]').text()).toContain('+$20.00')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('兑换成功', { detail: '余额到账 · +$20.00' })
     expect((wrapper.get('[data-testid="redeem-input"]').element as HTMLInputElement).value).toBe('')
   })
 
-  it('keeps the code and shows an actionable message when redemption fails', async () => {
+  it('keeps the code and shows an actionable toast when redemption fails', async () => {
     mocks.redeemCode.mockRejectedValue(new Error('兑换码无效或已使用'))
     const wrapper = mount(RedeemView)
     await flushPromises()
@@ -77,7 +84,8 @@ describe('RedeemView', () => {
     await wrapper.get('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="redeem-error"]').text()).toContain('兑换码无效或已使用')
+    expect(mocks.toastError).toHaveBeenCalledWith('兑换失败', { detail: '兑换码无效或已使用' })
+    expect(wrapper.find('[data-testid="redeem-error"]').exists()).toBe(false)
     expect((wrapper.get('[data-testid="redeem-input"]').element as HTMLInputElement).value).toBe('BAD-CODE')
     expect(mocks.refreshUser).not.toHaveBeenCalled()
   })

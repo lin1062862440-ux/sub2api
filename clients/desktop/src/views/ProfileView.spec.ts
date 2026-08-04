@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   getProfile: vi.fn(),
   updateProfile: vi.fn(),
   setCurrentUser: vi.fn(),
+  toastSuccess: vi.fn(),
   session: {
     runMode: 'standard',
     user: {
@@ -31,6 +32,10 @@ vi.mock('@/api', () => ({
 vi.mock('@/stores/session', () => ({
   session: mocks.session,
   setCurrentUser: mocks.setCurrentUser,
+}))
+
+vi.mock('@/stores/toast', () => ({
+  toast: { success: mocks.toastSuccess },
 }))
 
 import ProfileView from './ProfileView.vue'
@@ -68,8 +73,7 @@ describe('ProfileView', () => {
     expect(mocks.setCurrentUser).toHaveBeenCalledWith(
       expect.objectContaining({ username: 'LinAI User' }),
     )
-    expect(wrapper.text()).toContain('资料已保存')
-    expect(wrapper.get('[data-testid="identity-console"]').classes()).toContain('save-complete')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('资料已保存')
   })
 
   it('removes an existing avatar through the profile endpoint', async () => {

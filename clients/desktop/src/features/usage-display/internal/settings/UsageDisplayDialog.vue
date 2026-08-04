@@ -7,6 +7,7 @@ import { notifyUsageConfigChanged } from '@/features/usage-display/core/host'
 import { createUsageDisplayStore } from '@/features/usage-display/core/store'
 import type { UsageDisplayConfig } from '@/features/usage-display/core/storage'
 import { formatUsageOrbValue } from '@/features/usage-display/core/format'
+import { toast } from '@/stores/toast'
 import UsageDisplaySettingsForm from './UsageDisplaySettingsForm.vue'
 
 const props = defineProps<{ modelValue: boolean; user: User | null }>()
@@ -18,7 +19,6 @@ const settingsStore = createUsageDisplayStore(undefined, {
 })
 const { state } = settingsStore
 const dialog = ref<HTMLElement | null>(null)
-const localError = ref('')
 const saving = ref(false)
 const orbValue = computed(() => {
   if (state.config.source === 'balance') {
@@ -44,7 +44,6 @@ function handleKeydown(event: KeyboardEvent) {
 
 async function loadSettings() {
   if (!props.modelValue || !props.user) return
-  localError.value = ''
   await settingsStore.attachUser(props.user)
   await settingsStore.loadSubscriptions()
   await nextTick()
@@ -53,13 +52,15 @@ async function loadSettings() {
 
 async function updateConfig(config: UsageDisplayConfig) {
   if (!props.user) return
-  localError.value = ''
   saving.value = true
   try {
     await settingsStore.updateConfig(config)
     await notifyUsageConfigChanged(props.user.id)
+    toast.success('用量显示设置已保存')
   } catch (error) {
-    localError.value = error instanceof Error ? error.message : '设置未能保存'
+    toast.error('用量显示设置保存失败', {
+      detail: error instanceof Error ? error.message : '设置未能保存',
+    })
   } finally {
     saving.value = false
   }
@@ -107,8 +108,8 @@ onBeforeUnmount(() => {
             ><X :size="17" /></button>
           </header>
 
-          <p v-if="localError || state.error" class="notice-error" role="alert">
-            {{ localError || state.error }}
+          <p v-if="state.error" class="notice-error" role="alert">
+            {{ state.error }}
           </p>
 
           <UsageDisplaySettingsForm

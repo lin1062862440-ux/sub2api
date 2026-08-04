@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   notifyUsageConfigChanged: vi.fn(),
   replace: vi.fn(),
   signOut: vi.fn(),
+  toastError: vi.fn(),
+  toastInfo: vi.fn(),
+  toastSuccess: vi.fn(),
   usageState: {
     platform: 'macos' as const,
     config: {
@@ -84,6 +87,14 @@ vi.mock('@/stores/session', () => ({
   signOut: mocks.signOut,
 }))
 
+vi.mock('@/stores/toast', () => ({
+  toast: {
+    error: mocks.toastError,
+    info: mocks.toastInfo,
+    success: mocks.toastSuccess,
+  },
+}))
+
 vi.mock('@/lib/platform', () => ({
   isMacOS: () => true,
   platform: () => 'macos',
@@ -115,6 +126,9 @@ describe('AppLayout', () => {
     mocks.updateUsageConfig.mockReset().mockResolvedValue(undefined)
     mocks.stopUsageStore.mockReset()
     mocks.notifyUsageConfigChanged.mockReset().mockResolvedValue(undefined)
+    mocks.toastError.mockReset()
+    mocks.toastInfo.mockReset()
+    mocks.toastSuccess.mockReset()
   })
 
   it('shows the LinAI dashboard destination and closes the session', async () => {
@@ -222,7 +236,7 @@ describe('AppLayout', () => {
     expect(wrapper.text()).toContain('账号管理')
     expect(wrapper.text()).toContain('用户管理')
     expect(wrapper.get('[aria-label="管理导航"]').text()).toContain('分组管理')
-    expect(wrapper.get('[aria-label="管理导航"]').text()).toContain('用户组')
+    expect(wrapper.get('[aria-label="管理导航"]').text()).toContain('团队管理')
     expect(wrapper.text()).not.toContain('API 密钥')
 
     await wrapper.get('[data-testid="account-menu-trigger"]').trigger('click')
@@ -267,12 +281,38 @@ describe('AppLayout', () => {
 
     expect(mocks.checkUpdate).toHaveBeenCalledOnce()
     expect(wrapper.get('[data-testid="desktop-update-status"]').text()).toContain('发现新版本 0.1.3')
+    expect(mocks.toastInfo).toHaveBeenCalledWith('发现新版本 0.1.3')
 
     await wrapper.get('[data-testid="install-update"]').trigger('click')
     await flushPromises()
 
     expect(mocks.installUpdate).toHaveBeenCalledWith(update, expect.any(Function))
     expect(wrapper.get('[data-testid="desktop-update-status"]').text()).toContain('更新已安装，正在重启')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('更新已安装，正在重启')
+  })
+
+  it('reports desktop update check failures through Toast', async () => {
+    mocks.checkUpdate.mockRejectedValue(new Error('更新服务不可用'))
+    const wrapper = mount(AppLayout, {
+      global: {
+        stubs: {
+          Teleport: true,
+          RouterLink: { template: '<a><slot /></a>' },
+          RouterView: { template: '<div />' },
+        },
+      },
+    })
+
+    await wrapper.get('[data-testid="account-menu-trigger"]').trigger('click')
+    await wrapper.get('[data-testid="settings-menu-item"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="settings-tab-updates"]').trigger('click')
+    await wrapper.get('[data-testid="check-update-button"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.toastError).toHaveBeenCalledWith('检查更新失败', {
+      detail: '更新服务不可用',
+    })
   })
 
   it('shows the personal user-group entry only to granted ordinary users', () => {
@@ -288,7 +328,7 @@ describe('AppLayout', () => {
       },
     })
 
-    expect(granted.get('[data-testid="user-group-nav-item"]').text()).toContain('用户组')
+    expect(granted.get('[data-testid="user-group-nav-item"]').text()).toContain('团队管理')
     granted.unmount()
 
     mocks.session.userGroupCapabilities = { can_access: false, can_manage: false, group_count: 0 }

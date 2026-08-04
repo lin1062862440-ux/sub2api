@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   quotas: vi.fn(),
   updateQuotas: vi.fn(),
   resetQuota: vi.fn(),
+  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/api/admin/users', () => ({
@@ -47,6 +48,7 @@ vi.mock('@/api/admin/users', () => ({
   updateAdminUserPlatformQuotas: mocks.updateQuotas,
   resetAdminUserPlatformQuota: mocks.resetQuota,
 }))
+vi.mock('@/stores/toast', () => ({ toast: { success: mocks.toastSuccess } }))
 
 import MobileAdminUsersView from './MobileAdminUsersView.vue'
 
@@ -349,6 +351,7 @@ describe('MobileAdminUsersView', () => {
     await wrapper.get('[data-testid="balance-form"]').trigger('submit')
     await flushPromises()
     expect(mocks.balance).toHaveBeenCalledWith(7, { balance: 20, operation: 'add', notes: '' })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已更新“Lin”的余额')
 
     await openMenu(wrapper, 8)
     await wrapper.get('[data-testid="groups-user-8"]').trigger('click')
@@ -356,6 +359,7 @@ describe('MobileAdminUsersView', () => {
     await wrapper.get('[data-testid="user-groups-submit"]').trigger('click')
     await flushPromises()
     expect(mocks.update).toHaveBeenLastCalledWith(8, { allowed_groups: [2] })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(`已更新“${disabledUser.username}”的分组`)
   })
 
   it('keeps cards and redacts balance and groups mutation failures', async () => {
@@ -448,9 +452,35 @@ describe('MobileAdminUsersView', () => {
     older.reject(new Error('token=older-operation-secret'))
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="user-action-message"]').text()).toContain('已启用')
+    expect(mocks.toastSuccess).toHaveBeenLastCalledWith('已启用用户“Second User”')
     expect(wrapper.find('[data-testid="user-action-error"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('older-operation-secret')
+  })
+
+  it('publishes only the newer user toast when two successful operations finish out of order', async () => {
+    const older = deferred<AdminUser>()
+    const newer = deferred<AdminUser>()
+    const secondUser = adminUser({ id: 9, username: 'Second User', email: 'second@example.com', status: 'disabled' })
+    mocks.list.mockResolvedValueOnce(response([activeUser, secondUser]))
+    mocks.update.mockReturnValueOnce(older.promise).mockReturnValueOnce(newer.promise)
+    const wrapper = mount(MobileAdminUsersView)
+    await flushPromises()
+
+    await openMenu(wrapper, 7)
+    await wrapper.get('[data-testid="toggle-user-7"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-user-status"]').trigger('click')
+    await openMenu(wrapper, 9)
+    await wrapper.get('[data-testid="toggle-user-9"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-user-status"]').trigger('click')
+    newer.resolve({ ...secondUser, status: 'active' })
+    await flushPromises()
+    older.resolve({ ...activeUser, status: 'disabled' })
+    await flushPromises()
+
+    expect(mocks.toastSuccess.mock.calls.map(([message]) => message)).toEqual([
+      '已启用用户“Second User”',
+    ])
+    expect(mocks.toastSuccess).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the old cards on refresh rejection and redacts the backend error', async () => {
@@ -577,7 +607,7 @@ describe('MobileAdminUsersView', () => {
 
     expect(mocks.remove).toHaveBeenCalledWith(21)
     expect(mocks.list).toHaveBeenLastCalledWith({ page: 1, page_size: 20 })
-    expect(wrapper.get('[data-testid="user-action-message"]').text()).toContain('用户已删除')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('用户已删除')
     expect(wrapper.get('[data-testid="user-action-error"]').text()).toContain('列表同步失败')
     expect(wrapper.find('[data-testid="mobile-pagination-label"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('delete-sync-secret')

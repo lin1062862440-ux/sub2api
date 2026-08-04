@@ -10,7 +10,6 @@ import {
   RefreshCw,
   Sparkles,
   TicketCheck,
-  TriangleAlert,
   UsersRound,
   WalletCards,
 } from '@lucide/vue'
@@ -18,13 +17,13 @@ import {
 import * as api from '@/api'
 import type { RedeemHistoryItem, RedeemResult } from '@/api'
 import { refreshUser, session } from '@/stores/session'
+import { toast } from '@/stores/toast'
 
 const code = ref('')
 const submitting = ref(false)
 const historyLoading = ref(true)
 const history = ref<RedeemHistoryItem[]>([])
 const result = ref<RedeemResult | null>(null)
-const errorMessage = ref('')
 
 const user = computed(() => session.user)
 const canSubmit = computed(() => Boolean(code.value.trim()) && !submitting.value)
@@ -72,8 +71,9 @@ async function loadHistory() {
   historyLoading.value = true
   try {
     history.value = await api.getRedeemHistory()
+    return true
   } catch {
-    history.value = []
+    return false
   } finally {
     historyLoading.value = false
   }
@@ -84,17 +84,20 @@ async function submit() {
   if (!redeemValue || submitting.value) return
   submitting.value = true
   result.value = null
-  errorMessage.value = ''
   try {
     const response = await api.redeemCode(redeemValue)
     result.value = response
     code.value = ''
-    await refreshUser()
-    await loadHistory()
+    toast.success('兑换成功', { detail: `${typeLabel(response)} · ${resultValue(response)}` })
+    const [userRefresh, historyRefresh] = await Promise.allSettled([refreshUser(), loadHistory()])
+    if (userRefresh.status === 'rejected' || historyRefresh.status === 'rejected' || !historyRefresh.value) {
+      toast.warning('兑换成功，但账户数据同步失败', { detail: '请稍后刷新页面查看最新权益。' })
+    }
   } catch (error) {
-    errorMessage.value = error instanceof Error && error.message
+    const detail = error instanceof Error && error.message
       ? error.message
       : '兑换失败，请确认兑换码后重试'
+    toast.error('兑换失败', { detail })
   } finally {
     submitting.value = false
   }
@@ -138,7 +141,7 @@ onMounted(() => void loadHistory())
               spellcheck="false"
               placeholder="LINAI-XXXX-XXXX-XXXX"
               :disabled="submitting"
-              @input="errorMessage = ''; result = null"
+              @input="result = null"
             />
           </div>
         </label>
@@ -163,12 +166,6 @@ onMounted(() => void loadHistory())
           </div>
         </Transition>
 
-        <Transition name="result-pop">
-          <div v-if="errorMessage" class="error-panel" data-testid="redeem-error">
-            <TriangleAlert :size="17" />
-            <div><strong>未能完成兑换</strong><span>{{ errorMessage }}</span></div>
-          </div>
-        </Transition>
       </form>
 
       <aside class="redeem-side">

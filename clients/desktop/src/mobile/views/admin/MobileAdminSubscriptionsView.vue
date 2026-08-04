@@ -36,6 +36,7 @@ import { getAdminGroups } from '@/api/admin/users'
 import MobileBottomSheet from '@/mobile/components/MobileBottomSheet.vue'
 import MobilePage from '@/mobile/components/MobilePage.vue'
 import MobilePagination from '@/mobile/components/MobilePagination.vue'
+import { toast } from '@/stores/toast'
 
 const PAGE_SIZE = 20
 const PROGRESS_CONCURRENCY = 4
@@ -74,9 +75,7 @@ const loaded = ref(false)
 const initialLoading = ref(true)
 const listLoading = ref(false)
 const fatalError = ref('')
-const actionMessage = ref('')
 const actionError = ref('')
-const bulkWarning = ref('')
 const syncWarning = ref('')
 const searchDraft = ref('')
 const search = ref('')
@@ -483,9 +482,7 @@ function listParams(page: number) {
 
 function claimFeedback() {
   const token = ++feedbackGeneration
-  actionMessage.value = ''
   actionError.value = ''
-  bulkWarning.value = ''
   syncWarning.value = ''
   return token
 }
@@ -1058,7 +1055,7 @@ async function submitAssignment() {
       mergeAssignedSubscriptions([decoded], new Set())
       successfulAssignmentIds.add(decoded.id)
       if (ownsFeedback(token))
-        actionMessage.value = `已为用户 #${userId} 分配订阅`
+        toast.success(`已为用户 #${userId} 分配订阅`)
     } else {
       const response = await bulkAssignAdminSubscriptions({
         user_ids: userIds!,
@@ -1089,9 +1086,11 @@ async function submitAssignment() {
           const failedIds = [...decoded.failedUserIds]
             .map((id) => `#${id}`)
             .join('、')
-          bulkWarning.value = `${decoded.successCount ? '部分用户分配失败' : '批量分配失败'}：${failedIds}`
+          const message = `${decoded.successCount ? '部分用户分配失败' : '批量分配失败'}：${failedIds}`
+          if (decoded.successCount) toast.warning(message)
+          else toast.error(message)
         } else {
-          actionMessage.value = `批量分配完成：成功 ${decoded.successCount} 个，失败 0 个`
+          toast.success(`批量分配完成：成功 ${decoded.successCount} 个，失败 0 个`)
         }
       }
     }
@@ -1267,7 +1266,7 @@ async function confirmLifecycle() {
       }
       updatedItem = decoded
       reduceSubscription(updatedItem)
-      if (ownsFeedback(token)) actionMessage.value = `订阅已延长 ${days} 天`
+      if (ownsFeedback(token)) toast.success(`订阅已延长 ${days} 天`)
     } else if (type === 'reset') {
       const resetWindows = {
         daily: lifecycle.daily,
@@ -1297,7 +1296,7 @@ async function confirmLifecycle() {
       updatedItem = decoded
       reduceSubscription(updatedItem)
       refreshTargetProgress = true
-      if (ownsFeedback(token)) actionMessage.value = '订阅额度已重置'
+      if (ownsFeedback(token)) toast.success('订阅额度已重置')
     } else if (type === 'revoke') {
       const response = await revokeAdminSubscription(item.id)
       if (!mounted) return
@@ -1307,7 +1306,7 @@ async function confirmLifecycle() {
       }
       updatedItem = { ...item, status: 'revoked' }
       reduceSubscription(updatedItem)
-      if (ownsFeedback(token)) actionMessage.value = '订阅已撤销'
+      if (ownsFeedback(token)) toast.success('订阅已撤销')
     } else {
       const response = await restoreAdminSubscription(item.id)
       if (!mounted) return
@@ -1322,7 +1321,7 @@ async function confirmLifecycle() {
       }
       updatedItem = decoded
       reduceSubscription(updatedItem)
-      if (ownsFeedback(token)) actionMessage.value = '订阅已恢复'
+      if (ownsFeedback(token)) toast.success('订阅已恢复')
     }
     mutationPending.value = ''
     closeLifecycle()
@@ -1488,28 +1487,12 @@ onUnmounted(() => {
       </form>
 
       <p
-        v-if="actionMessage"
-        class="feedback success"
-        data-testid="subscription-action-message"
-        role="status"
-      >
-        <Check :size="17" />{{ actionMessage }}
-      </p>
-      <p
         v-if="actionError"
         class="feedback error"
         data-testid="subscription-action-error"
         role="alert"
       >
         <AlertCircle :size="17" />{{ actionError }}
-      </p>
-      <p
-        v-if="bulkWarning"
-        class="feedback warning"
-        data-testid="subscription-bulk-warning"
-        role="alert"
-      >
-        <AlertCircle :size="17" />{{ bulkWarning }}
       </p>
       <p
         v-if="syncWarning"
@@ -2080,11 +2063,6 @@ onUnmounted(() => {
   border-radius: 6px;
   font-size: 13px;
   line-height: 1.45;
-}
-.feedback.success {
-  border-color: #cce6d8;
-  background: #eef9f3;
-  color: #287154;
 }
 .feedback.error {
   border-color: #eccfc9;

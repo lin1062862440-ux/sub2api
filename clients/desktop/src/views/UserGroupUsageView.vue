@@ -82,7 +82,7 @@ async function loadGroups() {
       error.value = '团队不存在或无权访问'
     }
   } catch (caught) {
-    error.value = caught instanceof Error && caught.message ? caught.message : '用户组加载失败'
+    error.value = caught instanceof Error && caught.message ? caught.message : '团队加载失败'
   } finally {
     loadingGroups.value = false
   }
@@ -162,7 +162,7 @@ onMounted(() => void loadGroups())
     <Transition name="filter-drop"><section v-if="moreFilters" class="ug-advanced-filters"><label><span>成员</span><select v-model="memberId"><option value="">全部成员</option><option v-for="member in members" :key="member.user_id" :value="member.user_id">{{ member.username || member.email }}</option></select></label><label><span>模型</span><input v-model="model" placeholder="例如 claude-sonnet-4" /></label></section></Transition>
 
     <div v-if="error" class="ug-inline-error"><span>{{ error }}</span><button type="button" @click="selectedGroupId ? loadUsage() : loadGroups()">重试</button></div>
-    <div v-if="!loadingGroups && !groups.length" class="ug-empty"><strong>暂无可访问的用户组</strong><span>请联系管理员授予用户组查看权限。</span></div>
+    <div v-if="!loadingGroups && !groups.length" class="ug-empty"><strong>暂无可访问的团队</strong><span>请联系管理员授予团队查看权限。</span></div>
     <template v-else-if="result">
       <section v-if="quota" class="ug-team-quota" data-testid="usage-team-quota"><div><span>团队周配额</span><strong>{{ formatCost(quota.policy.weekly_limit_usd) }}</strong></div><div><span>本周已用</span><strong>{{ formatCost(quota.policy.weekly_usage_usd) }}</strong></div><div><span>本周剩余</span><strong>{{ formatCost(quotaRemaining) }}</strong></div><div><span>成员已分配</span><strong>{{ formatCost(quota.allocated_usd) }}</strong></div></section>
       <section class="ug-summary five">

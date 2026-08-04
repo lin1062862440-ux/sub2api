@@ -49,6 +49,7 @@ import {
   type AvailableDesktopUpdate,
 } from '@/lib/desktop-updater'
 import { session, signOut } from '@/stores/session'
+import { toast } from '@/stores/toast'
 import type { Update } from '@tauri-apps/plugin-updater'
 
 const router = useRouter()
@@ -115,7 +116,7 @@ function setAutoCheckUpdates(value: boolean) {
   localStorage.setItem(autoCheckUpdatesStorageKey, String(value))
 }
 
-async function handleCheckUpdate() {
+async function handleCheckUpdate(manual = true) {
   updateChecking.value = true
   updateMessage.value = ''
   availableUpdate.value = null
@@ -124,13 +125,17 @@ async function handleCheckUpdate() {
     const result = await checkDesktopUpdate()
     if (!result.available || !result.update || !result.info) {
       updateMessage.value = '已是最新版本'
+      if (manual) toast.info('已是最新版本')
       return
     }
     availableUpdate.value = result.update
     availableUpdateInfo.value = result.info
     updateMessage.value = `发现新版本 ${result.info.version}`
+    toast.info(updateMessage.value)
   } catch (error) {
-    updateMessage.value = desktopUpdateErrorMessage(error)
+    const detail = desktopUpdateErrorMessage(error)
+    updateMessage.value = detail
+    if (manual) toast.error('检查更新失败', { detail })
   } finally {
     updateChecking.value = false
   }
@@ -147,8 +152,11 @@ async function handleInstallUpdate() {
       updateMessage.value = progress.percent == null ? '正在下载更新' : `正在下载更新 ${progress.percent}%`
     })
     updateMessage.value = '更新已安装，正在重启'
+    toast.success(updateMessage.value)
   } catch (error) {
-    updateMessage.value = desktopUpdateErrorMessage(error)
+    const detail = desktopUpdateErrorMessage(error)
+    updateMessage.value = detail
+    toast.error('更新安装失败', { detail })
     updateInstalling.value = false
   }
 }
@@ -182,7 +190,7 @@ onMounted(() => {
     void router.replace({ name: 'admin-dashboard' })
   }
   if (appCapabilities.desktopUpdater && autoCheckUpdates.value) {
-    void handleCheckUpdate()
+    void handleCheckUpdate(false)
   }
 })
 
@@ -260,10 +268,10 @@ onBeforeUnmount(() => {
           :to="{ name: 'user-groups' }"
           active-class="nav-link-active"
           data-testid="user-group-nav-item"
-          title="用户组"
+          title="团队管理"
         >
           <FolderKanban :size="18" />
-          <span>用户组</span>
+          <span>团队管理</span>
         </RouterLink>
         <RouterLink
           v-if="!isSimpleMode"
@@ -316,7 +324,7 @@ onBeforeUnmount(() => {
         <RouterLink class="nav-link" :to="{ name: 'admin-accounts' }" active-class="nav-link-active" data-testid="admin-nav-item" title="账号管理"><Globe2 :size="18" /><span>账号管理</span></RouterLink>
         <RouterLink v-if="!isSimpleMode" class="nav-link" :to="{ name: 'admin-users' }" active-class="nav-link-active" data-testid="admin-nav-item" title="用户管理"><UsersRound :size="18" /><span>用户管理</span></RouterLink>
         <RouterLink v-if="!isSimpleMode" class="nav-link" :to="{ name: 'admin-groups' }" active-class="nav-link-active" data-testid="admin-nav-item" title="分组管理"><Boxes :size="18" /><span>分组管理</span></RouterLink>
-        <RouterLink class="nav-link" :to="{ name: 'user-groups' }" active-class="nav-link-active" data-testid="admin-nav-item" title="用户组"><FolderKanban :size="18" /><span>用户组</span></RouterLink>
+        <RouterLink class="nav-link" :to="{ name: 'user-groups' }" active-class="nav-link-active" data-testid="admin-nav-item" title="团队管理"><FolderKanban :size="18" /><span>团队管理</span></RouterLink>
         <RouterLink class="nav-link" :to="{ name: 'admin-usage' }" active-class="nav-link-active" data-testid="admin-nav-item" title="全站用量"><ChartNoAxesCombined :size="18" /><span>全站用量</span></RouterLink>
         <RouterLink v-if="!isSimpleMode" class="nav-link" :to="{ name: 'admin-channel-monitors' }" active-class="nav-link-active" data-testid="admin-nav-item" title="渠道监控"><Activity :size="18" /><span>渠道监控</span></RouterLink>
         <RouterLink v-if="!isSimpleMode" class="nav-link" :to="{ name: 'admin-audit-logs' }" active-class="nav-link-active" data-testid="admin-nav-item" title="审计日志"><ScrollText :size="18" /><span>审计日志</span></RouterLink>
@@ -431,7 +439,7 @@ onBeforeUnmount(() => {
     </main>
   </div>
 
-  <ChangePasswordDialog v-model="passwordDialogOpen" />
+  <ChangePasswordDialog v-model="passwordDialogOpen" toast-feedback />
   <SettingsDialog
     v-model="settingsDialogOpen"
     :user="user ?? null"
@@ -465,7 +473,9 @@ onBeforeUnmount(() => {
 .app-rail {
   display: flex;
   min-width: 0;
+  min-height: 0;
   flex-direction: column;
+  overflow: hidden;
   background: var(--bg-rail);
   border-right: 1px solid var(--border-subtle);
 }
@@ -473,6 +483,7 @@ onBeforeUnmount(() => {
 .rail-brand {
   display: flex;
   min-height: 100px;
+  flex: 0 0 auto;
   align-items: center;
   gap: 12px;
   padding: 42px 20px 18px;
@@ -501,13 +512,19 @@ onBeforeUnmount(() => {
 
 .rail-nav {
   display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 5px;
   padding: 18px 13px;
+  overflow-y: auto;
+  scrollbar-color: rgba(116, 136, 162, 0.38) transparent;
+  scrollbar-width: thin;
 }
 
 .workspace-switch {
   display: grid;
+  flex: 0 0 auto;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 3px;
   margin: 4px 13px 0;
@@ -539,7 +556,6 @@ onBeforeUnmount(() => {
   color: var(--accent-strong);
 }
 
-.admin-nav { overflow-y: auto; }
 .nav-section-label { margin: 11px 12px 3px; color: var(--text-tertiary); font-size: 11px; font-weight: 720; }
 
 .nav-link {
@@ -568,6 +584,7 @@ onBeforeUnmount(() => {
 
 .rail-account {
   position: relative;
+  flex: 0 0 auto;
   margin-top: auto;
   padding: 14px 12px 16px;
   border-top: 1px solid var(--border-subtle);
@@ -741,6 +758,7 @@ onBeforeUnmount(() => {
 .app-content {
   position: relative;
   min-width: 0;
+  padding-bottom: var(--toast-scroll-reserve, 0px);
   overflow-y: auto;
   background: var(--bg-base);
   container-name: app-content;

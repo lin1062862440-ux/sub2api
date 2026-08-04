@@ -678,6 +678,7 @@ onBeforeUnmount(() => {
   left: 0;
   height: auto;
   min-width: 0;
+  padding-bottom: var(--toast-scroll-reserve, 0px);
   overflow-y: auto;
   scroll-padding-block: 12px;
   background: var(--bg-base);

@@ -21,6 +21,7 @@ import UserAvatar from '@/components/UserAvatar.vue'
 import { formatCost, formatDateTime, formatNumber } from '@/lib/format'
 import { ApiError } from '@/lib/http'
 import { session, setCurrentUser } from '@/stores/session'
+import { toast } from '@/stores/toast'
 
 const maxAvatarBytes = 100 * 1024
 const targetAvatarBytes = 80 * 1024
@@ -31,7 +32,6 @@ const avatarDraft = ref<string | undefined>(undefined)
 const loading = ref(true)
 const saving = ref(false)
 const error = ref('')
-const success = ref('')
 
 const user = computed(() => profile.value ?? session.user)
 const avatarSrc = computed(() => avatarDraft.value ?? user.value?.avatar_url ?? '')
@@ -120,7 +120,6 @@ async function handleAvatarFileChange(event: Event) {
   if (!file) return
 
   error.value = ''
-  success.value = ''
   try {
     avatarDraft.value = await prepareAvatar(file)
   } catch (caught) {
@@ -130,7 +129,6 @@ async function handleAvatarFileChange(event: Event) {
 
 function removeAvatar() {
   avatarDraft.value = ''
-  success.value = ''
 }
 
 async function saveProfile() {
@@ -141,7 +139,6 @@ async function saveProfile() {
   }
 
   error.value = ''
-  success.value = ''
   saving.value = true
   try {
     const payload: { username: string; avatar_url?: string } = { username: normalizedUsername }
@@ -152,9 +149,9 @@ async function saveProfile() {
     username.value = updated.username
     avatarDraft.value = undefined
     setCurrentUser(updated)
-    success.value = '资料已保存'
+    toast.success('资料已保存')
   } catch (caught) {
-    error.value = errorMessage(caught, '保存个人资料失败')
+    toast.error('保存个人资料失败', { detail: errorMessage(caught, '请稍后重试。') })
   } finally {
     saving.value = false
   }
@@ -186,14 +183,9 @@ onMounted(async () => {
 
     <section
       class="identity-console"
-      :class="{ 'save-complete': success }"
       data-testid="identity-console"
       aria-label="LinAI 身份控制台"
     >
-      <div v-if="success" class="save-feedback" role="status">
-        <Check :size="14" />
-        {{ success }}
-      </div>
 
       <div class="console-top">
         <aside class="portrait-rail">
@@ -289,7 +281,6 @@ onMounted(async () => {
                 autocomplete="nickname"
                 maxlength="64"
                 placeholder="输入用户名"
-                @input="success = ''"
               >
             </label>
             <label class="field">

@@ -42,6 +42,7 @@ import { BACKEND_ORIGIN } from '@/config'
 import { routeApiKeyClient } from '@/lib/client-config'
 import { formatCost } from '@/lib/format'
 import { session } from '@/stores/session'
+import { toast } from '@/stores/toast'
 
 type ExpiryMode = 'never' | '7d' | '30d' | '90d' | 'custom'
 type DialogMode = 'create' | 'edit'
@@ -78,9 +79,6 @@ const deleteTarget = ref<ApiKey | null>(null)
 const deleting = ref(false)
 const useTarget = ref<ApiKey | null>(null)
 
-const toastMessage = ref('')
-const toastVisible = ref(false)
-let toastTimer: ReturnType<typeof setTimeout> | null = null
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
 function emptyForm() {
@@ -107,11 +105,9 @@ const todayCost = computed(() => dashboard.value?.today_actual_cost ?? Object.va
 const limitedCount = computed(() => keys.value.filter(hasConfiguredLimit).length)
 const apiEndpoint = computed(() => session.settings?.api_base_url?.replace(/\/$/, '') || `${BACKEND_ORIGIN.replace(/\/$/, '')}/v1`)
 
-function showToast(message: string) {
-  toastMessage.value = message
-  toastVisible.value = true
-  if (toastTimer) clearTimeout(toastTimer)
-  toastTimer = setTimeout(() => { toastVisible.value = false }, 1800)
+function notifyAction(message: string) {
+  if (/失败|错误|无法/.test(message)) toast.error(message)
+  else toast.success(message)
 }
 
 function errorText(error: unknown, fallback: string) {
@@ -207,14 +203,14 @@ async function copyText(value: string) {
 async function copyKey(key: ApiKey) {
   await copyText(key.key)
   copiedKeyId.value = key.id
-  showToast('API 密钥已复制')
+  notifyAction('API 密钥已复制')
   setTimeout(() => { if (copiedKeyId.value === key.id) copiedKeyId.value = null }, 1200)
 }
 
 async function copyEndpoint() {
   await copyText(apiEndpoint.value)
   endpointCopied.value = true
-  showToast('API 地址已复制')
+  notifyAction('API 地址已复制')
   setTimeout(() => { endpointCopied.value = false }, 1200)
 }
 
@@ -317,7 +313,7 @@ function openEdit(key: ApiKey) {
 function openUseKey(key: ApiKey) {
   const route = routeApiKeyClient(key.group?.platform)
   if (route.kind === 'unsupported') {
-    showToast(route.message)
+    notifyAction(route.message)
     return
   }
   useTarget.value = key
@@ -400,7 +396,7 @@ async function submitForm() {
         ...limits,
       }
       await api.updateApiKey(selectedKey.value.id, payload)
-      showToast('密钥配置已更新')
+      notifyAction('密钥配置已更新')
     } else {
       const payload: CreateApiKeyRequest = {
         name: form.name.trim(),
@@ -418,7 +414,7 @@ async function submitForm() {
       if (form.expiry === 'custom') {
         await api.updateApiKey(created.id, { expires_at: new Date(form.custom_expiry).toISOString() })
       }
-      showToast('API 密钥已创建')
+      notifyAction('API 密钥已创建')
     }
     dialogOpen.value = false
     selectedKey.value = null
@@ -436,10 +432,10 @@ async function toggleStatus(key: ApiKey) {
   try {
     const status = key.status === 'active' ? 'inactive' : 'active'
     await api.updateApiKey(key.id, { status })
-    showToast(status === 'active' ? '密钥已启用' : '密钥已停用')
+    notifyAction(status === 'active' ? '密钥已启用' : '密钥已停用')
     await load(true)
   } catch (error) {
-    showToast(errorText(error, '状态更新失败'))
+    notifyAction(errorText(error, '状态更新失败'))
   } finally {
     busyKeyId.value = null
   }
@@ -458,10 +454,10 @@ async function changeGroup(key: ApiKey, groupId: number | null) {
   try {
     await api.updateApiKey(key.id, { group_id: groupId })
     groupPickerKeyId.value = null
-    showToast('密钥分组已更新')
+    notifyAction('密钥分组已更新')
     await load(true)
   } catch (error) {
-    showToast(errorText(error, '分组更新失败'))
+    notifyAction(errorText(error, '分组更新失败'))
   } finally {
     groupUpdatingKeyId.value = null
   }
@@ -473,11 +469,11 @@ async function removeKey() {
   try {
     await api.deleteApiKey(deleteTarget.value.id)
     deleteTarget.value = null
-    showToast('API 密钥已删除')
+    notifyAction('API 密钥已删除')
     if (keys.value.length === 1 && page.value > 1) page.value -= 1
     await load(true)
   } catch (error) {
-    showToast(errorText(error, '删除失败'))
+    notifyAction(errorText(error, '删除失败'))
   } finally {
     deleting.value = false
   }
@@ -508,7 +504,6 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('pointerdown', handleDocumentPointerDown)
   if (searchTimer) clearTimeout(searchTimer)
-  if (toastTimer) clearTimeout(toastTimer)
 })
 </script>
 
@@ -725,7 +720,7 @@ onBeforeUnmount(() => {
     </section>
   </div>
 
-  <UseApiKeyDialog v-if="useTarget" :api-key="useTarget" :base-url="apiEndpoint" @close="closeUseKey" @applied="showToast('本地客户端配置已更新')" />
+  <UseApiKeyDialog v-if="useTarget" :api-key="useTarget" :base-url="apiEndpoint" @close="closeUseKey" @applied="notifyAction('本地客户端配置已更新')" />
 
   <Teleport to="body">
     <Transition name="dialog-fade">
@@ -834,9 +829,6 @@ onBeforeUnmount(() => {
       </div>
     </Transition>
 
-    <Transition name="toast-pop">
-      <div v-if="toastVisible" class="toast"><Check :size="15" /><span>{{ toastMessage }}</span></div>
-    </Transition>
   </Teleport>
 </template>
 
@@ -1015,14 +1007,10 @@ onBeforeUnmount(() => {
 .confirm-dialog footer { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 8px; margin-top: 6px; }
 .danger-button { min-height: 44px; padding: 0 15px; background: var(--coral); border: 1px solid var(--coral); color: white; }
 .danger-button:hover:not(:disabled) { background: var(--danger); }
-.toast { position: fixed; z-index: 130; right: 28px; bottom: 28px; display: flex; align-items: center; gap: 8px; padding: 10px 13px; background: #18334f; border-radius: 8px; box-shadow: 0 12px 30px rgba(23,43,68,.22); color: white; font-size: 13px; }
-.toast svg { color: #7fe3bd; }
 
 .dialog-fade-enter-active,.dialog-fade-leave-active { transition: opacity 180ms ease; }
 .dialog-fade-enter-active .key-dialog,.dialog-fade-enter-active .confirm-dialog { animation: dialog-in 240ms var(--motion-ease-out) both; }
 .dialog-fade-enter-from,.dialog-fade-leave-to { opacity: 0; }
-.toast-pop-enter-active,.toast-pop-leave-active { transition: opacity 180ms ease,transform 180ms ease; }
-.toast-pop-enter-from,.toast-pop-leave-to { opacity: 0; transform: translateY(7px); }
 .group-pop-enter-active,.group-pop-leave-active { transition: opacity 150ms ease,transform 150ms ease; transform-origin: top left; }
 .group-pop-enter-from,.group-pop-leave-to { opacity: 0; transform: translateY(-4px) scale(.985); }
 .is-refreshing .key-list { opacity: .72; transition: opacity var(--motion-fast); }

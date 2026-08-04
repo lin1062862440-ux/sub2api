@@ -16,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   clearError: vi.fn(),
   refreshCredentials: vi.fn(),
   setSchedulable: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastWarning: vi.fn(),
+  toastError: vi.fn(),
 }))
 
 vi.mock('@/api/admin/accounts', () => ({
@@ -28,6 +31,9 @@ vi.mock('@/api/admin/accounts', () => ({
   clearAdminAccountError: mocks.clearError,
   refreshAdminAccountCredentials: mocks.refreshCredentials,
   setAdminAccountSchedulable: mocks.setSchedulable,
+}))
+vi.mock('@/stores/toast', () => ({
+  toast: { success: mocks.toastSuccess, warning: mocks.toastWarning, error: mocks.toastError },
 }))
 
 import MobileAdminAccountsView from './MobileAdminAccountsView.vue'
@@ -192,6 +198,11 @@ describe('MobileAdminAccountsView', () => {
     await wrapper.get('[data-testid="refresh-account-credentials-29"]').trigger('click')
     await flushPromises()
     expect(mocks.refreshCredentials).toHaveBeenCalledWith(29)
+    expect(mocks.toastSuccess.mock.calls.map(([message]) => message)).toEqual([
+      `${healthy.name}：连接正常`,
+      `${unhealthy.name} 已恢复运行状态`,
+      `${unhealthy.name} 已清除错误状态`,
+    ])
   })
 
   it('replaces an account only from a complete credential refresh response', async () => {
@@ -215,6 +226,7 @@ describe('MobileAdminAccountsView', () => {
     expect(wrapper.text()).toContain('Codex Backup Refreshed')
     expect(wrapper.text()).not.toContain('must-not-render')
     expect(mocks.list).toHaveBeenCalledTimes(2)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(`${unhealthy.name} 已刷新凭据`)
   })
 
   it('keeps the existing card and shows a fixed message for a refresh warning response', async () => {
@@ -231,7 +243,8 @@ describe('MobileAdminAccountsView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain(unhealthy.name)
-    expect(wrapper.get('[data-testid="account-action-message"]').text()).toContain('凭据已刷新，但项目 ID 暂未获取，系统将自动重试。')
+    expect(mocks.toastWarning).toHaveBeenCalledWith('凭据已刷新，但项目 ID 暂未获取，系统将自动重试。')
+    expect(wrapper.find('[data-testid="account-action-message"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('raw credential refresh details')
     expect(mocks.list).toHaveBeenCalledTimes(2)
   })
@@ -250,7 +263,8 @@ describe('MobileAdminAccountsView', () => {
     await flushPromises()
 
     expect(wrapper.text()).toContain(unhealthy.name)
-    expect(wrapper.get('[data-testid="account-action-message"]').text()).toContain('凭据已刷新，但项目 ID 暂未获取，系统将自动重试。')
+    expect(mocks.toastWarning).toHaveBeenCalledTimes(1)
+    expect(mocks.toastWarning).toHaveBeenCalledWith('凭据已刷新，但项目 ID 暂未获取，系统将自动重试。')
     expect(wrapper.find('[data-testid="account-action-error"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('follow-up-secret')
     expect(wrapper.text()).not.toContain('raw warning message')
@@ -379,6 +393,7 @@ describe('MobileAdminAccountsView', () => {
     expect(mocks.update).toHaveBeenCalledTimes(1)
     expect(wrapper.find('.account-editor').exists()).toBe(true)
     expect(wrapper.get('.form-error').text()).toBe('账号保存失败，请稍后重试。')
+    expect(mocks.toastError).toHaveBeenCalledWith('账号保存失败', { detail: '账号保存失败，请稍后重试。' })
     expect(wrapper.text()).not.toContain('editor-secret')
     expect(wrapper.findAll('[data-testid="mobile-account-card"]')).toHaveLength(2)
     expect(wrapper.get('[data-testid="account-editor-save"]').attributes('disabled')).toBeUndefined()
@@ -401,6 +416,7 @@ describe('MobileAdminAccountsView', () => {
       priority: 0,
       rate_multiplier: 0,
     }))
+    expect(mocks.toastSuccess).toHaveBeenCalledWith(`${healthy.name} 已保存`)
   })
 
   it('submits an account update only once while the first request is pending', async () => {
@@ -550,9 +566,32 @@ describe('MobileAdminAccountsView', () => {
     olderRefresh.reject(new Error('token=older-operation-secret'))
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="account-action-message"]').text()).toContain(`${unhealthy.name} 已恢复运行状态`)
+    expect(mocks.toastSuccess).toHaveBeenLastCalledWith(`${unhealthy.name} 已恢复运行状态`)
     expect(wrapper.find('[data-testid="account-action-error"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('older-operation-secret')
+  })
+
+  it('publishes only the newer account toast when two successful operations finish out of order', async () => {
+    const olderRefresh = deferred<AdminAccount>()
+    const newerRecover = deferred<AdminAccount>()
+    mocks.refreshCredentials.mockReturnValueOnce(olderRefresh.promise)
+    mocks.recover.mockReturnValueOnce(newerRecover.promise)
+    const wrapper = mount(MobileAdminAccountsView)
+    await flushPromises()
+
+    await openMenu(wrapper, 17)
+    await wrapper.get('[data-testid="refresh-account-credentials-17"]').trigger('click')
+    await openMenu(wrapper, 29)
+    await wrapper.get('[data-testid="recover-account-29"]').trigger('click')
+    newerRecover.resolve({ ...unhealthy, status: 'active', schedulable: true, error_message: null })
+    await flushPromises()
+    olderRefresh.resolve({ ...healthy, name: 'Older Refreshed Account' })
+    await flushPromises()
+
+    expect(mocks.toastSuccess.mock.calls.map(([message]) => message)).toEqual([
+      `${unhealthy.name} 已恢复运行状态`,
+    ])
+    expect(mocks.toastSuccess).toHaveBeenCalledTimes(1)
   })
 
   it('does not let an older standalone account reload conflict with a newer mutation result', async () => {
@@ -574,7 +613,7 @@ describe('MobileAdminAccountsView', () => {
     newerRecover.resolve({ ...unhealthy, status: 'active', schedulable: true, error_message: null })
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="account-action-message"]').text()).toContain(`${unhealthy.name} 已恢复运行状态`)
+    expect(mocks.toastSuccess).toHaveBeenLastCalledWith(`${unhealthy.name} 已恢复运行状态`)
     expect(wrapper.find('[data-testid="account-action-error"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('older-list-secret')
   })

@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   setSchedulable: vi.fn(),
   getModels: vi.fn(),
   getUsage: vi.fn(),
+  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/api/admin/accounts', () => ({
@@ -19,6 +20,10 @@ vi.mock('@/api/admin/accounts', () => ({
   setAdminAccountSchedulable: mocks.setSchedulable,
   getAdminAccountModels: mocks.getModels,
   getAdminAccountUsage: mocks.getUsage,
+}))
+
+vi.mock('@/stores/toast', () => ({
+  toast: { success: mocks.toastSuccess },
 }))
 
 import AdminAccountsView from './AdminAccountsView.vue'
@@ -149,7 +154,9 @@ describe('AdminAccountsView', () => {
       model_id: 'claude-opus-4-1',
       prompt: '',
     })
-    expect(wrapper.get('[data-testid="action-message"]').text()).toContain('连接正常')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('Claude 主池 连接测试通过', {
+      detail: '连接正常 · 420ms',
+    })
   })
 
   it('links scheduling and account status through one control', async () => {

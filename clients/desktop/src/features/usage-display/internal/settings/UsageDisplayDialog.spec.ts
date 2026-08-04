@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   updateConfig: vi.fn(),
   stop: vi.fn(),
   notifyConfigChanged: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/features/usage-display/core/store', () => ({
@@ -38,6 +40,13 @@ vi.mock('@/features/usage-display/core/store', () => ({
 
 vi.mock('@/features/usage-display/core/host', () => ({
   notifyUsageConfigChanged: mocks.notifyConfigChanged,
+}))
+
+vi.mock('@/stores/toast', () => ({
+  toast: {
+    error: mocks.toastError,
+    success: mocks.toastSuccess,
+  },
 }))
 
 import UsageDisplayDialog from './UsageDisplayDialog.vue'
@@ -69,6 +78,8 @@ describe('UsageDisplayDialog', () => {
     mocks.updateConfig.mockReset().mockResolvedValue(undefined)
     mocks.stop.mockReset()
     mocks.notifyConfigChanged.mockReset().mockResolvedValue(undefined)
+    mocks.toastError.mockReset()
+    mocks.toastSuccess.mockReset()
   })
 
   it('uses an internal settings dialog without external lifecycle actions', async () => {
@@ -126,6 +137,22 @@ describe('UsageDisplayDialog', () => {
       floatingStyle: 'orb',
     })
     expect(mocks.notifyConfigChanged).toHaveBeenCalledWith(42)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('用量显示设置已保存')
+  })
+
+  it('keeps the dialog open and reports save failures through Toast', async () => {
+    mocks.updateConfig.mockRejectedValueOnce(new Error('本地配置写入失败'))
+    const wrapper = mountDialog()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="usage-display-toggle"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.toastError).toHaveBeenCalledWith('用量显示设置保存失败', {
+      detail: '本地配置写入失败',
+    })
+    expect(wrapper.find('[data-testid="usage-display-dialog"]').exists()).toBe(true)
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
   it('publishes complete surface and appearance configurations', async () => {

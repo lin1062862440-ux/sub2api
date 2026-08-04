@@ -14,8 +14,7 @@ defineProps<{ group: UserGroup | null; readOnly?: boolean }>()
     <div class="ug-detail-actions no-drag"><slot name="actions" /></div>
   </header>
   <nav class="ug-tabs ug-detail-tabs" aria-label="团队详情">
-    <RouterLink :to="{ name: 'user-group-members', params: { id: group?.id } }">成员</RouterLink>
-    <RouterLink :to="{ name: 'user-group-quota', params: { id: group?.id } }">套餐与配额</RouterLink>
+    <RouterLink :to="{ name: 'user-group-members', params: { id: group?.id } }">成员与配额</RouterLink>
     <RouterLink :to="{ name: 'user-group-usage', params: { id: group?.id } }">用量分析</RouterLink>
   </nav>
 </template>

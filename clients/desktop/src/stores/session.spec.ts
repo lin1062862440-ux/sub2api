@@ -40,6 +40,7 @@ import {
   session,
   signOut,
 } from './session'
+import { toast, toastState } from './toast'
 
 const user = {
   id: 7,
@@ -93,8 +94,10 @@ describe('desktop user group capability state', () => {
     expect(hasUserGroupAccess()).toBe(false)
     expect(session.userGroupCapabilities).toEqual({ can_access: false, can_manage: false, can_manage_quota: false, group_count: 0 })
 
+    toast.success('不应保留到下个会话')
     await signOut()
     expect(session.userGroupCapabilities).toBeNull()
     expect(session.user).toBeNull()
+    expect(toastState.items).toEqual([])
   })
 })

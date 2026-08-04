@@ -23,6 +23,7 @@ import {
   type UsageDisplayConfig,
 } from '@/features/usage-display/core/storage'
 import type { User, UserSubscription, UsageFilters, UsageStats } from '@/api'
+import { isTeamSubscription } from '@/lib/subscription-display'
 
 export interface BalanceDisplaySnapshot {
   available: number | null
@@ -62,6 +63,16 @@ const defaultDependencies: UsageDisplayDependencies = {
 function subscriptionQuotas(item: UserSubscription): UsageQuotaInput[] {
   const group = item.group
   if (!group) return []
+  if (isTeamSubscription(item)) {
+    return [{
+      key: 'weekly',
+      label: '成员周额度',
+      used: item.team_weekly_usage_usd ?? 0,
+      limit: item.team_weekly_limit_usd ?? 0,
+      windowStart: item.team_weekly_window_start ?? null,
+      windowHours: 168,
+    }]
+  }
   return [
     {
       key: 'daily' as const,

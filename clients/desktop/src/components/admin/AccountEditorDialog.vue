@@ -10,6 +10,7 @@ import type {
   CreateAdminAccountRequest,
   UpdateAdminAccountRequest,
 } from '@/api/admin/types'
+import { toast } from '@/stores/toast'
 
 const props = withDefaults(defineProps<{
   modelValue: boolean
@@ -178,6 +179,7 @@ async function submit() {
       saved = await createAdminAccount(payload)
     }
     if (!mounted) return
+    toast.success(`${saved.name} 已保存`)
     emit('saved', saved)
     emit('update:modelValue', false)
   } catch (caught) {
@@ -185,6 +187,7 @@ async function submit() {
       error.value = props.mobile
         ? '账号保存失败，请稍后重试。'
         : caught instanceof Error && caught.message ? caught.message : '账号保存失败'
+      toast.error('账号保存失败', { detail: error.value })
     }
   } finally {
     if (mounted) saving.value = false

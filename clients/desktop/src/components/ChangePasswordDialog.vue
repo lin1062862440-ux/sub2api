@@ -4,8 +4,14 @@ import { Check, Eye, EyeOff, KeyRound, LoaderCircle, ShieldCheck, X } from '@luc
 
 import * as api from '@/api'
 import { ApiError } from '@/lib/http'
+import { toast } from '@/stores/toast'
 
-const props = defineProps<{ modelValue: boolean }>()
+const props = withDefaults(defineProps<{
+  modelValue: boolean
+  toastFeedback?: boolean
+}>(), {
+  toastFeedback: false,
+})
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 
 const form = reactive({
@@ -76,9 +82,20 @@ async function submitPassword() {
     form.currentPassword = ''
     form.newPassword = ''
     form.confirmPassword = ''
-    completed.value = true
+    if (props.toastFeedback) {
+      toast.success('密码已修改', { detail: '下次登录时请使用新密码。' })
+      emit('update:modelValue', false)
+    } else {
+      completed.value = true
+    }
   } catch (caught) {
-    error.value = caught instanceof ApiError && caught.message ? caught.message : '密码修改失败'
+    const detail = caught instanceof ApiError && caught.message
+      ? caught.message
+      : caught instanceof Error && caught.message
+        ? caught.message
+        : '请稍后重试。'
+    if (props.toastFeedback) toast.error('密码修改失败', { detail })
+    else error.value = detail
   } finally {
     saving.value = false
   }

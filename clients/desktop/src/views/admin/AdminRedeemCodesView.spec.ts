@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   exportCodes: vi.fn(),
   saveText: vi.fn(),
   groups: vi.fn(),
+  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/api/admin/redeem', () => ({
@@ -32,6 +33,7 @@ vi.mock('@/lib/platform-capabilities', () => ({
     get textExport() { return mocks.textExport },
   },
 }))
+vi.mock('@/stores/toast', () => ({ toast: { success: mocks.toastSuccess } }))
 
 import View from './AdminRedeemCodesView.vue'
 
@@ -105,7 +107,9 @@ describe('AdminRedeemCodesView', () => {
       'id,code\n1,LINAI-TEST\n',
       expect.stringMatching(/^linai-redeem-codes-\d{8}-\d{6}\.csv$/),
     )
-    expect(wrapper.text()).toContain('已导出到')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('兑换码已导出', {
+      detail: '/Users/lin/Downloads/linai-redeem-codes.csv',
+    })
   })
 
   it('requires confirmation before deleting the selected codes', async () => {

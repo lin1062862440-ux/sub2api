@@ -26,6 +26,7 @@ import {
   setLaunchAtStartup,
   startupSettingsErrorMessage,
 } from '@/lib/startup'
+import { toast } from '@/stores/toast'
 
 type SettingsSection = 'general' | 'usage' | 'about' | 'updates'
 
@@ -59,7 +60,6 @@ const settingsStore = createUsageDisplayStore(undefined, {
 const { state } = settingsStore
 const dialog = ref<HTMLElement | null>(null)
 const activeSection = ref<SettingsSection>('usage')
-const usageError = ref('')
 const usageSaving = ref(false)
 const startupLoading = ref(false)
 const startupSaving = ref(false)
@@ -115,7 +115,6 @@ async function loadAppInfo() {
 
 async function loadUsageSettings() {
   if (!props.modelValue || !props.user || !props.canUseUsageDisplay) return
-  usageError.value = ''
   await settingsStore.attachUser(props.user)
   await settingsStore.loadSubscriptions()
 }
@@ -140,9 +139,12 @@ async function updateLaunchAtStartup(enabled: boolean) {
   startupSaving.value = true
   try {
     launchAtStartup.value = await setLaunchAtStartup(enabled)
+    toast.success('开机启动设置已更新')
   } catch (error) {
     launchAtStartup.value = previous
-    startupError.value = startupSettingsErrorMessage(error)
+    toast.error('开机启动设置更新失败', {
+      detail: startupSettingsErrorMessage(error),
+    })
   } finally {
     startupSaving.value = false
   }
@@ -161,13 +163,15 @@ async function openDialog() {
 
 async function updateUsageConfig(config: UsageDisplayConfig) {
   if (!props.user) return
-  usageError.value = ''
   usageSaving.value = true
   try {
     await settingsStore.updateConfig(config)
     await notifyUsageConfigChanged(props.user.id)
+    toast.success('用量显示设置已保存')
   } catch (error) {
-    usageError.value = error instanceof Error ? error.message : '设置未能保存'
+    toast.error('用量显示设置保存失败', {
+      detail: error instanceof Error ? error.message : '设置未能保存',
+    })
   } finally {
     usageSaving.value = false
   }
@@ -258,8 +262,8 @@ onBeforeUnmount(() => {
               </section>
 
               <section v-else-if="activeSection === 'usage' && canUseUsageDisplay" class="settings-section">
-                <p v-if="usageError || state.error" class="settings-error" role="alert">
-                  {{ usageError || state.error }}
+                <p v-if="state.error" class="settings-error" role="alert">
+                  {{ state.error }}
                 </p>
                 <UsageDisplaySettingsForm
                   :config="state.config"

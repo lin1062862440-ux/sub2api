@@ -43,6 +43,16 @@ describe('UserGroupUsageView', () => {
     expect(wrapper.text()).toContain('$8.50')
   })
 
+  it('uses team terminology in the empty state', async () => {
+    mocks.groups.mockResolvedValueOnce([])
+
+    const wrapper = mount(UserGroupUsageView, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('暂无可访问的团队')
+    expect(wrapper.text()).not.toContain('用户组')
+  })
+
   it('submits advanced filters and paginates request details', async () => {
     mocks.usage.mockResolvedValue({
       summary: { total_requests: 120, total_input_tokens: 1000, total_output_tokens: 500, total_cache_tokens: 200, total_tokens: 1700, total_actual_cost: 8.5, balance_consumption: 3.5, subscription_consumption: 5 },

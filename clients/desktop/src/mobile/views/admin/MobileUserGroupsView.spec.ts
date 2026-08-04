@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   replaceViewers: vi.fn(),
   users: vi.fn(),
   refreshUser: vi.fn(),
+  pushRoute: vi.fn(),
+  toastSuccess: vi.fn(),
   session: {
     user: { role: 'admin' },
     userGroupCapabilities: { can_access: true, can_manage: true, group_count: 1 },
@@ -33,6 +35,8 @@ vi.mock('@/api/user-groups', () => ({
 }))
 vi.mock('@/api/admin/users', () => ({ listAdminUsers: mocks.users }))
 vi.mock('@/stores/session', () => ({ session: mocks.session, refreshUser: mocks.refreshUser }))
+vi.mock('@/stores/toast', () => ({ toast: { success: mocks.toastSuccess } }))
+vi.mock('vue-router', () => ({ useRouter: () => ({ push: mocks.pushRoute }) }))
 
 import MobileUserGroupsView from './MobileUserGroupsView.vue'
 import mobileUserGroupsSource from './MobileUserGroupsView.vue?raw'
@@ -131,7 +135,7 @@ describe('MobileUserGroupsView', () => {
 
     expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="user-group-search"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="mobile-page-loading"]').text()).toContain('正在加载用户组')
+    expect(wrapper.get('[data-testid="mobile-page-loading"]').text()).toContain('正在加载团队')
     expect(wrapper.get('.mobile-page-scroll').attributes('aria-busy')).toBe('true')
 
     pending.resolve([
@@ -143,7 +147,7 @@ describe('MobileUserGroupsView', () => {
     expect(mocks.list).toHaveBeenCalledWith()
     expect(wrapper.findAll('[data-testid="mobile-user-group-card"]')).toHaveLength(2)
     expect(wrapper.text()).toContain('暂无说明')
-    expect(wrapper.text()).toContain('未命名用户组')
+    expect(wrapper.text()).toContain('未命名团队')
     expect(wrapper.text()).toContain('已归档')
     expect(wrapper.text()).not.toContain('NaN')
     expect(wrapper.text()).not.toContain('Infinity')
@@ -155,6 +159,14 @@ describe('MobileUserGroupsView', () => {
     expect(mobileUserGroupsSource).toContain('class="group-summary"')
     expect(mobileUserGroupsSource).not.toMatch(/<dl>[\s\S]*?<\/dl>/)
     expect(mobileUserGroupsSource).toMatch(/\.group-summary\{[^}]*border:\s*0/)
+  })
+
+  it('opens the combined member and quota workspace from each team card', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-testid="open-team-workspace-3"]').trigger('click')
+    expect(mocks.pushRoute).toHaveBeenCalledWith({ name: 'user-group-members', params: { id: 3 } })
   })
 
   it('normalizes list records to unique positive IDs and canonical statuses', async () => {
@@ -204,7 +216,7 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="user-group-search"]').setValue(' 团队 1 ')
     await wrapper.get('[data-testid="user-group-search-form"]').trigger('submit')
     expect(wrapper.get('[data-testid="mobile-pagination-label"]').text()).toContain('1 / 1')
-    expect(wrapper.text()).toContain('共 3 个用户组')
+    expect(wrapper.text()).toContain('共 3 个团队')
 
     mocks.list.mockResolvedValueOnce(groups.slice(0, 5))
     await wrapper.get('[data-testid="user-group-search"]').setValue('')
@@ -227,12 +239,14 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="user-group-editor-form"]').trigger('submit')
     await flushPromises()
     expect(mocks.create).toHaveBeenCalledWith({ name: '产品团队', description: '产品成员' })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('团队已创建')
 
     await wrapper.get('[data-testid="edit-user-group-3"]').trigger('click')
     await wrapper.get('[data-testid="user-group-name"]').setValue('研发二组')
     await wrapper.get('[data-testid="user-group-editor-form"]').trigger('submit')
     await flushPromises()
     expect(mocks.update).toHaveBeenCalledWith(3, { name: '研发二组', description: '核心研发成员' })
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('团队已更新')
     wrapper.unmount()
   })
 
@@ -268,7 +282,7 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="edit-user-group-3"]').trigger('click')
     await wrapper.get('[data-testid="user-group-editor-form"]').trigger('submit')
     await flushPromises()
-    expect(wrapper.get('[data-testid="user-group-editor-error"]').text()).toBe('用户组保存失败，请稍后重试。')
+    expect(wrapper.get('[data-testid="user-group-editor-error"]').text()).toBe('团队保存失败，请稍后重试。')
     expect(wrapper.find('[data-testid="mobile-bottom-sheet"]').exists()).toBe(true)
 
     mocks.update.mockRejectedValueOnce(new Error('token=secret raw upstream failure'))
@@ -329,7 +343,7 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="confirm-archive-user-group"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="archive-user-group-error"]').text()).toBe('用户组归档失败，请稍后重试。')
+    expect(wrapper.get('[data-testid="archive-user-group-error"]').text()).toBe('团队归档失败，请稍后重试。')
     expect(wrapper.findAll('[data-testid="mobile-user-group-card"]')).toHaveLength(2)
     expect(wrapper.text()).not.toContain('archive-secret')
   })
@@ -343,9 +357,9 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="user-group-editor-form"]').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('用户组已创建')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('团队已创建')
     expect(wrapper.find('[data-testid="edit-user-group-20"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('用户组列表同步失败，请手动刷新。')
+    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('团队列表同步失败，请手动刷新。')
     expect(wrapper.text()).not.toContain('create-secret')
   })
 
@@ -357,9 +371,9 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="confirm-archive-user-group"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('用户组已归档')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('团队已归档')
     expect(wrapper.find('[data-testid="edit-user-group-3"]').exists()).toBe(false)
-    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('用户组列表同步失败，请手动刷新。')
+    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('团队列表同步失败，请手动刷新。')
   })
 
   it('loads and replaces exact member and viewer selections with real APIs', async () => {
@@ -624,8 +638,8 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="save-user-group-people"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.text()).toContain('成员已更新')
-    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('用户组列表同步失败，请手动刷新。')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('成员已更新')
+    expect(wrapper.get('[data-testid="user-group-sync-warning"]').text()).toBe('团队列表同步失败，请手动刷新。')
     expect(wrapper.text()).not.toContain('people-secret')
   })
 
@@ -636,7 +650,7 @@ describe('MobileUserGroupsView', () => {
     await wrapper.get('[data-testid="group-members-3"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="user-group-permission-error"]').text()).toBe('用户组管理权限已失效，请刷新后重试。')
+    expect(wrapper.get('[data-testid="user-group-permission-error"]').text()).toBe('团队管理权限已失效，请刷新后重试。')
     expect(wrapper.find('[data-testid="user-group-people-sheet"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('permission token')
@@ -730,7 +744,7 @@ describe('MobileUserGroupsView', () => {
     mocks.list.mockRejectedValueOnce(new Error('token=list-secret'))
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.get('[data-testid="mobile-page-error"]').text()).toContain('用户组列表加载失败，请检查网络后重试。')
+    expect(wrapper.get('[data-testid="mobile-page-error"]').text()).toContain('团队列表加载失败，请检查网络后重试。')
     expect(wrapper.find('[data-testid="user-group-search"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="refresh-user-groups"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="create-user-group"]').exists()).toBe(true)
@@ -739,7 +753,7 @@ describe('MobileUserGroupsView', () => {
     mocks.list.mockResolvedValueOnce([])
     await wrapper.get('[data-testid="mobile-page-retry"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="mobile-page-empty"]').text()).toContain('暂无可访问的用户组')
+    expect(wrapper.get('[data-testid="mobile-page-empty"]').text()).toContain('暂无可访问的团队')
 
     wrapper.unmount()
     mocks.session.user.role = 'user'

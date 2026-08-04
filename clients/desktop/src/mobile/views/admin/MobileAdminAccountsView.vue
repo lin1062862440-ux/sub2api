@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   AlertCircle,
-  Check,
   ChevronDown,
   CircleEllipsis,
   Filter,
@@ -38,6 +37,7 @@ import { formatDateTime, formatPlatform } from '@/lib/format'
 import MobileBottomSheet from '@/mobile/components/MobileBottomSheet.vue'
 import MobilePage from '@/mobile/components/MobilePage.vue'
 import MobilePagination from '@/mobile/components/MobilePagination.vue'
+import { toast } from '@/stores/toast'
 
 const PAGE_SIZE = 20
 const accountPlatforms: AdminAccountPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok']
@@ -50,7 +50,6 @@ const initialLoading = ref(true)
 const listLoading = ref(false)
 const fatalError = ref('')
 const actionError = ref('')
-const actionMessage = ref('')
 const searchDraft = ref('')
 const search = ref('')
 const platform = ref<'' | AdminAccountPlatform>('')
@@ -202,7 +201,6 @@ function listParams(page: number): AdminAccountListParams {
 function claimFeedback() {
   const token = ++feedbackGeneration
   actionError.value = ''
-  actionMessage.value = ''
   return token
 }
 
@@ -246,7 +244,6 @@ async function loadAccounts(
     if (!mounted || generation !== loadGeneration) return
     if (!loaded.value) fatalError.value = '账号列表加载失败，请检查网络后重试。'
     else if (reportFailure && (feedbackToken === undefined || ownsFeedback(feedbackToken))) {
-      actionMessage.value = ''
       actionError.value = '账号列表刷新失败，已保留当前数据。'
     }
   } finally {
@@ -309,7 +306,7 @@ async function mutateAccount(
   account: AdminAccount,
   action: string,
   operation: () => Promise<AdminAccount>,
-  successMessage: string,
+  toastMessage: string,
 ) {
   if (pendingByAccount[account.id]) return
   const feedbackToken = claimFeedback()
@@ -318,11 +315,10 @@ async function mutateAccount(
     const updated = await operation()
     if (!mounted) return
     replaceAccount(updated)
-    if (ownsFeedback(feedbackToken)) actionMessage.value = successMessage
+    if (ownsFeedback(feedbackToken)) toast.success(toastMessage)
     await loadAccounts(result.value.page, true, feedbackToken, false)
   } catch {
     if (ownsFeedback(feedbackToken)) {
-      actionMessage.value = ''
       actionError.value = '操作失败，请稍后重试。当前账号列表未更改。'
     }
   } finally {
@@ -421,21 +417,19 @@ async function refreshAccount(account: AdminAccount) {
     if (!mounted) return
     if (isCompleteAdminAccount(response) && response.id === account.id) {
       replaceAccount(response)
-      if (ownsFeedback(feedbackToken)) actionMessage.value = `${safeName(account.name)} 已刷新凭据`
+      if (ownsFeedback(feedbackToken)) toast.success(`${safeName(account.name)} 已刷新凭据`)
     } else if (isMissingProjectWarning(response)) {
       warningMessage = '凭据已刷新，但项目 ID 暂未获取，系统将自动重试。'
-      if (ownsFeedback(feedbackToken)) actionMessage.value = warningMessage
+      if (ownsFeedback(feedbackToken)) toast.warning(warningMessage)
     } else {
       throw new Error('invalid refresh response')
     }
     await loadAccounts(result.value.page, true, feedbackToken, false)
     if (ownsFeedback(feedbackToken) && warningMessage) {
       actionError.value = ''
-      actionMessage.value = warningMessage
     }
   } catch {
     if (ownsFeedback(feedbackToken)) {
-      actionMessage.value = ''
       actionError.value = '操作失败，请稍后重试。当前账号列表未更改。'
     }
   } finally {
@@ -493,7 +487,7 @@ async function submitTest() {
   try {
     const response = await testAdminAccount(account.id, { model_id: modelId, prompt: '' })
     if (!mounted) return
-    if (ownsFeedback(feedbackToken)) actionMessage.value = `${safeName(account.name)}：${response.message || '连接测试通过'}`
+    if (ownsFeedback(feedbackToken)) toast.success(`${safeName(account.name)}：${response.message || '连接测试通过'}`)
     closeTestDialogAfterSuccess()
     await loadAccounts(result.value.page, true, feedbackToken, false)
   } catch {
@@ -589,7 +583,6 @@ onUnmounted(() => {
         </button>
       </form>
 
-      <p v-if="actionMessage" class="action-message" data-testid="account-action-message" role="status"><Check :size="17" />{{ actionMessage }}</p>
       <p v-if="actionError" class="action-error" data-testid="account-action-error" role="alert"><AlertCircle :size="17" />{{ actionError }}</p>
       <div v-if="listLoading" class="list-busy" role="status">正在刷新账号</div>
 
@@ -673,5 +666,5 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.icon-button,.filter-button,.menu-trigger{display:grid;width:44px;min-height:44px;padding:0;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);place-items:center}.icon-button:disabled{opacity:.5}.spinning{animation:account-spin 700ms linear infinite}.accounts-content{display:grid;min-width:0;gap:14px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.search-row label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.search-row input{min-width:0;width:100%;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.search-row>button[type=submit]{min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.filter-button{position:relative}.filter-button span{position:absolute;top:-5px;right:-5px;display:grid;min-width:18px;height:18px;border-radius:9px;background:#bd4d40;color:#fff;font-size:10px;place-items:center}.action-message,.action-error{display:flex;min-width:0;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border-radius:6px;font-size:13px;line-height:1.45}.action-message{border:1px solid #cce6d8;background:#eef9f3;color:#287154}.action-error{border:1px solid #eccfc9;background:#fff5f2;color:#9e493c}.list-busy{padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.account-list{display:grid;gap:10px}.account-card{position:relative;display:grid;min-width:0;gap:12px;padding:14px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.account-card>header{display:grid;grid-template-columns:38px minmax(0,1fr) 44px;align-items:center;gap:9px}.provider-mark{display:grid;width:38px;height:38px;border-radius:7px;background:var(--bg-base);place-items:center}.identity{display:grid;min-width:0;min-height:44px;gap:3px;padding:3px 0;border:0;background:transparent;color:var(--text-primary);text-align:left}.identity strong,.identity span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.identity strong{font-size:15px}.identity span{color:var(--text-tertiary);font-size:11px}.menu-owner{position:relative}.menu-trigger{border:0}.account-menu{position:absolute;z-index:25;top:46px;right:0;display:grid;width:178px;padding:5px;border:1px solid var(--border-strong);border-radius:7px;background:var(--bg-surface);box-shadow:0 12px 32px rgba(26,40,60,.18)}.account-menu button{display:flex;min-height:44px;align-items:center;gap:9px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text-primary);font:inherit;text-align:left}.account-menu button:focus,.account-menu button:hover{background:var(--bg-base);outline:0}.status-row{display:flex;flex-wrap:wrap;gap:7px}.status-row span{padding:4px 7px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:11px}.status-row .status.active{background:#eaf7f0;color:#287755}.status-row .status.error{background:#fff0ed;color:#a14639}.health-warning{display:flex;align-items:center;gap:7px;margin:0;padding:8px 9px;border:1px solid #efd4ce;border-radius:6px;background:#fff7f5;color:#9c493d;font-size:12px}.account-card dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;border-block:1px solid var(--border-subtle)}.account-card dl>div{display:grid;min-width:0;gap:4px;padding:10px 7px}.account-card dt{color:var(--text-tertiary);font-size:10px}.account-card dd{overflow:hidden;margin:0;color:var(--text-primary);font-family:var(--font-data);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.group-row{display:flex;min-width:0;flex-wrap:wrap;gap:6px}.group-row span{max-width:100%;overflow:hidden;padding:4px 7px;border:1px solid #d6e2f4;border-radius:5px;background:#eef4fc;color:#41689e;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.group-row em{color:var(--text-tertiary);font-size:11px;font-style:normal}.account-card>footer{display:grid;grid-template-columns:1fr 1fr;gap:8px}.account-card>footer button{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;gap:6px;padding:0 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;font-size:13px}.account-card>footer button:disabled{opacity:.5}.schedule-button{color:var(--text-secondary)!important}.filter-fields{display:grid;gap:14px}.filter-fields label{display:grid;gap:6px}.filter-fields span,.test-dialog label span{color:var(--text-secondary);font-size:12px}.filter-fields select,.test-dialog select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-secondary,.sheet-primary{min-height:44px;padding:0 16px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-primary{border-color:var(--accent);background:var(--accent);color:#fff}.confirm-backdrop{position:fixed;z-index:170;inset:0;display:grid;padding:16px;background:rgba(24,35,50,.28);backdrop-filter:blur(8px);place-items:center}.confirm-dialog,.test-dialog{width:min(100%,420px);padding:18px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 24px 60px rgba(28,43,63,.24)}.confirm-dialog h2,.test-dialog h2{margin:0;font-size:17px}.confirm-dialog p,.test-dialog>p{margin:8px 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.confirm-dialog footer,.test-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.confirm-dialog footer button,.test-dialog footer button{min-height:44px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.confirm-dialog footer .danger{border-color:#b84d40;background:#b84d40;color:#fff}.test-dialog label{display:grid;gap:6px;margin-top:15px}.test-dialog footer .primary{border-color:var(--accent);background:var(--accent);color:#fff}.test-error{color:#a14639!important}.mobile-pagination{margin-top:2px}@keyframes account-spin{to{transform:rotate(360deg)}}@media(max-width:360px){.search-row{grid-template-columns:minmax(0,1fr) 44px}.search-row>button[type=submit]{grid-column:1/-1;grid-row:2}.account-card dl{grid-template-columns:1fr}.account-card dl>div+div{border-top:1px solid var(--border-subtle)}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
+.icon-button,.filter-button,.menu-trigger{display:grid;width:44px;min-height:44px;padding:0;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);place-items:center}.icon-button:disabled{opacity:.5}.spinning{animation:account-spin 700ms linear infinite}.accounts-content{display:grid;min-width:0;gap:14px}.search-row{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;gap:8px}.search-row label{display:flex;min-width:0;min-height:44px;align-items:center;gap:8px;padding:0 11px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-tertiary)}.search-row input{min-width:0;width:100%;border:0;background:transparent;color:var(--text-primary);font:inherit;outline:0}.search-row>button[type=submit]{min-height:44px;padding:0 14px;border:1px solid var(--accent);border-radius:6px;background:var(--accent);color:#fff;font:inherit}.filter-button{position:relative}.filter-button span{position:absolute;top:-5px;right:-5px;display:grid;min-width:18px;height:18px;border-radius:9px;background:#bd4d40;color:#fff;font-size:10px;place-items:center}.action-error{display:flex;min-width:0;align-items:flex-start;gap:8px;margin:0;padding:10px 11px;border:1px solid #eccfc9;border-radius:6px;background:#fff5f2;color:#9e493c;font-size:13px;line-height:1.45}.list-busy{padding:7px 10px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:12px}.account-list{display:grid;gap:10px}.account-card{position:relative;display:grid;min-width:0;gap:12px;padding:14px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 4px 14px rgba(29,44,65,.04)}.account-card>header{display:grid;grid-template-columns:38px minmax(0,1fr) 44px;align-items:center;gap:9px}.provider-mark{display:grid;width:38px;height:38px;border-radius:7px;background:var(--bg-base);place-items:center}.identity{display:grid;min-width:0;min-height:44px;gap:3px;padding:3px 0;border:0;background:transparent;color:var(--text-primary);text-align:left}.identity strong,.identity span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.identity strong{font-size:15px}.identity span{color:var(--text-tertiary);font-size:11px}.menu-owner{position:relative}.menu-trigger{border:0}.account-menu{position:absolute;z-index:25;top:46px;right:0;display:grid;width:178px;padding:5px;border:1px solid var(--border-strong);border-radius:7px;background:var(--bg-surface);box-shadow:0 12px 32px rgba(26,40,60,.18)}.account-menu button{display:flex;min-height:44px;align-items:center;gap:9px;padding:0 10px;border:0;border-radius:5px;background:transparent;color:var(--text-primary);font:inherit;text-align:left}.account-menu button:focus,.account-menu button:hover{background:var(--bg-base);outline:0}.status-row{display:flex;flex-wrap:wrap;gap:7px}.status-row span{padding:4px 7px;border-radius:5px;background:var(--bg-base);color:var(--text-secondary);font-size:11px}.status-row .status.active{background:#eaf7f0;color:#287755}.status-row .status.error{background:#fff0ed;color:#a14639}.health-warning{display:flex;align-items:center;gap:7px;margin:0;padding:8px 9px;border:1px solid #efd4ce;border-radius:6px;background:#fff7f5;color:#9c493d;font-size:12px}.account-card dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:0;border-block:1px solid var(--border-subtle)}.account-card dl>div{display:grid;min-width:0;gap:4px;padding:10px 7px}.account-card dt{color:var(--text-tertiary);font-size:10px}.account-card dd{overflow:hidden;margin:0;color:var(--text-primary);font-family:var(--font-data);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.group-row{display:flex;min-width:0;flex-wrap:wrap;gap:6px}.group-row span{max-width:100%;overflow:hidden;padding:4px 7px;border:1px solid #d6e2f4;border-radius:5px;background:#eef4fc;color:#41689e;font-size:11px;text-overflow:ellipsis;white-space:nowrap}.group-row em{color:var(--text-tertiary);font-size:11px;font-style:normal}.account-card>footer{display:grid;grid-template-columns:1fr 1fr;gap:8px}.account-card>footer button{display:flex;min-width:0;min-height:44px;align-items:center;justify-content:center;gap:6px;padding:0 8px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit;font-size:13px}.account-card>footer button:disabled{opacity:.5}.schedule-button{color:var(--text-secondary)!important}.filter-fields{display:grid;gap:14px}.filter-fields label{display:grid;gap:6px}.filter-fields span,.test-dialog label span{color:var(--text-secondary);font-size:12px}.filter-fields select,.test-dialog select{width:100%;min-height:44px;padding:0 10px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-secondary,.sheet-primary{min-height:44px;padding:0 16px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.sheet-primary{border-color:var(--accent);background:var(--accent);color:#fff}.confirm-backdrop{position:fixed;z-index:170;inset:0;display:grid;padding:16px;background:rgba(24,35,50,.28);backdrop-filter:blur(8px);place-items:center}.confirm-dialog,.test-dialog{width:min(100%,420px);padding:18px;border:1px solid var(--border-subtle);border-radius:8px;background:var(--bg-surface);box-shadow:0 24px 60px rgba(28,43,63,.24)}.confirm-dialog h2,.test-dialog h2{margin:0;font-size:17px}.confirm-dialog p,.test-dialog>p{margin:8px 0 0;color:var(--text-secondary);font-size:13px;line-height:1.5;overflow-wrap:anywhere}.confirm-dialog footer,.test-dialog footer{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}.confirm-dialog footer button,.test-dialog footer button{min-height:44px;padding:0 14px;border:1px solid var(--border-strong);border-radius:6px;background:var(--bg-surface);color:var(--text-primary);font:inherit}.confirm-dialog footer .danger{border-color:#b84d40;background:#b84d40;color:#fff}.test-dialog label{display:grid;gap:6px;margin-top:15px}.test-dialog footer .primary{border-color:var(--accent);background:var(--accent);color:#fff}.test-error{color:#a14639!important}.mobile-pagination{margin-top:2px}@keyframes account-spin{to{transform:rotate(360deg)}}@media(max-width:360px){.search-row{grid-template-columns:minmax(0,1fr) 44px}.search-row>button[type=submit]{grid-column:1/-1;grid-row:2}.account-card dl{grid-template-columns:1fr}.account-card dl>div+div{border-top:1px solid var(--border-subtle)}}@media(prefers-reduced-motion:reduce){*{animation:none!important}}
 </style>

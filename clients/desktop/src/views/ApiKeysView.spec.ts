@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   createApiKey: vi.fn(),
   deleteApiKey: vi.fn(),
   detectLocalClient: vi.fn(),
+  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/api', () => ({
@@ -24,6 +25,10 @@ vi.mock('@/api', () => ({
 
 vi.mock('@/stores/session', () => ({
   session: { settings: { api_base_url: 'https://lynn.lat/v1' } },
+}))
+
+vi.mock('@/stores/toast', () => ({
+  toast: { success: mocks.toastSuccess },
 }))
 
 vi.mock('@/lib/client-config', async (importOriginal) => {
@@ -95,7 +100,7 @@ describe('ApiKeysView local client entry', () => {
     await flushPromises()
 
     await useButtons[2]!.trigger('click')
-    expect(wrapper.text()).toContain('当前分组暂不支持客户端配置')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('当前分组暂不支持客户端配置')
   })
 
   it('passes the public API endpoint and never stores the key in the URL', async () => {

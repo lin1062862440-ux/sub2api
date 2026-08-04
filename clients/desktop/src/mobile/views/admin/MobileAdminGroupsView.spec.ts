@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   update: vi.fn(),
   status: vi.fn(),
+  toastSuccess: vi.fn(),
 }))
 
 vi.mock('@/api/admin/groups', () => ({
@@ -18,6 +19,7 @@ vi.mock('@/api/admin/groups', () => ({
   updateAdminGroup: mocks.update,
   updateAdminGroupStatus: mocks.status,
 }))
+vi.mock('@/stores/toast', () => ({ toast: { success: mocks.toastSuccess } }))
 
 import MobileAdminGroupsView from './MobileAdminGroupsView.vue'
 
@@ -170,6 +172,7 @@ describe('MobileAdminGroupsView', () => {
       monthly_limit_usd: 240,
     })
     expect(mocks.list).toHaveBeenCalledTimes(2)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已创建分组“Gemini Monthly”')
   })
 
   it('keeps the mobile editor open and redacts a group create rejection', async () => {
@@ -269,6 +272,7 @@ describe('MobileAdminGroupsView', () => {
       weekly_limit_usd: 0,
       monthly_limit_usd: 0,
     }))
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('已更新分组“Zero Quota Renamed”')
   })
 
   it('preserves a zero RPM limit as the valid unlimited boundary', async () => {
@@ -392,9 +396,31 @@ describe('MobileAdminGroupsView', () => {
     olderStatus.reject(new Error('credential=older-group-secret'))
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="group-action-message"]').text()).toContain(`已启用分组“${inactiveGroup.name}”`)
+    expect(mocks.toastSuccess).toHaveBeenLastCalledWith(`已启用分组“${inactiveGroup.name}”`)
     expect(wrapper.find('[data-testid="group-action-error"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('older-group-secret')
+  })
+
+  it('publishes only the newer group toast when two successful operations finish out of order', async () => {
+    const olderStatus = deferred<AdminGroup>()
+    const newerStatus = deferred<AdminGroup>()
+    mocks.status.mockReturnValueOnce(olderStatus.promise).mockReturnValueOnce(newerStatus.promise)
+    const wrapper = mount(MobileAdminGroupsView)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="toggle-group-8"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-group-status"]').trigger('click')
+    await wrapper.get('[data-testid="toggle-group-14"]').trigger('click')
+    await wrapper.get('[data-testid="confirm-group-status"]').trigger('click')
+    newerStatus.resolve({ ...inactiveGroup, status: 'active' })
+    await flushPromises()
+    olderStatus.resolve({ ...activeGroup, status: 'inactive' })
+    await flushPromises()
+
+    expect(mocks.toastSuccess.mock.calls.map(([message]) => message)).toEqual([
+      `已启用分组“${inactiveGroup.name}”`,
+    ])
+    expect(mocks.toastSuccess).toHaveBeenCalledTimes(1)
   })
 
   it('does not let an older standalone group search conflict with a newer mutation result', async () => {
@@ -417,7 +443,7 @@ describe('MobileAdminGroupsView', () => {
     newerStatus.resolve({ ...inactiveGroup, status: 'active' })
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="group-action-message"]').text()).toContain(`已启用分组“${inactiveGroup.name}”`)
+    expect(mocks.toastSuccess).toHaveBeenLastCalledWith(`已启用分组“${inactiveGroup.name}”`)
     expect(wrapper.find('[data-testid="group-action-error"]').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('older-group-list-secret')
   })

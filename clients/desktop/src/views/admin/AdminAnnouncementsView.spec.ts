@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   list: vi.fn(), create: vi.fn(), update: vi.fn(), remove: vi.fn(), read: vi.fn(),
+  toastSuccess: vi.fn(), toastError: vi.fn(),
 }))
+vi.mock('@/stores/toast', () => ({ toast: { success: mocks.toastSuccess, error: mocks.toastError } }))
 vi.mock('@/api/admin/announcements', () => ({
   listAdminAnnouncements: mocks.list,
   createAdminAnnouncement: mocks.create,
@@ -93,5 +95,21 @@ describe('AdminAnnouncementsView', () => {
     await wrapper.get('[data-testid="delete-announcement-8"]').trigger('click')
     await flushPromises()
     expect(mocks.remove).toHaveBeenCalledWith(8)
+  })
+
+  it('keeps the editor open and exposes a failed save inline and by toast', async () => {
+    mocks.create.mockRejectedValueOnce(new Error('公告服务暂不可用'))
+    const wrapper = mount(View)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="create-announcement"]').trigger('click')
+    await wrapper.get('[data-testid="announcement-title"]').setValue('New notice')
+    await wrapper.get('[data-testid="announcement-content"]').setValue('Hello')
+    await wrapper.get('[data-testid="announcement-editor"]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="announcement-editor-error"]').text()).toContain('公告服务暂不可用')
+    expect(mocks.toastError).toHaveBeenCalledWith('公告保存失败', { detail: '公告服务暂不可用' })
+    expect(wrapper.find('[data-testid="announcement-editor"]').exists()).toBe(true)
   })
 })

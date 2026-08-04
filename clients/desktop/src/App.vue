@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import { notifyUsageSessionChanged } from '@/features/usage-display/core/host'
 import { appCapabilities } from '@/lib/platform-capabilities'
 import { session } from '@/stores/session'
+import ToastViewport from '@/components/ToastViewport.vue'
 
 const router = useRouter()
 
@@ -36,4 +37,5 @@ watch(
     aria-hidden="true"
   />
   <RouterView />
+  <ToastViewport />
 </template>

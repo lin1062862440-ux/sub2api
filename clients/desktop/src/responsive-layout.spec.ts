@@ -8,6 +8,11 @@ const sourceModules = import.meta.glob([
 
 const readSource = (relativePath: string) => sourceModules[relativePath] ?? ''
 
+const readStyleRule = (source: string, selector: string) => {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return source.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`))?.[1] ?? ''
+}
+
 const responsiveViews = [
   './views/DashboardView.vue',
   './views/ApiKeysView.vue',
@@ -18,7 +23,6 @@ const responsiveViews = [
   './views/ProfileView.vue',
   './views/UserGroupsView.vue',
   './views/UserGroupMembersView.vue',
-  './views/UserGroupQuotasView.vue',
   './views/UserGroupUsageView.vue',
   './views/admin/AdminDashboardView.vue',
   './views/admin/AdminAccountsView.vue',
@@ -40,6 +44,21 @@ describe('desktop responsive layout contract', () => {
     expect(layout).toContain('container-type: inline-size')
     expect(layout).toContain('@media (max-width: 1020px)')
     expect(layout).toContain('grid-template-columns: 76px minmax(0, 1fr)')
+  })
+
+  it('keeps the account area visible and scrolls navigation in short windows', () => {
+    const layout = readSource('./layouts/DesktopAppLayout.vue')
+    const rail = readStyleRule(layout, '.app-rail')
+    const navigation = readStyleRule(layout, '.rail-nav')
+
+    expect(rail).toContain('min-height: 0')
+    expect(rail).toContain('overflow: hidden')
+    expect(navigation).toContain('flex: 1 1 auto')
+    expect(navigation).toContain('min-height: 0')
+    expect(navigation).toContain('overflow-y: auto')
+    expect(readStyleRule(layout, '.rail-brand')).toContain('flex: 0 0 auto')
+    expect(readStyleRule(layout, '.workspace-switch')).toContain('flex: 0 0 auto')
+    expect(readStyleRule(layout, '.rail-account')).toContain('flex: 0 0 auto')
   })
 
   it.each(responsiveViews)('%s responds to available content width', (viewPath) => {

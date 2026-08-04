@@ -55,6 +55,7 @@ describe('App', () => {
 
     const region = wrapper.get('[data-testid="window-drag-region"]')
     expect(region.attributes()).toHaveProperty('data-tauri-drag-region')
+    expect(wrapper.findAll('[data-testid="toast-viewport"]')).toHaveLength(1)
   })
 
   it('broadcasts the current user and logout to the usage popover', async () => {

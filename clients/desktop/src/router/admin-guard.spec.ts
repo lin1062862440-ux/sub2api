@@ -13,6 +13,7 @@ const mobileRouteModules = {
   'admin-groups': () => import('@/mobile/views/admin/MobileAdminGroupsView.vue'),
   'admin-users': () => import('@/mobile/views/admin/MobileAdminUsersView.vue'),
   'user-groups': () => import('@/mobile/views/admin/MobileUserGroupsView.vue'),
+  'user-group-members': () => import('@/mobile/views/admin/MobileTeamWorkspaceView.vue'),
   'admin-subscriptions': () => import('@/mobile/views/admin/MobileAdminSubscriptionsView.vue'),
 }
 
@@ -25,6 +26,7 @@ const desktopRouteModules = {
   'admin-groups': () => import('@/views/admin/AdminGroupsView.vue'),
   'admin-users': () => import('@/views/admin/AdminUsersView.vue'),
   'user-groups': () => import('@/views/UserGroupsView.vue'),
+  'user-group-members': () => import('@/views/UserGroupMembersView.vue'),
   'admin-subscriptions': () => import('@/views/admin/AdminSubscriptionsView.vue'),
 }
 
@@ -64,7 +66,7 @@ async function lazyRouteComponent(platformRouter: Router, name: string) {
 describe('desktop administrator route guard', () => {
   afterAll(() => stopUserGroupAccessWatch())
 
-  it('evaluates all nine approved routes to mobile lazy views on Android', async () => {
+  it('evaluates all approved routes to mobile lazy views on Android', async () => {
     const evaluated = await evaluatedRouter(true)
 
     try {
@@ -77,7 +79,7 @@ describe('desktop administrator route guard', () => {
     }
   })
 
-  it('retains all nine original desktop lazy views outside mobile mode', async () => {
+  it('retains all original desktop lazy views outside mobile mode', async () => {
     const evaluated = await evaluatedRouter(false)
 
     try {
@@ -92,6 +94,27 @@ describe('desktop administrator route guard', () => {
 
   it('registers the administrator group management route', () => {
     expect(router.hasRoute('admin-groups')).toBe(true)
+  })
+
+  it('uses team terminology and redirects legacy quota routes into the combined workspace', () => {
+    const directory = router.getRoutes().find((route) => route.name === 'user-groups')
+    const members = router.getRoutes().find((route) => route.name === 'user-group-members')
+    const quota = router.getRoutes().find((route) => route.name === 'user-group-quota')
+    const subscriptions = router.getRoutes().find((route) => route.path === '/user-group-subscriptions')
+
+    expect(directory?.meta.title).toBe('团队管理')
+    expect(members?.meta.title).toBe('成员与配额')
+    expect(quota?.redirect).toBeTypeOf('function')
+    expect((quota?.redirect as Function)({ params: { id: '7' }, query: { from: 'old' } })).toEqual({
+      name: 'user-group-members',
+      params: { id: '7' },
+      query: { from: 'old', openQuota: '1' },
+    })
+    expect((subscriptions?.redirect as Function)({ query: { group_id: '7' } })).toEqual({
+      name: 'user-group-members',
+      params: { id: '7' },
+      query: { openQuota: '1' },
+    })
   })
 
   it('redirects an ordinary user away from administrator routes', () => {

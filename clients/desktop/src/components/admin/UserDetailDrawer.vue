@@ -18,6 +18,7 @@ import type {
   AdminUser,
 } from '@/api/admin/types'
 import { formatDateTime, formatPlatform } from '@/lib/format'
+import { toast } from '@/stores/toast'
 
 const props = withDefaults(defineProps<{ user: AdminUser | null; mobile?: boolean }>(), { mobile: false })
 const emit = defineEmits<{ close: []; updated: [user: AdminUser] }>()
@@ -34,7 +35,7 @@ const quotas = ref<AdminPlatformQuota[]>([])
 const quotasReady = ref(false)
 const identity = reactive({ provider_type: 'oidc', provider_key: 'main', provider_subject: '' })
 const saving = ref('')
-const message = ref('')
+const formError = ref('')
 const detail = ref<HTMLElement | null>(null)
 const platforms: AdminQuotaPlatform[] = ['anthropic', 'openai', 'gemini', 'antigravity', 'grok']
 const quotaDraft = ref<Record<string, { daily: string; weekly: string; monthly: string }>>(
@@ -159,7 +160,7 @@ function resetUserState() {
   identity.provider_key = 'main'
   identity.provider_subject = ''
   saving.value = ''
-  message.value = ''
+  formError.value = ''
 }
 
 function safeNumber(value: unknown) {
@@ -277,7 +278,7 @@ async function bindIdentity() {
   if (!props.user || !identity.provider_subject.trim() || (props.mobile && saving.value)) return
   const targetId = props.user.id
   saving.value = 'identity'
-  message.value = ''
+  formError.value = ''
   try {
     await bindAdminUserIdentity(targetId, {
       provider_type: identity.provider_type,
@@ -285,12 +286,12 @@ async function bindIdentity() {
       provider_subject: identity.provider_subject.trim(),
     })
     if (!mounted || props.user?.id !== targetId) return
-    message.value = '身份绑定完成'
+    toast.success('身份绑定完成')
     identity.provider_subject = ''
   } catch (caught) {
-    if (mounted && props.user?.id === targetId) message.value = props.mobile
-      ? '身份绑定失败，请稍后重试。'
-      : caught instanceof Error && caught.message ? caught.message : '身份绑定失败'
+    if (mounted && props.user?.id === targetId) toast.error('身份绑定失败', {
+      detail: props.mobile ? '请稍后重试。' : caught instanceof Error ? caught.message : undefined,
+    })
   } finally {
     if (mounted && props.user?.id === targetId && saving.value === 'identity') saving.value = ''
   }
@@ -316,11 +317,11 @@ async function saveQuotas() {
     monthly_limit_usd: props.mobile ? parseQuota(quotaDraft.value[platform]?.monthly ?? '') : legacyNullable(quotaDraft.value[platform]?.monthly ?? ''),
   }))
   if (payload.some((quota) => quota.daily_limit_usd === undefined || quota.weekly_limit_usd === undefined || quota.monthly_limit_usd === undefined)) {
-    message.value = '额度必须是有限的非负数字，或留空表示不限。'
+    formError.value = '额度必须是有限的非负数字，或留空表示不限。'
     return
   }
   saving.value = 'quotas'
-  message.value = ''
+  formError.value = ''
   try {
     const data = await updateAdminUserPlatformQuotas(targetId, payload.map((quota) => ({
       platform: quota.platform,
@@ -331,14 +332,14 @@ async function saveQuotas() {
     if (!mounted || props.user?.id !== targetId) return
     const sanitized = sanitizeQuotas(data)
     if (!sanitized) {
-      message.value = props.mobile ? '额度保存失败，请稍后重试。' : '额度保存返回结果无效'
+      formError.value = props.mobile ? '额度保存失败，请稍后重试。' : '额度保存返回结果无效'
       return
     }
     quotas.value = sanitized
     syncDraft()
-    message.value = '平台额度已保存'
+    toast.success('平台额度已保存')
   } catch (caught) {
-    if (mounted && props.user?.id === targetId) message.value = props.mobile
+    if (mounted && props.user?.id === targetId) formError.value = props.mobile
       ? '额度保存失败，请稍后重试。'
       : caught instanceof Error && caught.message ? caught.message : '额度保存失败'
   } finally {
@@ -352,22 +353,21 @@ async function resetQuota(platform: AdminQuotaPlatform, window: AdminQuotaWindow
   const windowLabel = { daily: '日', weekly: '周', monthly: '月' }[window]
   if (!globalThis.confirm(`确认重置 ${props.user.email} 的 ${formatPlatform(platform)} ${windowLabel}用量？`)) return
   saving.value = `${platform}-${window}`
-  message.value = ''
   try {
     const data = await resetAdminUserPlatformQuota(targetId, platform, window)
     if (!mounted || props.user?.id !== targetId) return
     const sanitized = sanitizeQuotas(data)
     if (!sanitized) {
-      message.value = props.mobile ? '额度重置失败，请稍后重试。' : '额度重置返回结果无效'
+      toast.error('额度重置失败', { detail: props.mobile ? '请稍后重试。' : '服务端返回结果无效。' })
       return
     }
     quotas.value = sanitized
     syncDraft()
-    message.value = `${formatPlatform(platform)} ${windowLabel}用量已重置`
+    toast.success(`${formatPlatform(platform)} ${windowLabel}用量已重置`)
   } catch (caught) {
-    if (mounted && props.user?.id === targetId) message.value = props.mobile
-      ? '额度重置失败，请稍后重试。'
-      : caught instanceof Error && caught.message ? caught.message : '额度重置失败'
+    if (mounted && props.user?.id === targetId) toast.error('额度重置失败', {
+      detail: props.mobile ? '请稍后重试。' : caught instanceof Error ? caught.message : undefined,
+    })
   } finally {
     if (mounted && props.user?.id === targetId && saving.value === `${platform}-${window}`) saving.value = ''
   }
@@ -412,7 +412,7 @@ onBeforeUnmount(() => {
       <aside ref="detail" class="detail" :class="{ mobile }" data-testid="user-detail" role="dialog" aria-modal="true" aria-labelledby="user-detail-title" tabindex="-1">
         <header><div><h2 id="user-detail-title">{{ safeText(user.username, '未命名用户') }}</h2><p>{{ safeText(user.email, '未提供邮箱') }}</p></div><button type="button" aria-label="关闭" :disabled="mobile && Boolean(saving)" @click="requestClose"><X :size="18" /></button></header>
         <p v-if="issues.length" class="warning">部分数据不可用：{{ issues.join('、') }}</p>
-        <p v-if="message" class="message" role="status">{{ message }}</p>
+        <p v-if="formError" class="message" role="alert">{{ formError }}</p>
         <div v-if="loading" class="loading"><i v-for="n in 7" :key="n" /></div>
         <template v-else>
           <section class="metrics"><div><span>近 30 天请求</span><strong>{{ safeCount(usage?.total_requests) }}</strong></div><div><span>Token</span><strong>{{ safeCount(usage?.total_tokens) }}</strong></div><div><span>消费</span><strong>{{ safeCost(usage?.total_cost) }}</strong></div><div><span>当前余额</span><strong>{{ safeCost(user.balance) }}</strong></div></section>

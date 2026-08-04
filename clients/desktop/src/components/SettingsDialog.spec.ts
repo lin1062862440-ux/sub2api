@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   getLaunchAtStartup: vi.fn(),
+  notifyUsageConfigChanged: vi.fn(),
   setLaunchAtStartup: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+  updateUsageConfig: vi.fn(),
 }))
 
 vi.mock('@tauri-apps/api/app', () => ({
@@ -38,13 +42,20 @@ vi.mock('@/features/usage-display/core/store', () => ({
     },
     attachUser: vi.fn(),
     loadSubscriptions: vi.fn(),
-    updateConfig: vi.fn(),
+    updateConfig: mocks.updateUsageConfig,
     stop: vi.fn(),
   }),
 }))
 
 vi.mock('@/features/usage-display/core/host', () => ({
-  notifyUsageConfigChanged: vi.fn(),
+  notifyUsageConfigChanged: mocks.notifyUsageConfigChanged,
+}))
+
+vi.mock('@/stores/toast', () => ({
+  toast: {
+    error: mocks.toastError,
+    success: mocks.toastSuccess,
+  },
 }))
 
 import SettingsDialog from './SettingsDialog.vue'
@@ -67,8 +78,11 @@ const baseProps = {
 
 describe('SettingsDialog launch at startup', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     mocks.getLaunchAtStartup.mockReset().mockResolvedValue(true)
     mocks.setLaunchAtStartup.mockReset()
+    mocks.notifyUsageConfigChanged.mockReset().mockResolvedValue(undefined)
+    mocks.updateUsageConfig.mockReset().mockResolvedValue(undefined)
   })
 
   it('loads the native state and lets the user disable startup', async () => {
@@ -89,6 +103,7 @@ describe('SettingsDialog launch at startup', () => {
     expect(mocks.setLaunchAtStartup).toHaveBeenCalledWith(false)
     expect(checkbox.element.checked).toBe(false)
     expect(wrapper.text()).toContain('已关闭')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('开机启动设置已更新')
   })
 
   it('restores the previous state when Windows rejects the change', async () => {
@@ -104,7 +119,10 @@ describe('SettingsDialog launch at startup', () => {
     await flushPromises()
 
     expect(checkbox.element.checked).toBe(true)
-    expect(wrapper.get('[role="alert"]').text()).toBe('无法关闭开机启动')
+    expect(mocks.toastError).toHaveBeenCalledWith('开机启动设置更新失败', {
+      detail: '无法关闭开机启动',
+    })
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 
   it('does not show the Windows-only setting on unsupported platforms', async () => {
@@ -117,5 +135,39 @@ describe('SettingsDialog launch at startup', () => {
     expect(wrapper.find('[data-testid="settings-tab-general"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="launch-at-startup"]').exists()).toBe(false)
     expect(mocks.getLaunchAtStartup).not.toHaveBeenCalled()
+  })
+
+  it('reports usage-display save results through Toast', async () => {
+    const usageForm = {
+      emits: ['update'],
+      template: '<button data-testid="usage-settings-update" @click="$emit(\'update\', { enabled: true, source: \'balance\', subscriptionId: null, surface: \'floating-window\', appearance: \'sky\', floatingStyle: \'orb\' })">保存</button>',
+    }
+    const props = {
+      ...baseProps,
+      user: { id: 42, username: 'Lin' } as never,
+      canUseUsageDisplay: true,
+      canManageLaunchAtStartup: false,
+    }
+    const wrapper = mount(SettingsDialog, {
+      props,
+      global: { stubs: { Teleport: true, UsageDisplaySettingsForm: usageForm } },
+    })
+    await flushPromises()
+
+    await wrapper.get('[data-testid="usage-settings-update"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.updateUsageConfig).toHaveBeenCalledOnce()
+    expect(mocks.notifyUsageConfigChanged).toHaveBeenCalledWith(42)
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('用量显示设置已保存')
+
+    mocks.updateUsageConfig.mockRejectedValueOnce(new Error('本地配置写入失败'))
+    await wrapper.get('[data-testid="usage-settings-update"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.toastError).toHaveBeenCalledWith('用量显示设置保存失败', {
+      detail: '本地配置写入失败',
+    })
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
   })
 })

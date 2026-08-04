@@ -26,6 +26,7 @@ import {
 import type { AdminGroupOption, AdminSubscription, AdminSubscriptionProgress, AdminSubscriptionQuotaWindow } from '@/api/admin/types'
 import { getAdminGroups } from '@/api/admin/users'
 import { formatCost, formatDateTime } from '@/lib/format'
+import { toast } from '@/stores/toast'
 
 type AssignMode = 'single' | 'bulk'
 type LifecycleAction = 'extend' | 'reset' | 'revoke' | 'restore'
@@ -44,7 +45,7 @@ const pageSize = ref(20)
 const loading = ref(true)
 const refreshing = ref(false)
 const loadError = ref('')
-const message = ref('')
+const assignmentError = ref('')
 const editorOpen = ref(false)
 const pending = ref('')
 const groups = ref<AdminGroupOption[]>([])
@@ -131,6 +132,7 @@ function openAssign() {
   form.userIds = ''
   form.groupId = ''
   form.days = 30
+  assignmentError.value = ''
   editorOpen.value = true
 }
 
@@ -140,8 +142,9 @@ function parseUserIds(value: string): number[] {
 
 async function submitAssignment() {
   const groupId = Number(form.groupId)
+  assignmentError.value = ''
   if (!groupId) {
-    message.value = '请选择订阅分组'
+    assignmentError.value = '请选择订阅分组'
     return
   }
   pending.value = 'assign'
@@ -149,24 +152,27 @@ async function submitAssignment() {
     if (form.mode === 'single') {
       const userId = Number(form.userId)
       if (!userId) {
-        message.value = '请输入有效的用户 ID'
+        assignmentError.value = '请输入有效的用户 ID'
         return
       }
       await assignAdminSubscription({ user_id: userId, group_id: groupId, validity_days: Number(form.days) || 30 })
-      message.value = `已为用户 #${userId} 分配订阅`
+      toast.success(`已为用户 #${userId} 分配订阅`)
     } else {
       const userIds = parseUserIds(form.userIds)
       if (!userIds.length) {
-        message.value = '请至少输入一个有效的用户 ID'
+        assignmentError.value = '请至少输入一个有效的用户 ID'
         return
       }
       const assigned = await bulkAssignAdminSubscriptions({ user_ids: userIds, group_id: groupId, validity_days: Number(form.days) || 30 })
-      message.value = `批量分配完成：成功 ${assigned.success_count} 个，失败 ${assigned.failed_count} 个`
+      const title = `批量分配完成：成功 ${assigned.success_count} 个，失败 ${assigned.failed_count} 个`
+      if (assigned.failed_count > 0) toast.warning(title)
+      else toast.success(title)
     }
     editorOpen.value = false
     await load(true)
   } catch (caught) {
-    message.value = errorMessage(caught, '订阅分配失败')
+    assignmentError.value = errorMessage(caught, '订阅分配失败')
+    toast.error('订阅分配失败', { detail: assignmentError.value })
   } finally {
     pending.value = ''
   }
@@ -207,24 +213,23 @@ async function confirmAction() {
   try {
     if (type === 'extend') {
       await extendAdminSubscription(item.id, Number(action.days))
-      message.value = `订阅已延长 ${action.days} 天`
+      toast.success(`订阅已延长 ${action.days} 天`)
     } else if (type === 'reset') {
       await resetAdminSubscriptionQuota(item.id, { daily: action.daily, weekly: action.weekly, monthly: action.monthly })
-      message.value = '订阅用量已重置'
+      toast.success('订阅用量已重置')
     } else if (type === 'revoke') {
       await revokeAdminSubscription(item.id)
-      message.value = '订阅已撤销'
+      toast.success('订阅已撤销')
     } else {
       await restoreAdminSubscription(item.id)
-      message.value = '订阅已恢复'
+      toast.success('订阅已恢复')
     }
     closeAction()
     await load(true)
   } catch (caught) {
-    action.error = errorMessage(caught, '订阅操作失败')
+    toast.error('订阅操作失败', { detail: errorMessage(caught, '请稍后重试。') })
   } finally {
     pending.value = ''
-    if (!action.error) closeAction()
   }
 }
 
@@ -310,7 +315,6 @@ onMounted(() => void load())
       <select v-model="filters.status"><option value="">全部状态</option><option value="active">有效</option><option value="expired">已过期</option><option value="revoked">已撤销</option><option value="suspended">已暂停</option></select>
       <button type="button" @click="submitFilters">搜索</button><button class="refresh" type="button" :disabled="refreshing" @click="load(true)"><RefreshCw :size="15" :class="{ spinning: refreshing }" />刷新</button>
     </form>
-    <p v-if="message" class="message" role="status">{{ message }}</p>
 
     <section v-if="loading" class="loading"><i v-for="n in 4" :key="n" /></section>
     <section v-else-if="loadError" class="empty"><strong>订阅列表加载失败</strong><span>{{ loadError }}</span><button @click="() => load()">重新加载</button></section>
@@ -334,7 +338,7 @@ onMounted(() => void load())
     <footer v-if="total > pageSize" class="pagination"><div><span>每页</span><select :value="pageSize" data-testid="subscription-page-size" @change="changePageSize"><option :value="20">20</option><option :value="50">50</option><option :value="100">100</option></select><span>条，共 {{ total }} 条</span></div><nav aria-label="订阅分页"><button type="button" :disabled="page <= 1" @click="changePage(page - 1)">上一页</button><template v-for="(value, index) in visiblePages" :key="value"><span v-if="index > 0 && value - visiblePages[index - 1]! > 1">...</span><button type="button" :class="{ current: value === page }" :data-testid="`subscription-page-${value}`" @click="changePage(value)">{{ value }}</button></template><button type="button" :disabled="page >= pageCount" @click="changePage(page + 1)">下一页</button></nav></footer>
 
     <Transition name="fade">
-      <div v-if="editorOpen" class="backdrop" @mousedown.self="editorOpen = false"><section class="editor"><header><div><h2>分配订阅</h2><p>为一个或多个用户开通分组订阅</p></div><button aria-label="关闭" @click="editorOpen = false"><X :size="18" /></button></header><form data-testid="subscription-editor" @submit.prevent="submitAssignment"><div class="mode-switch wide" aria-label="分配方式"><button type="button" :aria-pressed="form.mode === 'single'" @click="form.mode = 'single'">单个用户</button><button type="button" data-testid="subscription-mode-bulk" :aria-pressed="form.mode === 'bulk'" @click="form.mode = 'bulk'"><UsersRound :size="14" />批量用户</button></div><label v-if="form.mode === 'single'" class="wide"><span>用户 ID</span><input v-model="form.userId" data-testid="subscription-user-id" inputmode="numeric" /></label><label v-else class="wide"><span>用户 ID 列表</span><textarea v-model="form.userIds" data-testid="subscription-user-ids" rows="4" placeholder="例如：7, 8, 9；支持逗号、空格或换行" /></label><label><span>订阅分组</span><select v-model="form.groupId" data-testid="subscription-group-id"><option value="">请选择</option><option v-for="group in assignableGroups" :key="group.id" :value="String(group.id)">{{ group.name }}</option></select></label><label><span>有效天数</span><input v-model.number="form.days" type="number" min="1" /></label><footer class="wide"><button type="button" @click="editorOpen = false">取消</button><button class="save" type="submit" :disabled="pending === 'assign'">{{ pending === 'assign' ? '正在分配' : '确认分配' }}</button></footer></form></section></div>
+      <div v-if="editorOpen" class="backdrop" @mousedown.self="editorOpen = false"><section class="editor"><header><div><h2>分配订阅</h2><p>为一个或多个用户开通分组订阅</p></div><button aria-label="关闭" @click="editorOpen = false"><X :size="18" /></button></header><form data-testid="subscription-editor" @submit.prevent="submitAssignment"><div class="mode-switch wide" aria-label="分配方式"><button type="button" :aria-pressed="form.mode === 'single'" @click="form.mode = 'single'">单个用户</button><button type="button" data-testid="subscription-mode-bulk" :aria-pressed="form.mode === 'bulk'" @click="form.mode = 'bulk'"><UsersRound :size="14" />批量用户</button></div><label v-if="form.mode === 'single'" class="wide"><span>用户 ID</span><input v-model="form.userId" data-testid="subscription-user-id" inputmode="numeric" /></label><label v-else class="wide"><span>用户 ID 列表</span><textarea v-model="form.userIds" data-testid="subscription-user-ids" rows="4" placeholder="例如：7, 8, 9；支持逗号、空格或换行" /></label><label><span>订阅分组</span><select v-model="form.groupId" data-testid="subscription-group-id"><option value="">请选择</option><option v-for="group in assignableGroups" :key="group.id" :value="String(group.id)">{{ group.name }}</option></select></label><label><span>有效天数</span><input v-model.number="form.days" type="number" min="1" /></label><p v-if="assignmentError" class="form-error wide" data-testid="subscription-assignment-error" role="alert">{{ assignmentError }}</p><footer class="wide"><button type="button" @click="editorOpen = false">取消</button><button class="save" type="submit" :disabled="pending === 'assign'">{{ pending === 'assign' ? '正在分配' : '确认分配' }}</button></footer></form></section></div>
     </Transition>
 
     <Transition name="fade">

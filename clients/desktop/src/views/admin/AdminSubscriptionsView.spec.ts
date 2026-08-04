@@ -11,6 +11,9 @@ const mocks = vi.hoisted(() => ({
   revoke: vi.fn(),
   restore: vi.fn(),
   groups: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastWarning: vi.fn(),
+  toastError: vi.fn(),
 }))
 
 vi.mock('@/api/admin/subscriptions', () => ({
@@ -24,6 +27,11 @@ vi.mock('@/api/admin/subscriptions', () => ({
   restoreAdminSubscription: mocks.restore,
 }))
 vi.mock('@/api/admin/users', () => ({ getAdminGroups: mocks.groups }))
+vi.mock('@/stores/toast', () => ({ toast: {
+  success: mocks.toastSuccess,
+  warning: mocks.toastWarning,
+  error: mocks.toastError,
+} }))
 
 import View from './AdminSubscriptionsView.vue'
 
@@ -130,6 +138,22 @@ describe('AdminSubscriptionsView', () => {
     expect(mocks.assign).toHaveBeenCalledWith({ user_id: 7, group_id: 2, validity_days: 30 })
   })
 
+  it('keeps assignment errors visible in the editor and emits an error toast', async () => {
+    mocks.assign.mockRejectedValueOnce(new Error('分配服务暂不可用'))
+    const wrapper = mount(View)
+    await flushPromises()
+
+    await wrapper.get('[data-testid="assign-subscription"]').trigger('click')
+    await wrapper.get('[data-testid="subscription-user-id"]').setValue('7')
+    await wrapper.get('[data-testid="subscription-group-id"]').setValue('2')
+    await wrapper.get('[data-testid="subscription-editor"]').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="subscription-assignment-error"]').text()).toContain('分配服务暂不可用')
+    expect(mocks.toastError).toHaveBeenCalledWith('订阅分配失败', { detail: '分配服务暂不可用' })
+    expect(wrapper.find('[data-testid="subscription-editor"]').exists()).toBe(true)
+  })
+
   it('bulk assigns a subscription from comma, space, or line separated user ids', async () => {
     const wrapper = mount(View)
     await flushPromises()
@@ -141,7 +165,7 @@ describe('AdminSubscriptionsView', () => {
     await flushPromises()
 
     expect(mocks.bulkAssign).toHaveBeenCalledWith({ user_ids: [7, 8, 9], group_id: 2, validity_days: 30 })
-    expect(wrapper.text()).toContain('成功 3 个')
+    expect(mocks.toastSuccess).toHaveBeenCalledWith('批量分配完成：成功 3 个，失败 0 个')
   })
 
   it('requires an in-app confirmation before revoking an active subscription', async () => {

@@ -32,6 +32,7 @@ import type {
 } from '@/api/admin/types'
 import ProviderIcon from '@/components/ProviderIcon.vue'
 import { formatDateTime, formatPlatform } from '@/lib/format'
+import { toast } from '@/stores/toast'
 
 interface UsageWindowView {
   key: string
@@ -45,7 +46,6 @@ const loading = ref(true)
 const refreshing = ref(false)
 const loadError = ref('')
 const pendingAction = ref('')
-const actionMessage = ref('')
 const filters = reactive({ search: '', platform: '', status: '' })
 const usageByAccount = reactive<Record<number, AdminAccountUsageInfo | null>>({})
 const usageLoading = reactive<Record<number, boolean>>({})
@@ -159,7 +159,6 @@ async function toggleAccount(account: AdminAccount) {
   const key = `enabled-${account.id}`
   if (pendingAction.value) return
   pendingAction.value = key
-  actionMessage.value = ''
   try {
     let updated: AdminAccount
     if (enabled) {
@@ -172,9 +171,9 @@ async function toggleAccount(account: AdminAccount) {
       updated = { ...account, ...active, ...scheduled, status: 'active', schedulable: true }
     }
     replaceAccount(updated)
-    actionMessage.value = `${account.name} 已${enabled ? '停止运行' : '恢复运行'}`
+    toast.success(`${account.name} 已${enabled ? '停止运行' : '恢复运行'}`)
   } catch (caught) {
-    actionMessage.value = caught instanceof Error && caught.message ? caught.message : '状态更新失败'
+    toast.error('状态更新失败', { detail: caught instanceof Error ? caught.message : undefined })
     await load(true)
   } finally {
     pendingAction.value = ''
@@ -185,13 +184,12 @@ async function recover(account: AdminAccount) {
   const key = `recover-${account.id}`
   if (pendingAction.value) return
   pendingAction.value = key
-  actionMessage.value = ''
   try {
     replaceAccount(await recoverAdminAccount(account.id))
     await loadUsage(account.id, true)
-    actionMessage.value = `${account.name} 的运行状态已恢复`
+    toast.success(`${account.name} 的运行状态已恢复`)
   } catch (caught) {
-    actionMessage.value = caught instanceof Error && caught.message ? caught.message : '恢复失败，请稍后重试'
+    toast.error('恢复失败', { detail: caught instanceof Error ? caught.message : '请稍后重试。' })
   } finally {
     pendingAction.value = ''
   }
@@ -226,10 +224,9 @@ async function submitConnectionTest() {
   if (!account || !selectedModel.value || pendingAction.value) return
   pendingAction.value = `test-${account.id}`
   testError.value = ''
-  actionMessage.value = ''
   try {
     const response = await testAdminAccount(account.id, { model_id: selectedModel.value, prompt: '' })
-    actionMessage.value = `${account.name}：${response.message}${response.latency_ms ? ` · ${response.latency_ms}ms` : ''}`
+    toast.success(`${account.name} 连接测试通过`, { detail: `${response.message}${response.latency_ms ? ` · ${response.latency_ms}ms` : ''}` })
     testDialogOpen.value = false
     await loadUsage(account.id, true)
   } catch (caught) {
@@ -272,7 +269,6 @@ onMounted(() => void load())
       <button class="icon-button" type="button" title="刷新账号" :disabled="refreshing" @click="load(true)"><RefreshCw :size="16" :class="{ spinning: refreshing }" /></button>
     </form>
 
-    <p v-if="actionMessage" class="action-message" data-testid="action-message" role="status">{{ actionMessage }}</p>
 
     <section class="account-content">
       <div v-if="loading" class="card-loading" aria-label="正在加载账号"><i v-for="row in 4" :key="row" /></div>
@@ -344,7 +340,7 @@ onMounted(() => void load())
 <style scoped>
 .accounts-page{width:100%;min-height:100%;padding:28px 30px 34px;overflow:auto;color:var(--text-primary)}
 .page-header{display:flex;align-items:flex-end;justify-content:space-between;gap:20px}.page-header>div>span{display:block;margin-bottom:5px;color:var(--accent);font-size:11px;font-weight:720;letter-spacing:.08em}.page-header h1{font-size:25px;line-height:1.15}.page-header p{margin-top:7px;color:var(--text-secondary);font-size:14px}.filter-bar>button,.pagination button{display:flex;height:36px;align-items:center;gap:7px;padding:0 13px;border:1px solid var(--border-subtle);border-radius:7px;background:white;color:var(--text-secondary);font-weight:620}.summary-strip{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:20px;overflow:hidden;background:rgba(255,255,255,.76);border:1px solid rgba(205,216,231,.92);border-radius:8px;box-shadow:0 6px 18px rgba(31,51,78,.04)}.summary-strip>div{display:flex;min-height:70px;align-items:center;justify-content:space-between;gap:12px;padding:0 18px;border-right:1px solid var(--border-subtle)}.summary-strip>div:last-child{border-right:0}.summary-strip span{color:var(--text-secondary);font-size:13px}.summary-strip strong{font-family:var(--font-data);font-size:20px}
-.filter-bar{display:flex;align-items:center;gap:9px;margin-top:13px}.filter-bar label{display:flex;height:38px;align-items:center;gap:7px;padding:0 11px;background:rgba(255,255,255,.75);border:1px solid var(--border-subtle);border-radius:7px;color:var(--text-tertiary)}.filter-bar .search-box{min-width:220px;flex:1}.filter-bar input,.filter-bar select{min-width:0;border:0;outline:0;background:transparent;color:var(--text-primary);font:inherit;font-size:13px}.filter-bar select{min-width:112px}.filter-bar>button[type=submit]{border-color:var(--accent);background:var(--accent);color:white}.filter-bar .icon-button{width:38px;padding:0;justify-content:center}.action-message{min-height:34px;margin:10px 0 -1px;padding:8px 11px;background:#edf5ff;border:1px solid #d4e4f8;border-radius:7px;color:#3e66a1;font-size:12px}
+.filter-bar{display:flex;align-items:center;gap:9px;margin-top:13px}.filter-bar label{display:flex;height:38px;align-items:center;gap:7px;padding:0 11px;background:rgba(255,255,255,.75);border:1px solid var(--border-subtle);border-radius:7px;color:var(--text-tertiary)}.filter-bar .search-box{min-width:220px;flex:1}.filter-bar input,.filter-bar select{min-width:0;border:0;outline:0;background:transparent;color:var(--text-primary);font:inherit;font-size:13px}.filter-bar select{min-width:112px}.filter-bar>button[type=submit]{border-color:var(--accent);background:var(--accent);color:white}.filter-bar .icon-button{width:38px;padding:0;justify-content:center}
 .account-content{min-height:300px;margin-top:14px}.account-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.account-card{display:flex;min-width:0;min-height:338px;flex-direction:column;padding:17px;background:rgba(255,255,255,.86);border:1px solid rgba(205,216,231,.94);border-radius:8px;box-shadow:0 7px 20px rgba(31,51,78,.045);animation:card-in 360ms var(--motion-ease-out) both}.account-card.attention{border-color:#e8d6d1;background:linear-gradient(145deg,rgba(255,248,246,.92),rgba(255,255,255,.88) 52%)}.card-head{display:grid;grid-template-columns:42px minmax(0,1fr) 38px;align-items:center;gap:10px}.provider-mark{display:grid;width:40px;height:40px;border:1px solid #d8e4f5;border-radius:8px;background:#edf4ff;color:#315f9f;place-items:center}.account-identity{min-width:0}.account-identity>div{display:flex;min-width:0;align-items:center;gap:8px}.account-identity h2{overflow:hidden;font-size:15px;text-overflow:ellipsis;white-space:nowrap}.account-identity p{margin-top:3px;color:var(--text-tertiary);font-size:11px}.state-dot{display:inline-flex;flex:0 0 auto;align-items:center;gap:4px;color:#a64a3b;font-size:10px;font-weight:650}.state-dot::before{width:6px;height:6px;border-radius:50%;background:currentColor;content:""}.state-dot.enabled{color:#257957}.enabled-switch{position:relative;width:36px;height:22px}.enabled-switch input{position:absolute;opacity:0}.enabled-switch i{position:absolute;inset:0;border-radius:12px;background:#d7dde6;transition:background 160ms ease}.enabled-switch i::after{position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:white;box-shadow:0 1px 3px rgba(25,40,60,.24);content:"";transition:transform 160ms ease}.enabled-switch input:checked+i{background:#2d70d2}.enabled-switch input:checked+i::after{transform:translateX(14px)}.enabled-switch input:focus-visible+i{outline:2px solid var(--accent);outline-offset:2px}.enabled-switch input:disabled+i{opacity:.52}.account-error{display:flex;align-items:flex-start;gap:7px;margin-top:12px;padding:8px 9px;background:#fff1ed;border:1px solid #efd0c9;border-radius:6px;color:#a24738;font-size:11px;line-height:1.45}.account-error svg{flex:0 0 auto;margin-top:1px}.account-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px;color:var(--text-tertiary);font-size:11px}.account-meta span{display:flex;min-width:0;align-items:center;gap:5px}.account-meta span:last-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account-meta strong{color:var(--text-primary);font-family:var(--font-data)}.group-row{display:flex;min-height:25px;flex-wrap:wrap;gap:5px;margin-top:10px}.group-row span{max-width:100%;padding:3px 7px;overflow:hidden;background:#edf3ff;border-radius:4px;color:#466ca8;font-size:10px;text-overflow:ellipsis;white-space:nowrap}.group-row em{color:var(--text-tertiary);font-size:11px;font-style:normal}
 .usage-panel{margin-top:13px;padding-top:12px;border-top:1px solid var(--border-subtle)}.usage-heading{display:flex;align-items:center;justify-content:space-between}.usage-heading strong{font-size:12px}.usage-heading button{display:grid;width:25px;height:25px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--text-tertiary);place-items:center}.usage-heading button:hover{background:var(--bg-base);color:var(--accent)}.usage-windows{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px 14px;margin-top:9px}.usage-window>div{display:flex;align-items:center;justify-content:space-between;gap:8px}.usage-window span{overflow:hidden;color:var(--text-secondary);font-size:10px;text-overflow:ellipsis;white-space:nowrap}.usage-window strong{font-family:var(--font-data);font-size:11px;font-weight:650}.usage-window>i{display:block;height:5px;margin-top:5px;overflow:hidden;border-radius:3px;background:#e7ecf2}.usage-window>i b{display:block;height:100%;border-radius:inherit;background:#4d85d7;transform-origin:left;animation:bar-in 420ms var(--motion-ease-out) both}.usage-window.warning>i b{background:#d69a34}.usage-window.critical>i b{background:#c95c50}.usage-window small{display:block;margin-top:4px;overflow:hidden;color:#8b96a4;font-size:9px;text-overflow:ellipsis;white-space:nowrap}.usage-empty{margin-top:12px;color:var(--text-tertiary);font-size:11px}.usage-loading{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:11px}.usage-loading i{height:28px;border-radius:5px;background:linear-gradient(90deg,#edf1f5 25%,#fafbfd 45%,#edf1f5 65%);background-size:240% 100%;animation:shimmer 1.15s linear infinite}.card-actions{display:flex;align-items:center;gap:8px;margin-top:auto;padding-top:15px}.card-actions button{display:flex;height:33px;align-items:center;justify-content:center;gap:6px;padding:0 11px;border:1px solid var(--border-subtle);border-radius:6px;background:white;color:var(--text-secondary);font-size:11px;font-weight:650}.card-actions button:hover{border-color:#b9cceb;color:var(--accent)}.card-actions .recovery-action{border-color:#e9c8c1;background:#fff7f5;color:#a44a3b}
 .card-loading{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.card-loading i{height:330px;border-radius:8px;background:linear-gradient(90deg,#edf1f5 25%,#fafbfd 45%,#edf1f5 65%);background-size:240% 100%;animation:shimmer 1.15s linear infinite}.page-error{display:grid;min-height:300px;place-content:center;justify-items:center;gap:8px;color:var(--text-tertiary);text-align:center}.page-error strong{color:var(--text-primary);font-size:14px}.page-error span{font-size:12px}.page-error button{margin-top:6px;padding:7px 11px;border:0;border-radius:6px;background:var(--accent);color:white}.pagination{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:14px}.pagination span{color:var(--text-tertiary);font-size:12px}.pagination button{height:32px;font-size:12px}

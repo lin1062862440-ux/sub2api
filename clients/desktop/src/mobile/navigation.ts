@@ -10,6 +10,8 @@ export type MobileRouteName =
   | 'admin-groups'
   | 'admin-users'
   | 'user-groups'
+  | 'user-group-members'
+  | 'user-group-usage'
   | 'admin-subscriptions'
 
 export type MobileIconKey =
@@ -50,7 +52,7 @@ const adminNavigation: MobileNavigation = {
     { routeName: 'admin-users', title: '用户管理', iconKey: 'user-round-cog' },
   ],
   overflow: [
-    { routeName: 'user-groups', title: '用户组', iconKey: 'building-2' },
+    { routeName: 'user-groups', title: '团队管理', iconKey: 'building-2' },
     { routeName: 'admin-subscriptions', title: '订阅管理', iconKey: 'receipt-text' },
   ],
 }
@@ -61,22 +63,30 @@ const profileItem: MobileNavigationItem = {
   iconKey: 'circle-user-round',
 }
 
+const contextualTeamRoutes: Partial<Record<MobileRouteName, string>> = {
+  'user-group-members': '成员与配额',
+  'user-group-usage': '用量分析',
+}
+
 export function mobileNavigation(workspace: MobileWorkspace): MobileNavigation {
   return workspace === 'admin' ? adminNavigation : personalNavigation
 }
 
 export function isMobileRouteAllowed(routeName: unknown, workspace: MobileWorkspace): boolean {
   if (routeName === profileItem.routeName) return true
+  if (workspace === 'admin' && typeof routeName === 'string' && routeName in contextualTeamRoutes) return true
   const navigation = mobileNavigation(workspace)
   return [...navigation.direct, ...navigation.overflow].some((item) => item.routeName === routeName)
 }
 
 export function isMobileOverflowActive(routeName: unknown, workspace: MobileWorkspace): boolean {
+  if (workspace === 'admin' && typeof routeName === 'string' && routeName in contextualTeamRoutes) return true
   return mobileNavigation(workspace).overflow.some((item) => item.routeName === routeName)
 }
 
 export function mobileRouteTitle(routeName: unknown): string {
   if (routeName === profileItem.routeName) return profileItem.title
+  if (typeof routeName === 'string' && routeName in contextualTeamRoutes) return contextualTeamRoutes[routeName as MobileRouteName] ?? ''
   for (const navigation of [personalNavigation, adminNavigation]) {
     const item = [...navigation.direct, ...navigation.overflow].find((candidate) => candidate.routeName === routeName)
     if (item) return item.title
