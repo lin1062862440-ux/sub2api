@@ -1,4 +1,5 @@
 import { previewRouteFlag } from './preview-query'
+import type { UserGroup } from '../../api/user-groups'
 
 const now = '2026-08-02T08:00:00Z'
 const visualQuery = new URLSearchParams(window.location.search)
@@ -7,10 +8,10 @@ function previewFlag(name: 'empty' | 'error') {
   return previewRouteFlag(visualQuery, name, 'user-groups')
 }
 
-let groups = [
+let groups: UserGroup[] = [
   { id: 1, name: '跨区域模型推理与超长上下文联合调度', description: '核心研发成员、跨区域模型推理与超长上下文联合调度项目用量统一查看', status: 'active' as const, member_count: 3, viewer_count: 2, prompt_capture_enabled: true, can_view_prompt: true, created_at: '2026-07-01T00:00:00Z', updated_at: now },
-  { id: 2, name: '运营团队', description: '运营、客服与内容协作成员', status: 'active' as const, member_count: 3, viewer_count: 1, created_at: '2026-07-05T00:00:00Z', updated_at: '2026-07-30T08:00:00Z' },
-  { id: 3, name: '重点客户', description: '客户成功团队的服务对象与额度跟踪', status: 'active' as const, member_count: 2, viewer_count: 3, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-28T08:00:00Z' },
+  { id: 2, name: '运营团队', description: '运营、客服与内容协作成员', status: 'active' as const, member_count: 3, viewer_count: 1, prompt_capture_enabled: false, can_view_prompt: false, created_at: '2026-07-05T00:00:00Z', updated_at: '2026-07-30T08:00:00Z' },
+  { id: 3, name: '重点客户', description: '客户成功团队的服务对象与额度跟踪', status: 'active' as const, member_count: 2, viewer_count: 3, prompt_capture_enabled: false, can_view_prompt: false, created_at: '2026-07-10T00:00:00Z', updated_at: '2026-07-28T08:00:00Z' },
 ]
 
 const members = [
