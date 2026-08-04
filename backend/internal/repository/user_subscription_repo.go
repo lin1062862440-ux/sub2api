@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/lib/pq"
 )
 
 type userSubscriptionRepository struct {
@@ -329,9 +331,76 @@ func (r *userSubscriptionRepository) List(ctx context.Context, params pagination
 			return nil, nil, err
 		}
 	}
+	if err := r.attachTeamQuotaAllocations(ctx, result); err != nil {
+		return nil, nil, err
+	}
 
 	return result, paginationResultFromTotal(int64(total), params), nil
 }
+
+func (r *userSubscriptionRepository) attachTeamQuotaAllocations(ctx context.Context, subs []service.UserSubscription) (err error) {
+	ids := make([]int64, 0, len(subs))
+	byID := make(map[int64]*service.UserSubscription, len(subs))
+	for i := range subs {
+		if subs[i].OwnerUserGroupID == nil {
+			continue
+		}
+		ids = append(ids, subs[i].ID)
+		byID[subs[i].ID] = &subs[i]
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	weekStart := service.CurrentUserGroupQuotaWeek(time.Now())
+	rows, err := clientFromContext(ctx, r.client).QueryContext(ctx, `
+		SELECT subscription.id,
+		       quota.weekly_limit_usd,
+		       CASE
+		           WHEN quota.weekly_window_start IS NULL OR quota.weekly_window_start < $2 THEN 0
+		           ELSE quota.weekly_usage_usd
+		       END,
+		       CASE
+		           WHEN quota.weekly_window_start IS NULL OR quota.weekly_window_start < $2 THEN $2
+		           ELSE quota.weekly_window_start
+		       END
+		FROM user_subscriptions subscription
+		JOIN user_group_quota_members quota
+		  ON quota.user_group_id = subscription.owner_user_group_id
+		 AND quota.user_id = subscription.user_id
+		WHERE subscription.id = ANY($1)
+		  AND subscription.owner_user_group_id IS NOT NULL`, pq.Array(ids), weekStart)
+	if err != nil {
+		return fmt.Errorf("load team quota allocations for subscriptions: %w", err)
+	}
+	defer func() {
+		if closeErr := rows.Close(); closeErr != nil && err == nil {
+			err = closeErr
+		}
+	}()
+
+	for rows.Next() {
+		var id int64
+		var limit, usage float64
+		var windowStart time.Time
+		if err := rows.Scan(&id, &limit, &usage, &windowStart); err != nil {
+			return fmt.Errorf("scan team quota allocation for subscription: %w", err)
+		}
+		if sub := byID[id]; sub != nil {
+			sub.TeamWeeklyLimitUSD = float64Pointer(limit)
+			sub.TeamWeeklyUsageUSD = float64Pointer(usage)
+			sub.TeamWeeklyWindowStart = timePointer(windowStart)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("list team quota allocations for subscriptions: %w", err)
+	}
+	return nil
+}
+
+func float64Pointer(value float64) *float64 { return &value }
+
+func timePointer(value time.Time) *time.Time { return &value }
 
 func (r *userSubscriptionRepository) ExistsByUserIDAndGroupID(ctx context.Context, userID, groupID int64) (bool, error) {
 	client := clientFromContext(ctx, r.client)

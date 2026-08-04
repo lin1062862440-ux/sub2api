@@ -782,11 +782,15 @@ func UserSubscriptionFromServiceAdmin(sub *service.UserSubscription) *AdminUserS
 		return nil
 	}
 	return &AdminUserSubscription{
-		UserSubscription: userSubscriptionFromServiceBase(sub),
-		AssignedBy:       sub.AssignedBy,
-		AssignedAt:       sub.AssignedAt,
-		Notes:            sub.Notes,
-		AssignedByUser:   UserFromServiceShallow(sub.AssignedByUser),
+		UserSubscription:      userSubscriptionFromServiceBase(sub),
+		AssignedBy:            sub.AssignedBy,
+		OwnerUserGroupID:      sub.OwnerUserGroupID,
+		AssignedAt:            sub.AssignedAt,
+		Notes:                 sub.Notes,
+		TeamWeeklyLimitUSD:    sub.TeamWeeklyLimitUSD,
+		TeamWeeklyUsageUSD:    sub.TeamWeeklyUsageUSD,
+		TeamWeeklyWindowStart: sub.TeamWeeklyWindowStart,
+		AssignedByUser:        UserFromServiceShallow(sub.AssignedByUser),
 	}
 }
 

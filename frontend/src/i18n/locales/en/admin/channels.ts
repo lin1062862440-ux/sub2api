@@ -617,6 +617,7 @@ export default {
       monthly: 'Monthly',
       noLimits: 'No limits configured',
       unlimited: 'Unlimited',
+      teamQuotaUnassigned: 'No team quota allocated',
       resetNow: 'Resetting soon',
       windowNotActive: 'Window not active',
       resetInMinutes: 'Resets in {minutes}m',

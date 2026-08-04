@@ -206,131 +206,168 @@
 
           <template #cell-usage="{ row }">
             <div class="min-w-[280px] space-y-2">
-              <!-- Daily Usage -->
-              <div v-if="row.group?.daily_limit_usd" class="usage-row">
-                <div class="flex items-center gap-2">
-                  <span class="usage-label">{{ t('admin.subscriptions.daily') }}</span>
-                  <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
-                    <div
-                      class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.daily_usage_usd, row.group?.daily_limit_usd)"
-                      :style="{
-                        width: getProgressWidth(row.daily_usage_usd, row.group?.daily_limit_usd)
-                      }"
-                    ></div>
+              <!-- Team subscriptions use the member allocation from the owning user group. -->
+              <template v-if="row.group?.subscription_type === 'team_subscription'">
+                <div v-if="row.team_weekly_limit_usd != null" class="usage-row">
+                  <div class="flex items-center gap-2">
+                    <span class="usage-label">{{ t('admin.subscriptions.weekly') }}</span>
+                    <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                      <div
+                        class="h-1.5 rounded-full transition-all"
+                        :class="getProgressClass(row.team_weekly_usage_usd, row.team_weekly_limit_usd)"
+                        :style="{
+                          width: getProgressWidth(row.team_weekly_usage_usd, row.team_weekly_limit_usd)
+                        }"
+                      ></div>
+                    </div>
+                    <span class="usage-amount">
+                      ${{ row.team_weekly_usage_usd?.toFixed(2) || '0.00' }}
+                      <span class="text-gray-400">/</span>
+                      ${{ row.team_weekly_limit_usd.toFixed(2) }}
+                    </span>
                   </div>
-                  <span class="usage-amount">
-                    ${{ row.daily_usage_usd?.toFixed(2) || '0.00' }}
-                    <span class="text-gray-400">/</span>
-                    ${{ row.group?.daily_limit_usd?.toFixed(2) }}
+                  <div class="reset-info" v-if="row.team_weekly_window_start">
+                    <Icon name="clock" size="xs" />
+                    <span>{{ formatResetTime(row.team_weekly_window_start, 'weekly') }}</span>
+                  </div>
+                </div>
+                <div
+                  v-else
+                  class="flex items-center gap-2 rounded-lg bg-gray-50 px-3 py-2 dark:bg-dark-800"
+                >
+                  <span class="text-xs font-medium text-gray-500 dark:text-gray-400">
+                    {{ t('admin.subscriptions.teamQuotaUnassigned') }}
                   </span>
                 </div>
-                <div class="reset-info" v-if="row.daily_window_start">
-                  <svg
-                    class="h-3 w-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <span>{{ formatDailyUsageWindow(row) }}</span>
-                </div>
-              </div>
+              </template>
 
-              <!-- Weekly Usage -->
-              <div v-if="row.group?.weekly_limit_usd" class="usage-row">
-                <div class="flex items-center gap-2">
-                  <span class="usage-label">{{ t('admin.subscriptions.weekly') }}</span>
-                  <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
-                    <div
-                      class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.weekly_usage_usd, row.group?.weekly_limit_usd)"
-                      :style="{
-                        width: getProgressWidth(row.weekly_usage_usd, row.group?.weekly_limit_usd)
-                      }"
-                    ></div>
+              <template v-else>
+                <!-- Daily Usage -->
+                <div v-if="row.group?.daily_limit_usd" class="usage-row">
+                  <div class="flex items-center gap-2">
+                    <span class="usage-label">{{ t('admin.subscriptions.daily') }}</span>
+                    <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                      <div
+                        class="h-1.5 rounded-full transition-all"
+                        :class="getProgressClass(row.daily_usage_usd, row.group?.daily_limit_usd)"
+                        :style="{
+                          width: getProgressWidth(row.daily_usage_usd, row.group?.daily_limit_usd)
+                        }"
+                      ></div>
+                    </div>
+                    <span class="usage-amount">
+                      ${{ row.daily_usage_usd?.toFixed(2) || '0.00' }}
+                      <span class="text-gray-400">/</span>
+                      ${{ row.group?.daily_limit_usd?.toFixed(2) }}
+                    </span>
                   </div>
-                  <span class="usage-amount">
-                    ${{ row.weekly_usage_usd?.toFixed(2) || '0.00' }}
-                    <span class="text-gray-400">/</span>
-                    ${{ row.group?.weekly_limit_usd?.toFixed(2) }}
+                  <div class="reset-info" v-if="row.daily_window_start">
+                    <svg
+                      class="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span>{{ formatDailyUsageWindow(row) }}</span>
+                  </div>
+                </div>
+
+                <!-- Weekly Usage -->
+                <div v-if="row.group?.weekly_limit_usd" class="usage-row">
+                  <div class="flex items-center gap-2">
+                    <span class="usage-label">{{ t('admin.subscriptions.weekly') }}</span>
+                    <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                      <div
+                        class="h-1.5 rounded-full transition-all"
+                        :class="getProgressClass(row.weekly_usage_usd, row.group?.weekly_limit_usd)"
+                        :style="{
+                          width: getProgressWidth(row.weekly_usage_usd, row.group?.weekly_limit_usd)
+                        }"
+                      ></div>
+                    </div>
+                    <span class="usage-amount">
+                      ${{ row.weekly_usage_usd?.toFixed(2) || '0.00' }}
+                      <span class="text-gray-400">/</span>
+                      ${{ row.group?.weekly_limit_usd?.toFixed(2) }}
+                    </span>
+                  </div>
+                  <div class="reset-info" v-if="row.weekly_window_start">
+                    <svg
+                      class="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span>{{ formatResetTime(row.weekly_window_start, 'weekly') }}</span>
+                  </div>
+                </div>
+
+                <!-- Monthly Usage -->
+                <div v-if="row.group?.monthly_limit_usd" class="usage-row">
+                  <div class="flex items-center gap-2">
+                    <span class="usage-label">{{ t('admin.subscriptions.monthly') }}</span>
+                    <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
+                      <div
+                        class="h-1.5 rounded-full transition-all"
+                        :class="getProgressClass(row.monthly_usage_usd, row.group?.monthly_limit_usd)"
+                        :style="{
+                          width: getProgressWidth(row.monthly_usage_usd, row.group?.monthly_limit_usd)
+                        }"
+                      ></div>
+                    </div>
+                    <span class="usage-amount">
+                      ${{ row.monthly_usage_usd?.toFixed(2) || '0.00' }}
+                      <span class="text-gray-400">/</span>
+                      ${{ row.group?.monthly_limit_usd?.toFixed(2) }}
+                    </span>
+                  </div>
+                  <div class="reset-info" v-if="row.monthly_window_start">
+                    <svg
+                      class="h-3 w-3"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <span>{{ formatResetTime(row.monthly_window_start, 'monthly') }}</span>
+                  </div>
+                </div>
+
+                <!-- No Limits - Unlimited badge -->
+                <div
+                  v-if="
+                    !row.group?.daily_limit_usd &&
+                    !row.group?.weekly_limit_usd &&
+                    !row.group?.monthly_limit_usd
+                  "
+                  class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
+                >
+                  <span class="text-lg text-emerald-600 dark:text-emerald-400">∞</span>
+                  <span class="text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                    {{ t('admin.subscriptions.unlimited') }}
                   </span>
                 </div>
-                <div class="reset-info" v-if="row.weekly_window_start">
-                  <svg
-                    class="h-3 w-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <span>{{ formatResetTime(row.weekly_window_start, 'weekly') }}</span>
-                </div>
-              </div>
-
-              <!-- Monthly Usage -->
-              <div v-if="row.group?.monthly_limit_usd" class="usage-row">
-                <div class="flex items-center gap-2">
-                  <span class="usage-label">{{ t('admin.subscriptions.monthly') }}</span>
-                  <div class="h-1.5 flex-1 rounded-full bg-gray-200 dark:bg-dark-600">
-                    <div
-                      class="h-1.5 rounded-full transition-all"
-                      :class="getProgressClass(row.monthly_usage_usd, row.group?.monthly_limit_usd)"
-                      :style="{
-                        width: getProgressWidth(row.monthly_usage_usd, row.group?.monthly_limit_usd)
-                      }"
-                    ></div>
-                  </div>
-                  <span class="usage-amount">
-                    ${{ row.monthly_usage_usd?.toFixed(2) || '0.00' }}
-                    <span class="text-gray-400">/</span>
-                    ${{ row.group?.monthly_limit_usd?.toFixed(2) }}
-                  </span>
-                </div>
-                <div class="reset-info" v-if="row.monthly_window_start">
-                  <svg
-                    class="h-3 w-3"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <span>{{ formatResetTime(row.monthly_window_start, 'monthly') }}</span>
-                </div>
-              </div>
-
-              <!-- No Limits - Unlimited badge -->
-              <div
-                v-if="
-                  !row.group?.daily_limit_usd &&
-                  !row.group?.weekly_limit_usd &&
-                  !row.group?.monthly_limit_usd
-                "
-                class="flex items-center gap-2 rounded-lg bg-gradient-to-r from-emerald-50 to-teal-50 px-3 py-2 dark:from-emerald-900/20 dark:to-teal-900/20"
-              >
-                <span class="text-lg text-emerald-600 dark:text-emerald-400">∞</span>
-                <span class="text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                  {{ t('admin.subscriptions.unlimited') }}
-                </span>
-              </div>
+              </template>
             </div>
           </template>
 

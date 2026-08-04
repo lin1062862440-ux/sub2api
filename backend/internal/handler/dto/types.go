@@ -648,9 +648,14 @@ type UserSubscription struct {
 type AdminUserSubscription struct {
 	UserSubscription
 
-	AssignedBy *int64    `json:"assigned_by"`
-	AssignedAt time.Time `json:"assigned_at"`
-	Notes      string    `json:"notes"`
+	AssignedBy       *int64    `json:"assigned_by"`
+	OwnerUserGroupID *int64    `json:"owner_user_group_id,omitempty"`
+	AssignedAt       time.Time `json:"assigned_at"`
+	Notes            string    `json:"notes"`
+
+	TeamWeeklyLimitUSD    *float64   `json:"team_weekly_limit_usd,omitempty"`
+	TeamWeeklyUsageUSD    *float64   `json:"team_weekly_usage_usd,omitempty"`
+	TeamWeeklyWindowStart *time.Time `json:"team_weekly_window_start,omitempty"`
 
 	AssignedByUser *User `json:"assigned_by_user,omitempty"`
 }

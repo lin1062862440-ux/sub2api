@@ -1916,6 +1916,10 @@ export interface UserSubscription {
   created_at: string
   updated_at: string
   revoked_at?: string | null
+  owner_user_group_id?: number | null
+  team_weekly_limit_usd?: number | null
+  team_weekly_usage_usd?: number | null
+  team_weekly_window_start?: string | null
   expires_at: string | null
   user?: User
   group?: Group
