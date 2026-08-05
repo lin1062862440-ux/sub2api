@@ -15,13 +15,21 @@ const mocks = vi.hoisted(() => ({
   replacePromptViewers: vi.fn(),
   update: vi.fn(),
   archive: vi.fn(),
+  getQuotaOverview: vi.fn(),
+  setQuotaPolicy: vi.fn(),
+  replaceQuotaManagers: vi.fn(),
+  updateMemberQuotas: vi.fn(),
+  replaceTeamSubscriptionGroups: vi.fn(),
+  resetQuotaUsage: vi.fn(),
   push: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
 }))
 
+const route = vi.hoisted(() => ({ params: { id: '7' }, name: 'UserGroupMembers', query: {} as Record<string, string> }))
+
 vi.mock('vue-router', () => ({
-  useRoute: () => ({ params: { id: '7' }, name: 'UserGroupMembers' }),
+  useRoute: () => route,
   useRouter: () => ({ push: mocks.push }),
 }))
 
@@ -42,6 +50,12 @@ vi.mock('@/api/userGroups', () => ({
     replacePromptViewers: mocks.replacePromptViewers,
     update: mocks.update,
     archive: mocks.archive,
+    getQuotaOverview: mocks.getQuotaOverview,
+    setQuotaPolicy: mocks.setQuotaPolicy,
+    replaceQuotaManagers: mocks.replaceQuotaManagers,
+    updateMemberQuotas: mocks.updateMemberQuotas,
+    replaceTeamSubscriptionGroups: mocks.replaceTeamSubscriptionGroups,
+    resetQuotaUsage: mocks.resetQuotaUsage,
   },
 }))
 
@@ -76,6 +90,30 @@ const member = {
   joined_at: '2026-08-01T00:00:00Z',
 }
 
+const overview = {
+  group_id: 7,
+  policy: {
+    enabled: true,
+    weekly_limit_usd: 800,
+    weekly_usage_usd: 250,
+    weekly_window_start: '2026-08-02T16:00:00Z',
+    weekly_reset_at: '2026-08-09T16:00:00Z',
+  },
+  managers: [],
+  members: [
+    { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', weekly_limit_usd: 300, weekly_usage_usd: 120 },
+  ],
+  allocated_usd: 300,
+  can_manage: true,
+  can_configure: true,
+  team_subscription_groups: [
+    { billing_group_id: 31, name: 'OpenAI Team', platform: 'openai', status: 'active' },
+  ],
+  available_team_subscription_groups: [
+    { billing_group_id: 31, name: 'OpenAI Team', platform: 'openai', status: 'active' },
+  ],
+}
+
 function mountView() {
   return mount(UserGroupMembersView, {
     global: {
@@ -90,6 +128,11 @@ function mountView() {
           template: '<button v-if="show" data-test="save-people-stub" @click="$emit(\'save\', [11])">save people</button>',
         },
         UserGroupPromptSettingsDialog: true,
+        TeamQuotaSettingsDialog: {
+          props: ['show'],
+          emits: ['close', 'save', 'manage', 'reset'],
+          template: '<div v-if="show" data-test="quota-settings-stub"><button data-test="close-policy-stub" @click="$emit(\'close\')">close</button><button data-test="save-policy-stub" @click="$emit(\'save\', { enabled: true, weeklyLimit: 900, teamSubscriptionIds: [31] })">save policy</button></div>',
+        },
         ConfirmDialog: true,
       },
     },
@@ -105,6 +148,11 @@ describe('UserGroupMembersView', () => {
     mocks.getViewers.mockResolvedValue([])
     mocks.getPromptViewers.mockResolvedValue([])
     mocks.replaceMembers.mockResolvedValue(undefined)
+    mocks.getQuotaOverview.mockResolvedValue(overview)
+    mocks.updateMemberQuotas.mockResolvedValue(undefined)
+    mocks.replaceTeamSubscriptionGroups.mockResolvedValue(undefined)
+    mocks.setQuotaPolicy.mockResolvedValue(undefined)
+    route.query = {}
   })
 
   it('loads the selected team and renders its member roster', async () => {
@@ -113,8 +161,39 @@ describe('UserGroupMembersView', () => {
 
     expect(mocks.getMembers).toHaveBeenCalledWith(7)
     expect(wrapper.text()).toContain('Alice')
-    expect(wrapper.get('[data-test="member-summary"]').text()).toContain('1')
+    expect(wrapper.get('[data-test="team-quota-summary"]').text()).toContain('$800.00')
+    expect(wrapper.get('[data-test="team-member-11"]').text()).toContain('$120.00')
+    expect(wrapper.get('[data-test="team-member-11"]').text()).toContain('40%')
+    expect(wrapper.text()).toContain('OpenAI Team')
     expect(wrapper.get('[data-test="manage-members"]').exists()).toBe(true)
+  })
+
+  it('saves member allocations from the combined workspace', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-test="member-quota-11"]').setValue('350')
+    await wrapper.get('[data-test="save-member-quotas"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.updateMemberQuotas).toHaveBeenCalledWith(7, [
+      { user_id: 11, weekly_limit_usd: 350 },
+    ])
+    expect(mocks.success).toHaveBeenCalledWith('userGroups.quotas.allocationsSaved')
+  })
+
+  it('opens quota settings for legacy quota links', async () => {
+    route.query = { openQuota: '1' }
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.get('[data-test="quota-settings-stub"]').exists()).toBe(true)
+
+    await wrapper.get('[data-test="close-policy-stub"]').trigger('click')
+    await wrapper.get('[data-test="refresh-team-workspace"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="quota-settings-stub"]').exists()).toBe(false)
   })
 
   it('lets administrators update members from the detail page', async () => {
@@ -131,11 +210,24 @@ describe('UserGroupMembersView', () => {
 
   it('keeps management controls hidden for delegated viewers', async () => {
     mocks.canManage = false
+    mocks.getQuotaOverview.mockResolvedValue({ ...overview, can_manage: false, can_configure: false })
     const wrapper = mountView()
     await flushPromises()
 
     expect(wrapper.find('[data-test="manage-members"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="edit-group"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="save-member-quotas"]').exists()).toBe(false)
     expect(wrapper.text()).toContain('Alice')
+  })
+
+  it('lets delegated quota managers allocate members without team administration controls', async () => {
+    mocks.canManage = false
+    mocks.getQuotaOverview.mockResolvedValue({ ...overview, can_manage: true, can_configure: false })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="manage-members"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="open-quota-settings"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="save-member-quotas"]').exists()).toBe(true)
   })
 })

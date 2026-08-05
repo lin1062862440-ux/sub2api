@@ -82,7 +82,6 @@ const route = useRoute()
 const { t } = useI18n()
 const tabs = computed(() => [
   { key: 'members', routeName: 'UserGroupMembers' },
-  { key: 'planQuota', routeName: 'UserGroupPlanQuota' },
   { key: 'usage', routeName: 'UserGroupUsage' },
 ])
 </script>

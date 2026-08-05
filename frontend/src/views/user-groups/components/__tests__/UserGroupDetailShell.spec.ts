@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import UserGroupDetailShell from '../UserGroupDetailShell.vue'
 
-const route = reactive({ name: 'UserGroupPlanQuota' })
+const route = reactive({ name: 'UserGroupMembers' })
 
 vi.mock('vue-router', () => ({
   useRoute: () => route,
@@ -35,9 +35,9 @@ describe('UserGroupDetailShell', () => {
 
     expect(wrapper.get('[data-test="back-to-group-list"]').exists()).toBe(true)
     expect(wrapper.getComponent('[data-test="group-detail-tab-members"]').props('to')).toEqual({ name: 'UserGroupMembers', params: { id: '7' } })
-    expect(wrapper.getComponent('[data-test="group-detail-tab-planQuota"]').props('to')).toEqual({ name: 'UserGroupPlanQuota', params: { id: '7' } })
     expect(wrapper.getComponent('[data-test="group-detail-tab-usage"]').props('to')).toEqual({ name: 'UserGroupUsage', params: { id: '7' } })
-    expect(wrapper.get('[data-test="group-detail-tab-planQuota"]').attributes('aria-current')).toBe('page')
+    expect(wrapper.find('[data-test="group-detail-tab-planQuota"]').exists()).toBe(false)
+    expect(wrapper.get('[data-test="group-detail-tab-members"]').attributes('aria-current')).toBe('page')
   })
 
   it('shows delegated access without changing the team header', () => {

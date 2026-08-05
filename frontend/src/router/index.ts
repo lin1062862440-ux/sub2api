@@ -14,6 +14,7 @@ import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
 import { resolveUserGroupRouteAccess } from './userGroupAccess'
+import { legacyUserGroupQuotaDestination, userGroupQuotaDestination } from './userGroupRoutes'
 
 /**
  * Route definitions with lazy loading
@@ -330,7 +331,7 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/user-groups/:id/plan-quota',
     name: 'UserGroupPlanQuota',
-    component: () => import('@/views/user-groups/UserGroupQuotasView.vue'),
+    redirect: to => userGroupQuotaDestination(to.params.id, to.query),
     meta: {
       requiresAuth: true,
       requiresAdmin: false,
@@ -355,10 +356,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/user-group-subscriptions',
-    redirect: to => {
-      const id = typeof to.query.group_id === 'string' ? to.query.group_id : ''
-      return /^\d+$/.test(id) ? { name: 'UserGroupPlanQuota', params: { id } } : { name: 'UserGroups' }
-    },
+    redirect: to => legacyUserGroupQuotaDestination(to.query.group_id),
   },
   {
     path: '/user-group-usage',
@@ -369,10 +367,7 @@ const routes: RouteRecordRaw[] = [
   },
   {
     path: '/user-group-quotas',
-    redirect: to => {
-      const id = typeof to.query.group_id === 'string' ? to.query.group_id : ''
-      return /^\d+$/.test(id) ? { name: 'UserGroupPlanQuota', params: { id } } : { name: 'UserGroups' }
-    },
+    redirect: to => legacyUserGroupQuotaDestination(to.query.group_id),
   },
   {
     path: '/purchase',
