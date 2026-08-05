@@ -1,6 +1,6 @@
 [package]
 name = "linai-windows-installer"
-version = "0.1.7"
+version = "0.1.8"
 description = "LinAI Windows installer experience"
 authors = ["LinAI"]
 edition = "2021"
