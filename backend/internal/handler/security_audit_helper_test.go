@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/gin-gonic/gin"
@@ -76,6 +77,33 @@ func TestUserGroupPromptCaptureDispatchesEveryWebSocketTurn(t *testing.T) {
 			[]byte(`{"type":"response.create","response":{"input":"turn"}}`), stage)
 	}
 	require.Equal(t, int64(2), spy.calls.Load())
+}
+
+func TestBuildSecurityAuditRequestUsesCanonicalClientRequestID(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	request := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	ctx := context.WithValue(request.Context(), ctxkey.RequestID, "local-request-ignored")
+	ctx = context.WithValue(ctx, ctxkey.ClientRequestID, "client-request-123")
+	c.Request = request.WithContext(ctx)
+
+	auditRequest := buildSecurityAuditRequest(c, nil, middleware2.AuthSubject{UserID: 7}, "anthropic_messages", "claude", nil, "http")
+
+	require.Equal(t, "client:client-request-123", auditRequest.RequestID)
+}
+
+func TestBuildSecurityAuditRequestUsesCanonicalLocalRequestIDFallback(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	request := httptest.NewRequest(http.MethodPost, "/v1/messages", nil)
+	ctx := context.WithValue(request.Context(), ctxkey.RequestID, "local-request-456")
+	c.Request = request.WithContext(ctx)
+
+	auditRequest := buildSecurityAuditRequest(c, nil, middleware2.AuthSubject{UserID: 7}, "anthropic_messages", "claude", nil, "http")
+
+	require.Equal(t, "local:local-request-456", auditRequest.RequestID)
 }
 
 type promptCaptureDispatcherSpy struct {

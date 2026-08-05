@@ -9,6 +9,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestid"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
@@ -209,13 +210,8 @@ func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *bill
 }
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
-	if ctx != nil {
-		if clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
-			return "client:" + strings.TrimSpace(clientRequestID)
-		}
-		if requestID, _ := ctx.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
-			return "local:" + strings.TrimSpace(requestID)
-		}
+	if contextRequestID := requestid.FromContext(ctx); contextRequestID != "" {
+		return contextRequestID
 	}
 	if requestID := strings.TrimSpace(upstreamRequestID); requestID != "" {
 		return requestID
@@ -227,15 +223,7 @@ func resolveUsageBillingPayloadFingerprint(ctx context.Context, requestPayloadHa
 	if payloadHash := strings.TrimSpace(requestPayloadHash); payloadHash != "" {
 		return payloadHash
 	}
-	if ctx != nil {
-		if clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
-			return "client:" + strings.TrimSpace(clientRequestID)
-		}
-		if requestID, _ := ctx.Value(ctxkey.RequestID).(string); strings.TrimSpace(requestID) != "" {
-			return "local:" + strings.TrimSpace(requestID)
-		}
-	}
-	return ""
+	return requestid.FromContext(ctx)
 }
 
 func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsageBillingParams) *UsageBillingCommand {
