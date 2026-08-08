@@ -114,6 +114,18 @@ const overview = {
   ],
 }
 
+const rankingMembers = [
+  { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', joined_at: '2026-08-01T00:00:00Z' },
+  { user_id: 12, email: 'bob@example.com', username: 'Bob', status: 'active', joined_at: '2026-08-01T00:00:00Z' },
+  { user_id: 13, email: 'carol@example.com', username: 'Carol', status: 'active', joined_at: '2026-08-01T00:00:00Z' },
+]
+
+const rankingQuotaMembers = [
+  { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', weekly_limit_usd: 100, weekly_usage_usd: 40 },
+  { user_id: 12, email: 'bob@example.com', username: 'Bob', status: 'active', weekly_limit_usd: 300, weekly_usage_usd: 90 },
+  { user_id: 13, email: 'carol@example.com', username: 'Carol', status: 'active', weekly_limit_usd: 75, weekly_usage_usd: 60 },
+]
+
 function mountView() {
   return mount(UserGroupMembersView, {
     global: {
@@ -137,6 +149,10 @@ function mountView() {
       },
     },
   })
+}
+
+function renderedMemberIds(wrapper: ReturnType<typeof mountView>) {
+  return wrapper.findAll('[data-test^="team-member-"]').map(row => Number(row.attributes('data-test').replace('team-member-', '')))
 }
 
 describe('UserGroupMembersView', () => {
@@ -166,6 +182,34 @@ describe('UserGroupMembersView', () => {
     expect(wrapper.get('[data-test="team-member-11"]').text()).toContain('40%')
     expect(wrapper.text()).toContain('OpenAI Team')
     expect(wrapper.get('[data-test="manage-members"]').exists()).toBe(true)
+  })
+
+  it('sorts by actual weekly usage descending by default', async () => {
+    mocks.getMembers.mockResolvedValue(rankingMembers)
+    mocks.getQuotaOverview.mockResolvedValue({ ...overview, members: rankingQuotaMembers })
+    const wrapper = mountView()
+    await flushPromises()
+
+    expect(renderedMemberIds(wrapper)).toEqual([12, 13, 11])
+    expect(wrapper.get('[data-test="usage-sort-actual"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-test="usage-sort-utilization"]').attributes('aria-pressed')).toBe('false')
+  })
+
+  it('switches to saved quota utilization without draft-driven row movement', async () => {
+    mocks.getMembers.mockResolvedValue(rankingMembers)
+    mocks.getQuotaOverview.mockResolvedValue({ ...overview, members: rankingQuotaMembers })
+    const wrapper = mountView()
+    await flushPromises()
+
+    await wrapper.get('[data-test="usage-sort-utilization"]').trigger('click')
+
+    expect(renderedMemberIds(wrapper)).toEqual([13, 11, 12])
+    expect(wrapper.get('[data-test="usage-sort-actual"]').attributes('aria-pressed')).toBe('false')
+    expect(wrapper.get('[data-test="usage-sort-utilization"]').attributes('aria-pressed')).toBe('true')
+
+    await wrapper.get('[data-test="member-quota-11"]').setValue('1000')
+
+    expect(renderedMemberIds(wrapper)).toEqual([13, 11, 12])
   })
 
   it('saves member allocations from the combined workspace', async () => {

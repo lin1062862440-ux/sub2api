@@ -110,17 +110,41 @@
               <h2 class="text-base font-semibold text-gray-950 dark:text-white">{{ t('userGroups.quotas.memberAllocations') }}</h2>
               <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">{{ t('userGroups.groups.rosterHint') }}</p>
             </div>
-            <button
-              v-if="canManageQuota && overview?.policy.enabled"
-              class="btn btn-primary min-h-11 shrink-0"
-              type="button"
-              data-test="save-member-quotas"
-              :disabled="savingMemberQuotas || !memberDraftDirty || memberDraftInvalid"
-              @click="saveMemberQuotas"
-            >
-              <Icon v-if="savingMemberQuotas" name="refresh" size="sm" class="mr-2 animate-spin" />
-              {{ savingMemberQuotas ? t('common.saving') : t('userGroups.quotas.saveAllocations') }}
-            </button>
+            <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+              <div v-if="overview && workspaceMembers.length > 1" class="inline-flex min-h-11 rounded-md bg-gray-100 p-1 dark:bg-dark-800" role="group" :aria-label="t('userGroups.quotas.usageSort')">
+                <button
+                  type="button"
+                  data-test="usage-sort-actual"
+                  class="rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                  :class="usageSortMetric === 'actual' ? 'bg-white text-gray-950 shadow-sm dark:bg-dark-700 dark:text-white' : 'text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white'"
+                  :aria-pressed="usageSortMetric === 'actual'"
+                  @click="usageSortMetric = 'actual'"
+                >
+                  {{ t('userGroups.quotas.actualUsage') }}
+                </button>
+                <button
+                  type="button"
+                  data-test="usage-sort-utilization"
+                  class="rounded px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500"
+                  :class="usageSortMetric === 'utilization' ? 'bg-white text-gray-950 shadow-sm dark:bg-dark-700 dark:text-white' : 'text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white'"
+                  :aria-pressed="usageSortMetric === 'utilization'"
+                  @click="usageSortMetric = 'utilization'"
+                >
+                  {{ t('userGroups.quotas.utilization') }}
+                </button>
+              </div>
+              <button
+                v-if="canManageQuota && overview?.policy.enabled"
+                class="btn btn-primary min-h-11 shrink-0"
+                type="button"
+                data-test="save-member-quotas"
+                :disabled="savingMemberQuotas || !memberDraftDirty || memberDraftInvalid"
+                @click="saveMemberQuotas"
+              >
+                <Icon v-if="savingMemberQuotas" name="refresh" size="sm" class="mr-2 animate-spin" />
+                {{ savingMemberQuotas ? t('common.saving') : t('userGroups.quotas.saveAllocations') }}
+              </button>
+            </div>
           </div>
 
           <p v-if="membersError" data-test="team-members-error" class="flex flex-col gap-3 border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300 sm:flex-row sm:items-center sm:justify-between">
@@ -140,7 +164,7 @@
               <span>{{ t('userGroups.quotas.usage') }}</span>
               <span>{{ t('userGroups.quotas.memberLimit') }}</span>
             </div>
-            <article v-for="member in workspaceMembers" :key="member.user_id" class="grid gap-4 border-t border-gray-100 px-4 py-4 first:border-t-0 dark:border-dark-700 sm:px-5 xl:grid-cols-[minmax(220px,1.15fr)_100px_minmax(210px,1fr)_170px] xl:items-center xl:gap-5" :data-test="`team-member-${member.user_id}`">
+            <article v-for="member in sortedWorkspaceMembers" :key="member.user_id" class="grid gap-4 border-t border-gray-100 px-4 py-4 first:border-t-0 dark:border-dark-700 sm:px-5 xl:grid-cols-[minmax(220px,1.15fr)_100px_minmax(210px,1fr)_170px] xl:items-center xl:gap-5" :data-test="`team-member-${member.user_id}`">
               <div class="flex min-w-0 items-center gap-3">
                 <img :src="resolveAvatarUrl(member.avatar_url)" :alt="member.username || member.email" class="h-10 w-10 shrink-0 rounded-full bg-gray-100 object-cover ring-1 ring-gray-950/5 dark:bg-dark-800 dark:ring-white/10" />
                 <div class="min-w-0">
@@ -258,6 +282,8 @@ const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+type UsageSortMetric = 'actual' | 'utilization'
+
 const canManage = computed(() => authStore.canManageUserGroups)
 const groupId = computed(() => Number(route.params.id))
 const group = ref<UserGroup | null>(null)
@@ -289,6 +315,7 @@ const savingQuotaManagers = ref(false)
 const resettingUsage = ref(false)
 const quotaSettingsError = ref('')
 const legacyQuotaHandled = ref(false)
+const usageSortMetric = ref<UsageSortMetric>('actual')
 
 const loadingData = computed(() => groupLoading.value || membersLoading.value || quotaLoading.value)
 const canManageQuota = computed(() => overview.value?.can_manage === true)
@@ -312,6 +339,18 @@ const workspaceMembers = computed<UserGroupMember[]>(() => {
   }
   return Array.from(rows.values())
 })
+const sortedWorkspaceMembers = computed(() => workspaceMembers.value
+  .map((member, index) => ({ member, index }))
+  .sort((left, right) => {
+    const leftValue = usageSortMetric.value === 'actual'
+      ? normalizedWeeklyUsage(left.member.user_id)
+      : persistedMemberUsagePercent(left.member.user_id)
+    const rightValue = usageSortMetric.value === 'actual'
+      ? normalizedWeeklyUsage(right.member.user_id)
+      : persistedMemberUsagePercent(right.member.user_id)
+    return rightValue - leftValue || left.index - right.index
+  })
+  .map(({ member }) => member))
 
 function errorMessage(error: unknown) {
   return error instanceof Error && error.message ? error.message : t('userGroups.common.loadFailed')
@@ -370,6 +409,19 @@ async function loadGroupData() {
 
 function quotaMember(userId: number) {
   return overview.value?.members.find(member => member.user_id === userId)
+}
+
+function normalizedWeeklyUsage(userId: number) {
+  const used = quotaMember(userId)?.weekly_usage_usd ?? 0
+  return Number.isFinite(used) ? used : 0
+}
+
+function persistedMemberUsagePercent(userId: number) {
+  const quota = quotaMember(userId)
+  const used = Number.isFinite(quota?.weekly_usage_usd) ? quota?.weekly_usage_usd ?? 0 : 0
+  const limit = Number.isFinite(quota?.weekly_limit_usd) ? quota?.weekly_limit_usd ?? 0 : 0
+  if (limit <= 0) return used > 0 ? 100 : 0
+  return Math.min(100, Math.round((used / limit) * 100))
 }
 
 function memberLimit(userId: number) {
