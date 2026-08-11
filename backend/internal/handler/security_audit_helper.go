@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/sha256"
 	"net/http"
 	"strings"
 
@@ -14,9 +15,18 @@ import (
 
 const securityAuditCompletedContextKey = "sub2api.security_audit.completed"
 const userGroupPromptCaptureCompletedContextKey = "sub2api.user_group_prompt_capture.completed"
+const securityAuditWSTurnContextKey = "sub2api.security_audit.ws_turn"
+const securityAuditWSDedupeContextKey = "sub2api.security_audit.ws_dedupe"
 
 type userPromptCaptureDispatcher interface {
 	Dispatch(securityaudit.Request)
+}
+
+type securityAuditWSDedupeEntry struct {
+	stage    string
+	turn     int
+	bodyHash [sha256.Size]byte
+	decision securityaudit.Decision
 }
 
 // cachesSecurityAuditCompletion reports whether a successful audit may be
@@ -25,6 +35,15 @@ type userPromptCaptureDispatcher interface {
 func cachesSecurityAuditCompletion(stage string) bool {
 	switch strings.TrimSpace(stage) {
 	case "", "http":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSecurityAuditWebSocketStage(stage string) bool {
+	switch strings.TrimSpace(stage) {
+	case "first_turn", "subsequent_turn":
 		return true
 	default:
 		return false
@@ -94,6 +113,25 @@ func runSecurityAudit(c *gin.Context, reqLog *zap.Logger, coordinator *securitya
 		}
 		return &decision
 	}
+	if isSecurityAuditWebSocketStage(request.Stage) {
+		if turnNo, ok := securityAuditWSTurn(c); ok {
+			bodyHash := sha256.Sum256(body)
+			if cached, exists := c.Get(securityAuditWSDedupeContextKey); exists {
+				if entry, ok := cached.(securityAuditWSDedupeEntry); ok &&
+					entry.stage == request.Stage && entry.turn == turnNo && entry.bodyHash == bodyHash {
+					decision := entry.decision
+					return &decision
+				}
+			}
+			decision := coordinator.Check(c.Request.Context(), request)
+			if decision.Kind == securityaudit.DecisionAllow {
+				c.Set(securityAuditWSDedupeContextKey, securityAuditWSDedupeEntry{
+					stage: request.Stage, turn: turnNo, bodyHash: bodyHash, decision: decision,
+				})
+			}
+			return &decision
+		}
+	}
 	if reqLog != nil {
 		reqLog.Info("security_audit.gateway_check_start",
 			zap.String("request_id", request.RequestID), zap.Int64("user_id", request.UserID),
@@ -113,6 +151,15 @@ func runSecurityAudit(c *gin.Context, reqLog *zap.Logger, coordinator *securitya
 			zap.String("stage", request.Stage))
 	}
 	return &decision
+}
+
+func securityAuditWSTurn(c *gin.Context) (int, bool) {
+	turn, exists := c.Get(securityAuditWSTurnContextKey)
+	if !exists {
+		return 0, false
+	}
+	turnNo, ok := turn.(int)
+	return turnNo, ok
 }
 
 func buildSecurityAuditRequest(c *gin.Context, apiKey *service.APIKey, subject middleware2.AuthSubject, protocol, model string, body []byte, stage string) securityaudit.Request {
