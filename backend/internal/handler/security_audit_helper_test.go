@@ -213,8 +213,8 @@ func TestRunSecurityAuditLogsWebSocketChecksAndCacheHits(t *testing.T) {
 	c.Set(securityAuditWSTurnContextKey, 2)
 	payload := []byte(`{"type":"response.create","response":{"input":"same turn"}}`)
 
-	runSecurityAudit(c, reqLog, coordinator, nil, nil, middleware2.AuthSubject{UserID: 7}, "openai_responses", "gpt-test", payload, "subsequent_turn")
-	runSecurityAudit(c, reqLog, coordinator, nil, nil, middleware2.AuthSubject{UserID: 7}, "openai_responses", "gpt-test", payload, "subsequent_turn")
+	runSecurityAudit(c, reqLog, coordinator, nil, nil, nil, middleware2.AuthSubject{UserID: 7}, "openai_responses", "gpt-test", payload, "subsequent_turn")
+	runSecurityAudit(c, reqLog, coordinator, nil, nil, nil, middleware2.AuthSubject{UserID: 7}, "openai_responses", "gpt-test", payload, "subsequent_turn")
 
 	startLogs := logs.FilterMessage("security_audit.gateway_check_start").All()
 	require.Len(t, startLogs, 1)
