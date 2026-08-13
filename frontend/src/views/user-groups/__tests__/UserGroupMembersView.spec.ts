@@ -96,12 +96,13 @@ const overview = {
     enabled: true,
     weekly_limit_usd: 800,
     weekly_usage_usd: 250,
+    weekly_cumulative_usage_usd: 390,
     weekly_window_start: '2026-08-02T16:00:00Z',
     weekly_reset_at: '2026-08-09T16:00:00Z',
   },
   managers: [],
   members: [
-    { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', weekly_limit_usd: 300, weekly_usage_usd: 120 },
+    { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', weekly_limit_usd: 300, weekly_usage_usd: 120, weekly_cumulative_usage_usd: 180 },
   ],
   allocated_usd: 300,
   can_manage: true,
@@ -121,9 +122,9 @@ const rankingMembers = [
 ]
 
 const rankingQuotaMembers = [
-  { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', weekly_limit_usd: 100, weekly_usage_usd: 40 },
-  { user_id: 12, email: 'bob@example.com', username: 'Bob', status: 'active', weekly_limit_usd: 300, weekly_usage_usd: 90 },
-  { user_id: 13, email: 'carol@example.com', username: 'Carol', status: 'active', weekly_limit_usd: 75, weekly_usage_usd: 60 },
+  { user_id: 11, email: 'alice@example.com', username: 'Alice', status: 'active', weekly_limit_usd: 100, weekly_usage_usd: 40, weekly_cumulative_usage_usd: 100 },
+  { user_id: 12, email: 'bob@example.com', username: 'Bob', status: 'active', weekly_limit_usd: 300, weekly_usage_usd: 90, weekly_cumulative_usage_usd: 20 },
+  { user_id: 13, email: 'carol@example.com', username: 'Carol', status: 'active', weekly_limit_usd: 75, weekly_usage_usd: 60, weekly_cumulative_usage_usd: 80 },
 ]
 
 function mountView() {
@@ -178,19 +179,21 @@ describe('UserGroupMembersView', () => {
     expect(mocks.getMembers).toHaveBeenCalledWith(7)
     expect(wrapper.text()).toContain('Alice')
     expect(wrapper.get('[data-test="team-quota-summary"]').text()).toContain('$800.00')
+    expect(wrapper.get('[data-test="team-quota-summary"]').text()).toContain('$390.00')
     expect(wrapper.get('[data-test="team-member-11"]').text()).toContain('$120.00')
+    expect(wrapper.get('[data-test="team-member-11"]').text()).toContain('$180.00')
     expect(wrapper.get('[data-test="team-member-11"]').text()).toContain('40%')
     expect(wrapper.text()).toContain('OpenAI Team')
     expect(wrapper.get('[data-test="manage-members"]').exists()).toBe(true)
   })
 
-  it('sorts by actual weekly usage descending by default', async () => {
+  it('sorts by cumulative weekly usage descending by default', async () => {
     mocks.getMembers.mockResolvedValue(rankingMembers)
     mocks.getQuotaOverview.mockResolvedValue({ ...overview, members: rankingQuotaMembers })
     const wrapper = mountView()
     await flushPromises()
 
-    expect(renderedMemberIds(wrapper)).toEqual([12, 13, 11])
+    expect(renderedMemberIds(wrapper)).toEqual([11, 13, 12])
     expect(wrapper.get('[data-test="usage-sort-actual"]').attributes('aria-pressed')).toBe('true')
     expect(wrapper.get('[data-test="usage-sort-utilization"]').attributes('aria-pressed')).toBe('false')
   })

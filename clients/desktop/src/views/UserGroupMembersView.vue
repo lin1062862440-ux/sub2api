@@ -61,6 +61,7 @@ const canConfigureQuota = computed(() => overview.value?.can_configure === true)
 const selectedPeople = computed(() => peopleMode.value === 'members' ? members.value : viewers.value)
 const weeklyLimit = computed(() => overview.value?.policy.weekly_limit_usd ?? 0)
 const weeklyUsed = computed(() => overview.value?.policy.weekly_usage_usd ?? 0)
+const weeklyCumulativeUsed = computed(() => overview.value?.policy.weekly_cumulative_usage_usd ?? overview.value?.policy.weekly_usage_usd ?? 0)
 const allocated = computed(() => Object.values(memberLimits.value).reduce((sum, raw) => {
   const value = Number(raw)
   return sum + (Number.isFinite(value) && value >= 0 ? value : 0)
@@ -151,6 +152,11 @@ function usagePercent(userId: number) {
   const used = quotaMember(userId)?.weekly_usage_usd ?? 0
   const limit = memberLimit(userId)
   return limit > 0 ? Math.min(100, Math.round(used / limit * 100)) : used > 0 ? 100 : 0
+}
+
+function cumulativeUsage(userId: number) {
+  const quota = quotaMember(userId)
+  return quota?.weekly_cumulative_usage_usd ?? quota?.weekly_usage_usd ?? 0
 }
 
 async function openPeople(mode: 'members' | 'viewers') {
@@ -310,7 +316,8 @@ onMounted(() => void load())
       <section v-if="overview" class="team-summary" data-testid="team-quota-summary">
         <div><span>成员数量</span><strong>{{ group.member_count }} 人</strong></div>
         <div><span>团队周配额</span><strong>{{ formatCost(weeklyLimit) }}</strong></div>
-        <div><span>本周用量</span><strong class="used">{{ formatCost(weeklyUsed) }}</strong></div>
+        <div><span>当前窗口已用</span><strong class="used">{{ formatCost(weeklyUsed) }}</strong></div>
+        <div><span>本周累计消费</span><strong>{{ formatCost(weeklyCumulativeUsed) }}</strong></div>
         <div><span>已分配成员额度</span><strong>{{ formatCost(allocated) }}</strong></div>
         <div><span>未分配额度</span><strong :class="{ exhausted: overview.policy.enabled && unallocated <= 0 }">{{ formatCost(unallocated) }}</strong></div>
       </section>
@@ -337,11 +344,11 @@ onMounted(() => void load())
         <div v-if="membersLoading && !members.length" class="roster-loading"><i v-for="n in 5" :key="n" /></div>
         <div v-else-if="!members.length && !membersError" class="roster-empty">暂无成员</div>
         <template v-else>
-          <div class="roster-row head"><span>成员</span><span>访问状态</span><span>本周用量</span><span>使用进度</span><span>成员周配额</span></div>
+          <div class="roster-row head"><span>成员</span><span>访问状态</span><span>额度使用</span><span>使用进度</span><span>成员周配额</span></div>
           <article v-for="member in members" :key="member.user_id" class="roster-row" :data-testid="`team-member-row-${member.user_id}`">
             <div><UserAvatar :name="member.username || member.email" :src="member.avatar_url" /><span><strong>{{ member.username || member.email }}</strong><small>{{ member.email }}</small></span></div>
             <em>{{ member.status === 'active' ? '可访问' : member.status }}</em>
-            <strong class="member-usage">{{ formatCost(quotaMember(member.user_id)?.weekly_usage_usd ?? 0) }}</strong>
+            <div class="member-usage"><strong>当前窗口：{{ formatCost(quotaMember(member.user_id)?.weekly_usage_usd ?? 0) }}</strong><small>本周累计：{{ formatCost(cumulativeUsage(member.user_id)) }}</small></div>
             <div class="member-progress"><i><b :style="{ width: `${usagePercent(member.user_id)}%` }" :class="{ full: usagePercent(member.user_id) >= 100 }" /></i><small>{{ usagePercent(member.user_id) }}%</small></div>
             <label class="member-quota-input"><span>$</span><input v-model="memberLimits[member.user_id]" type="number" min="0" step="0.01" :disabled="!canManageQuotas" :data-testid="`member-quota-${member.user_id}`" /></label>
           </article>
@@ -359,11 +366,11 @@ onMounted(() => void load())
 
 <style scoped>
 .team-detail-page{width:100%;min-height:100%;padding:28px 30px 34px;overflow:auto}.ug-message{margin-top:12px}.team-error{display:grid;min-height:280px;margin-top:14px;color:var(--text-tertiary);place-content:center;justify-items:center;gap:7px}.team-error strong{color:var(--text-primary)}.team-error button{height:34px;padding:0 12px;border:0;border-radius:6px;background:var(--accent);color:white}.team-summary{display:grid;grid-template-columns:repeat(3,1fr);margin-top:14px;overflow:hidden;border:1px solid var(--border-subtle);border-radius:8px;background:rgba(255,255,255,.82)}.team-summary>div{display:grid;min-height:72px;align-content:center;gap:5px;padding:0 16px;border-right:1px solid var(--border-subtle)}.team-summary>div:last-child{border:0}.team-summary span{color:var(--text-tertiary);font-size:10px}.team-summary strong{font-family:var(--font-data);font-size:17px}.team-toolbar{display:flex;gap:7px;margin-top:12px}.team-toolbar button{display:flex;height:34px;align-items:center;gap:6px;padding:0 10px;border:1px solid var(--border-subtle);border-radius:6px;background:white;color:var(--text-secondary)}.team-toolbar .danger{color:var(--danger)}.roster{margin-top:12px;overflow:hidden;border:1px solid var(--border-subtle);border-radius:8px;background:rgba(255,255,255,.84)}.roster>header{display:flex;min-height:64px;align-items:center;justify-content:space-between;padding:0 16px;border-bottom:1px solid var(--border-subtle)}.roster h2{margin:0;font-size:14px}.roster p{margin:3px 0 0;color:var(--text-tertiary);font-size:10px}.roster>header>span{color:var(--text-tertiary);font-size:11px}.roster-row{display:grid;min-height:62px;grid-template-columns:minmax(220px,1fr) 110px 150px;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid var(--border-subtle);font-size:11px}.roster-row:last-child{border:0}.roster-row.head{min-height:38px;background:var(--bg-base);color:var(--text-tertiary);font-size:10px}.roster-row>div{display:flex;min-width:0;align-items:center;gap:9px}.roster-row :deep(.user-avatar){width:34px;height:34px}.roster-row>div>span{display:grid;min-width:0;gap:2px}.roster-row strong,.roster-row small{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.roster-row small,.roster-row time{color:var(--text-tertiary)}.roster-row em{width:max-content;padding:4px 7px;border-radius:5px;background:#eaf8f1;color:#277a58;font-style:normal}.roster-loading{display:grid;gap:1px}.roster-loading i{height:62px;background:var(--skeleton);animation:pulse 1.2s infinite}.roster-empty{display:grid;min-height:220px;color:var(--text-tertiary);place-items:center}@container app-content (max-width:700px){.team-detail-page{padding:24px}.roster-row{grid-template-columns:minmax(180px,1fr) 90px}.roster-row>*:last-child{display:none}}
-.team-summary{grid-template-columns:repeat(5,minmax(0,1fr))}.team-summary .used{color:var(--accent-strong)}.team-summary .exhausted{color:var(--danger)}
+.team-summary{grid-template-columns:repeat(6,minmax(0,1fr))}.team-summary .used{color:var(--accent-strong)}.team-summary .exhausted{color:var(--danger)}
 .quota-inline-error{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0 0;padding:10px 12px;border:1px solid var(--coral-border);border-radius:7px;background:var(--coral-soft);color:var(--danger);font-size:11px}.quota-inline-error button{height:30px;padding:0 9px;border:1px solid var(--coral-border);border-radius:6px;background:white;color:var(--danger)}
 .team-sources{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:10px;padding:12px 15px;border-bottom:1px solid var(--border-subtle)}.team-sources h2{font-size:13px}.team-sources p{margin-top:3px;color:var(--text-tertiary);font-size:10px}.team-sources>div:last-child{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px}.team-sources>div:last-child span{display:flex;gap:5px;padding:5px 8px;border-radius:6px;background:#eaf8f1;color:#277a58;font-size:9px}.team-sources b{text-transform:uppercase}.team-sources em{color:var(--text-tertiary);font-size:11px;font-style:normal}
 .roster>header{gap:14px}.roster-actions{display:flex;align-items:center;gap:12px}.roster-actions>span{color:var(--text-tertiary);font-size:11px}.roster-actions .save-quotas{display:flex;height:34px;align-items:center;gap:6px;padding:0 10px;border:0;border-radius:6px;background:var(--accent);color:white;font-size:11px;font-weight:650}.roster-actions .save-quotas:disabled{opacity:.5}
-.roster-row{grid-template-columns:minmax(190px,1.4fr) 82px 82px minmax(110px,.75fr) 105px}.member-usage{font-family:var(--font-data)}.member-progress{display:flex!important;align-items:center;gap:7px}.member-progress i{display:block;height:6px;flex:1;overflow:hidden;border-radius:6px;background:#dfe5ed}.member-progress b{display:block;height:100%;border-radius:inherit;background:var(--accent)}.member-progress b.full{background:var(--danger)}.member-progress small{font-size:9px}.member-quota-input{position:relative}.member-quota-input span{position:absolute;top:10px;left:8px;color:var(--text-tertiary);font-size:10px}.member-quota-input input{width:100%;height:34px;padding:0 8px 0 19px;border:1px solid var(--border-subtle);border-radius:6px;background:white;color:var(--text-primary)}.member-quota-input input:disabled{background:var(--bg-base);color:var(--text-secondary)}.member-quota-validation{margin:10px 15px 13px;padding:8px 10px;border:1px solid var(--warning-border);border-radius:6px;background:var(--warning-soft);color:var(--warning);font-size:10px}
-@container app-content (max-width:900px){.team-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.team-summary>div:last-child{grid-column:1/-1}.roster-row{grid-template-columns:minmax(180px,1.3fr) 74px 76px 100px}.roster-row>*:nth-child(4){display:none}}
+.roster-row{grid-template-columns:minmax(190px,1.4fr) 82px 82px minmax(110px,.75fr) 105px}.member-usage{display:grid;gap:3px;font-family:var(--font-data)}.member-usage small{color:var(--text-tertiary);font-size:9px}.member-progress{display:flex!important;align-items:center;gap:7px}.member-progress i{display:block;height:6px;flex:1;overflow:hidden;border-radius:6px;background:#dfe5ed}.member-progress b{display:block;height:100%;border-radius:inherit;background:var(--accent)}.member-progress b.full{background:var(--danger)}.member-progress small{font-size:9px}.member-quota-input{position:relative}.member-quota-input span{position:absolute;top:10px;left:8px;color:var(--text-tertiary);font-size:10px}.member-quota-input input{width:100%;height:34px;padding:0 8px 0 19px;border:1px solid var(--border-subtle);border-radius:6px;background:white;color:var(--text-primary)}.member-quota-input input:disabled{background:var(--bg-base);color:var(--text-secondary)}.member-quota-validation{margin:10px 15px 13px;padding:8px 10px;border:1px solid var(--warning-border);border-radius:6px;background:var(--warning-soft);color:var(--warning);font-size:10px}
+@container app-content (max-width:900px){.team-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.roster-row{grid-template-columns:minmax(180px,1.3fr) 74px 76px 100px}.roster-row>*:nth-child(4){display:none}}
 @container app-content (max-width:650px){.team-sources{align-items:flex-start;flex-direction:column}.team-sources>div:last-child{justify-content:flex-start}.roster>header{align-items:flex-start;flex-direction:column;padding:12px 16px}.roster-actions{width:100%;justify-content:space-between}.roster-row{grid-template-columns:minmax(160px,1fr) 76px 96px}.roster-row>*:nth-child(2),.roster-row>*:nth-child(4){display:none}}
 </style>

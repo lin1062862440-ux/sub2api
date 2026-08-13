@@ -20,22 +20,24 @@ var (
 )
 
 type UserGroupQuotaPolicy struct {
-	Enabled           bool       `json:"enabled"`
-	WeeklyLimitUSD    float64    `json:"weekly_limit_usd"`
-	WeeklyUsageUSD    float64    `json:"weekly_usage_usd"`
-	WeeklyWindowStart *time.Time `json:"weekly_window_start,omitempty"`
-	WeeklyResetAt     *time.Time `json:"weekly_reset_at,omitempty"`
+	Enabled                  bool       `json:"enabled"`
+	WeeklyLimitUSD           float64    `json:"weekly_limit_usd"`
+	WeeklyUsageUSD           float64    `json:"weekly_usage_usd"`
+	WeeklyCumulativeUsageUSD float64    `json:"weekly_cumulative_usage_usd"`
+	WeeklyWindowStart        *time.Time `json:"weekly_window_start,omitempty"`
+	WeeklyResetAt            *time.Time `json:"weekly_reset_at,omitempty"`
 }
 
 type UserGroupQuotaMember struct {
-	UserID            int64      `json:"user_id"`
-	Email             string     `json:"email"`
-	Username          string     `json:"username"`
-	AvatarURL         string     `json:"avatar_url,omitempty"`
-	Status            string     `json:"status"`
-	WeeklyLimitUSD    float64    `json:"weekly_limit_usd"`
-	WeeklyUsageUSD    float64    `json:"weekly_usage_usd"`
-	WeeklyWindowStart *time.Time `json:"weekly_window_start,omitempty"`
+	UserID                   int64      `json:"user_id"`
+	Email                    string     `json:"email"`
+	Username                 string     `json:"username"`
+	AvatarURL                string     `json:"avatar_url,omitempty"`
+	Status                   string     `json:"status"`
+	WeeklyLimitUSD           float64    `json:"weekly_limit_usd"`
+	WeeklyUsageUSD           float64    `json:"weekly_usage_usd"`
+	WeeklyCumulativeUsageUSD float64    `json:"weekly_cumulative_usage_usd"`
+	WeeklyWindowStart        *time.Time `json:"weekly_window_start,omitempty"`
 }
 
 type UserGroupQuotaOverview struct {

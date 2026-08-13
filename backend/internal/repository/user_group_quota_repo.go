@@ -69,6 +69,14 @@ func (r *userGroupQuotaRepository) GetOverview(ctx context.Context, groupID int6
 	if err != nil {
 		return nil, fmt.Errorf("get user group quota policy: %w", err)
 	}
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT COALESCE(SUM(actual_cost), 0)
+		FROM usage_logs
+		WHERE business_user_group_id = $1
+		  AND created_at >= $2
+		  AND created_at < NOW()`, groupID, weekStart).Scan(&overview.Policy.WeeklyCumulativeUsageUSD); err != nil {
+		return nil, fmt.Errorf("get user group weekly cumulative usage: %w", err)
+	}
 	if overview.Policy.Enabled {
 		window := weekStart
 		overview.Policy.WeeklyWindowStart = &window
@@ -87,12 +95,21 @@ func (r *userGroupQuotaRepository) GetOverview(ctx context.Context, groupID int6
 		           WHEN quota.weekly_window_start IS NULL OR quota.weekly_window_start < $2 THEN 0
 		           ELSE quota.weekly_usage_usd
 		       END,
+		       COALESCE(usage.weekly_cumulative_usage_usd, 0),
 		       quota.weekly_window_start
 		FROM user_group_members member
 		JOIN users u ON u.id = member.user_id AND u.deleted_at IS NULL
 		LEFT JOIN user_avatars avatar ON avatar.user_id = u.id
 		LEFT JOIN user_group_quota_members quota
 		       ON quota.user_group_id = member.user_group_id AND quota.user_id = member.user_id
+		LEFT JOIN (
+		       SELECT user_id, SUM(actual_cost) AS weekly_cumulative_usage_usd
+		       FROM usage_logs
+		       WHERE business_user_group_id = $1
+		         AND created_at >= $2
+		         AND created_at < NOW()
+		       GROUP BY user_id
+		) usage ON usage.user_id = member.user_id
 		WHERE member.user_group_id = $1
 		ORDER BY LOWER(COALESCE(NULLIF(u.username, ''), u.email)), u.id`, groupID, weekStart)
 	if err != nil {
@@ -105,7 +122,7 @@ func (r *userGroupQuotaRepository) GetOverview(ctx context.Context, groupID int6
 		var memberWindow sql.NullTime
 		if err := rows.Scan(
 			&member.UserID, &member.Email, &member.Username, &member.AvatarURL, &member.Status,
-			&member.WeeklyLimitUSD, &member.WeeklyUsageUSD, &memberWindow,
+			&member.WeeklyLimitUSD, &member.WeeklyUsageUSD, &member.WeeklyCumulativeUsageUSD, &memberWindow,
 		); err != nil {
 			return nil, fmt.Errorf("scan user group quota member: %w", err)
 		}

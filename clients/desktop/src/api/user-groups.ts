@@ -47,6 +47,7 @@ export interface UserGroupQuotaPolicy {
   enabled: boolean
   weekly_limit_usd: number
   weekly_usage_usd: number
+  weekly_cumulative_usage_usd?: number
   weekly_window_start?: string | null
   weekly_reset_at?: string | null
 }
@@ -59,6 +60,7 @@ export interface UserGroupQuotaMember {
   status: string
   weekly_limit_usd: number
   weekly_usage_usd: number
+  weekly_cumulative_usage_usd?: number
   weekly_window_start?: string | null
 }
 

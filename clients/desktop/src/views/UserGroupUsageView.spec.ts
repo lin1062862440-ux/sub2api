@@ -17,7 +17,7 @@ describe('UserGroupUsageView', () => {
     vi.clearAllMocks()
     mocks.groups.mockResolvedValue([{ id: 3, name: '研发团队', description: '', status: 'active', member_count: 1, viewer_count: 0, can_view_prompt: true, created_at: '', updated_at: '' }])
     mocks.members.mockResolvedValue([{ user_id: 7, username: 'Lin', email: 'lin@example.com', status: 'active', balance: 28, joined_at: '' }])
-    mocks.quota.mockResolvedValue({ group_id: 3, policy: { enabled: true, weekly_limit_usd: 100, weekly_usage_usd: 35 }, managers: [], members: [{ user_id: 7, username: 'Lin', email: 'lin@example.com', status: 'active', weekly_limit_usd: 50, weekly_usage_usd: 20 }], allocated_usd: 50, can_manage: true, can_configure: true, team_subscription_groups: [] })
+    mocks.quota.mockResolvedValue({ group_id: 3, policy: { enabled: true, weekly_limit_usd: 100, weekly_usage_usd: 35, weekly_cumulative_usage_usd: 48 }, managers: [], members: [{ user_id: 7, username: 'Lin', email: 'lin@example.com', status: 'active', weekly_limit_usd: 50, weekly_usage_usd: 20, weekly_cumulative_usage_usd: 32 }], allocated_usd: 50, can_manage: true, can_configure: true, team_subscription_groups: [] })
     mocks.usage.mockResolvedValue({
       summary: { total_requests: 120, total_input_tokens: 1000, total_output_tokens: 500, total_cache_tokens: 200, total_tokens: 1700, total_actual_cost: 8.5, balance_consumption: 3.5, subscription_consumption: 5 },
       by_user: [{ user_id: 7, username: 'Lin', email: 'lin@example.com', total_requests: 120, total_tokens: 1700, total_actual_cost: 8.5, balance_consumption: 3.5, subscription_consumption: 5 }],
@@ -35,6 +35,7 @@ describe('UserGroupUsageView', () => {
     expect(Math.round((new Date(firstParams.end_date).getTime() - new Date(firstParams.start_date).getTime()) / 86_400_000)).toBe(6)
     expect(wrapper.text()).toContain('团队周配额')
     expect(wrapper.text()).toContain('$100.00')
+    expect(wrapper.text()).toContain('$48.00')
     expect(wrapper.text()).toContain('成员汇总')
 
     const modeButtons = wrapper.findAll('.ug-result-switch button')

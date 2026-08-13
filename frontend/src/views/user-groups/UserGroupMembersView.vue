@@ -43,7 +43,7 @@
       </section>
 
       <template v-else-if="group">
-        <section v-if="overview" data-test="team-quota-summary" class="grid grid-cols-2 divide-x divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-700 dark:border-dark-700 sm:grid-cols-3 xl:grid-cols-5 xl:divide-y-0">
+        <section v-if="overview" data-test="team-quota-summary" class="grid grid-cols-2 divide-x divide-y divide-gray-200 border-y border-gray-200 dark:divide-dark-700 dark:border-dark-700 sm:grid-cols-3 xl:grid-cols-6 xl:divide-y-0">
           <div class="px-4 py-4 sm:px-5">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.groups.members') }}</p>
             <p class="mt-1 text-xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ group.member_count }}</p>
@@ -55,6 +55,10 @@
           <div class="px-4 py-4 sm:px-5">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.quotas.weeklyUsed') }}</p>
             <p class="mt-1 text-xl font-semibold tabular-nums text-primary-600 dark:text-primary-400">{{ formatCurrency(weeklyUsed) }}</p>
+          </div>
+          <div class="px-4 py-4 sm:px-5">
+            <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.quotas.weeklyCumulative') }}</p>
+            <p class="mt-1 text-xl font-semibold tabular-nums text-gray-950 dark:text-white">{{ formatCurrency(weeklyCumulativeUsed) }}</p>
           </div>
           <div class="px-4 py-4 sm:px-5">
             <p class="text-xs font-medium text-gray-500 dark:text-gray-400">{{ t('userGroups.quotas.allocated') }}</p>
@@ -175,12 +179,13 @@
               <span class="w-fit rounded-md bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">{{ member.status }}</span>
               <div v-if="overview" class="min-w-0">
                 <div class="flex items-center justify-between gap-3 text-xs">
-                  <span class="tabular-nums text-gray-700 dark:text-gray-200">{{ formatCurrency(quotaMember(member.user_id)?.weekly_usage_usd ?? 0) }} / {{ formatCurrency(memberLimit(member.user_id)) }}</span>
+                  <span class="tabular-nums text-gray-700 dark:text-gray-200">{{ t('userGroups.quotas.currentWindow') }}: {{ formatCurrency(quotaMember(member.user_id)?.weekly_usage_usd ?? 0) }} / {{ formatCurrency(memberLimit(member.user_id)) }}</span>
                   <span class="tabular-nums text-gray-500 dark:text-gray-400">{{ memberUsagePercent(member.user_id) }}%</span>
                 </div>
                 <div class="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-dark-700">
                   <div class="h-full rounded-full transition-[width] duration-200" :class="memberUsagePercent(member.user_id) >= 100 ? 'bg-red-500' : memberUsagePercent(member.user_id) >= 80 ? 'bg-amber-500' : 'bg-primary-500'" :style="{ width: `${memberUsagePercent(member.user_id)}%` }" />
                 </div>
+                <p class="mt-1 text-xs tabular-nums text-gray-500 dark:text-gray-400">{{ t('userGroups.quotas.weeklyCumulative') }}: {{ formatCurrency(weeklyCumulativeUsage(member.user_id)) }}</p>
               </div>
               <span v-else class="text-sm text-gray-500 dark:text-gray-400">-</span>
               <label v-if="overview" class="block">
@@ -322,6 +327,7 @@ const canManageQuota = computed(() => overview.value?.can_manage === true)
 const canConfigureQuota = computed(() => overview.value?.can_configure === true)
 const weeklyLimit = computed(() => overview.value?.policy.weekly_limit_usd ?? 0)
 const weeklyUsed = computed(() => overview.value?.policy.weekly_usage_usd ?? 0)
+const weeklyCumulativeUsed = computed(() => overview.value?.policy.weekly_cumulative_usage_usd ?? overview.value?.policy.weekly_usage_usd ?? 0)
 const draftAllocatedUSD = computed(() => Object.values(memberLimitInputs.value).reduce((sum, raw) => {
   const value = Number(raw)
   return sum + (Number.isFinite(value) && value >= 0 ? value : 0)
@@ -343,10 +349,10 @@ const sortedWorkspaceMembers = computed(() => workspaceMembers.value
   .map((member, index) => ({ member, index }))
   .sort((left, right) => {
     const leftValue = usageSortMetric.value === 'actual'
-      ? normalizedWeeklyUsage(left.member.user_id)
+      ? normalizedWeeklyCumulativeUsage(left.member.user_id)
       : persistedMemberUsagePercent(left.member.user_id)
     const rightValue = usageSortMetric.value === 'actual'
-      ? normalizedWeeklyUsage(right.member.user_id)
+      ? normalizedWeeklyCumulativeUsage(right.member.user_id)
       : persistedMemberUsagePercent(right.member.user_id)
     return rightValue - leftValue || left.index - right.index
   })
@@ -411,8 +417,15 @@ function quotaMember(userId: number) {
   return overview.value?.members.find(member => member.user_id === userId)
 }
 
-function normalizedWeeklyUsage(userId: number) {
-  const used = quotaMember(userId)?.weekly_usage_usd ?? 0
+function normalizedWeeklyCumulativeUsage(userId: number) {
+  const quota = quotaMember(userId)
+  const used = quota?.weekly_cumulative_usage_usd ?? quota?.weekly_usage_usd ?? 0
+  return Number.isFinite(used) ? used : 0
+}
+
+function weeklyCumulativeUsage(userId: number) {
+  const quota = quotaMember(userId)
+  const used = quota?.weekly_cumulative_usage_usd ?? quota?.weekly_usage_usd ?? 0
   return Number.isFinite(used) ? used : 0
 }
 

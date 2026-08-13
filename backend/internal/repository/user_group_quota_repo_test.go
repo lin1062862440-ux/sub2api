@@ -75,3 +75,33 @@ func TestUserGroupQuotaResetClearsUsageAndPreservesAllocations(t *testing.T) {
 	require.NoError(t, repo.ResetUsage(context.Background(), 5, 1, resetAt))
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestUserGroupQuotaOverviewIncludesWeeklyCumulativeUsage(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	weekStart := time.Date(2026, time.August, 2, 16, 0, 0, 0, time.UTC)
+
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(policy.enabled")).
+		WithArgs(int64(5), weekStart).
+		WillReturnRows(sqlmock.NewRows([]string{"enabled", "weekly_limit_usd", "weekly_usage_usd", "weekly_window_start"}).
+			AddRow(true, 800, 250, weekStart))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT COALESCE(SUM(actual_cost), 0)")).
+		WithArgs(int64(5), weekStart).
+		WillReturnRows(sqlmock.NewRows([]string{"weekly_cumulative_usage_usd"}).AddRow(390))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT u.id, u.email, u.username, COALESCE(avatar.url, ''), u.status, manager.created_at")).
+		WithArgs(int64(5)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "username", "avatar_url", "status", "created_at"}))
+	mock.ExpectQuery(regexp.QuoteMeta("COALESCE(usage.weekly_cumulative_usage_usd, 0)")).
+		WithArgs(int64(5), weekStart).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "email", "username", "avatar_url", "status", "weekly_limit_usd", "weekly_usage_usd", "weekly_cumulative_usage_usd", "weekly_window_start"}).
+			AddRow(7, "alice@example.com", "Alice", "", "active", 300, 120, 180, weekStart))
+
+	repo := &userGroupQuotaRepository{db: db}
+	overview, err := repo.GetOverview(context.Background(), 5, weekStart)
+	require.NoError(t, err)
+	require.Equal(t, 390.0, overview.Policy.WeeklyCumulativeUsageUSD)
+	require.Len(t, overview.Members, 1)
+	require.Equal(t, 180.0, overview.Members[0].WeeklyCumulativeUsageUSD)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

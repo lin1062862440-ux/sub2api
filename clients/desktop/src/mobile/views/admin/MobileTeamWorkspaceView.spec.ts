@@ -43,9 +43,9 @@ import source from './MobileTeamWorkspaceView.vue?raw'
 
 const overview = {
   group_id: 3,
-  policy: { enabled: true, weekly_limit_usd: 100, weekly_usage_usd: 35, weekly_reset_at: '2026-08-10T00:00:00Z' },
+  policy: { enabled: true, weekly_limit_usd: 100, weekly_usage_usd: 35, weekly_cumulative_usage_usd: 48, weekly_reset_at: '2026-08-10T00:00:00Z' },
   managers: [],
-  members: [{ user_id: 7, username: 'Lin', email: 'lin@example.com', status: 'active', weekly_limit_usd: 60, weekly_usage_usd: 20 }],
+  members: [{ user_id: 7, username: 'Lin', email: 'lin@example.com', status: 'active', weekly_limit_usd: 60, weekly_usage_usd: 20, weekly_cumulative_usage_usd: 32 }],
   allocated_usd: 60,
   can_manage: true,
   can_configure: true,
@@ -75,6 +75,7 @@ describe('MobileTeamWorkspaceView', () => {
     const row = wrapper.get('[data-testid="mobile-team-member-7"]')
     expect(row.text()).toContain('Lin')
     expect(row.text()).toContain('$20.00')
+    expect(row.text()).toContain('$32.00')
     expect(row.text()).toContain('33%')
     expect(wrapper.get('[data-testid="mobile-member-quota-7"]').element).toHaveProperty('value', '60')
     expect(source).not.toContain('overflow-x: auto')
@@ -132,14 +133,15 @@ describe('MobileTeamWorkspaceView', () => {
     expect(wrapper.get('[data-testid="mobile-team-quota-summary"]').text()).toContain('$100.00')
   })
 
-  it('shows all five required team summary metrics', async () => {
+  it('shows all six team summary metrics', async () => {
     const wrapper = mount(MobileTeamWorkspaceView, { global: { stubs: { Teleport: true } } })
     await flushPromises()
 
     const summary = wrapper.get('[data-testid="mobile-team-quota-summary"]').text()
     expect(summary).toContain('成员数量')
     expect(summary).toContain('团队周配额')
-    expect(summary).toContain('本周用量')
+    expect(summary).toContain('当前窗口已用')
+    expect(summary).toContain('本周累计消费')
     expect(summary).toContain('已分配成员额度')
     expect(summary).toContain('未分配额度')
     expect(summary).toContain('$40.00')
